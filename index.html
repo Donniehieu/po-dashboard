@@ -1,0 +1,1022 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Quản lý tiến trình công việc</title>
+<style>
+:root{
+  --bg:#f4f6f9;--card:#ffffff;--ink:#0f172a;--mute:#64748b;--line:#e2e8f0;--soft:#f1f5f9;
+  --brand:#2563eb;--ok:#16a34a;--warn:#d97706;--bad:#dc2626;--shadow:0 1px 2px rgba(15,23,42,.06),0 1px 3px rgba(15,23,42,.05);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0b1220;--card:#131c2e;--ink:#e6edf7;--mute:#8da0ba;--line:#243049;--soft:#1a2539;
+  --brand:#60a5fa;--ok:#4ade80;--warn:#fbbf24;--bad:#f87171;--shadow:none}}
+:root[data-theme="dark"]{--bg:#0b1220;--card:#131c2e;--ink:#e6edf7;--mute:#8da0ba;--line:#243049;--soft:#1a2539;--brand:#60a5fa;--ok:#4ade80;--warn:#fbbf24;--bad:#f87171;--shadow:none}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:14px/1.45 "Segoe UI",system-ui,-apple-system,Roboto,Arial,sans-serif}
+button{font:inherit;color:inherit;cursor:pointer}
+header.top{display:flex;gap:12px;align-items:center;flex-wrap:wrap;padding:14px 20px;background:var(--card);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:20}
+header.top h1{font-size:17px;margin:0;font-weight:700;letter-spacing:-.2px}
+.grow{flex:1}
+.btn{border:1px solid var(--line);background:var(--card);padding:8px 14px;border-radius:8px;font-weight:600}
+.btn:hover{background:var(--soft)}
+.btn.primary{background:var(--brand);border-color:var(--brand);color:#fff}
+.btn.primary:hover{filter:brightness(1.08);background:var(--brand)}
+.fname{color:var(--mute);font-size:13px;max-width:36ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+nav.tabs{display:flex;gap:6px;overflow-x:auto;padding:10px 20px 0;background:var(--card);border-bottom:1px solid var(--line)}
+nav.tabs button{border:0;background:none;padding:9px 12px;border-bottom:3px solid transparent;color:var(--mute);font-weight:600;white-space:nowrap}
+nav.tabs button.on{color:var(--brand);border-bottom-color:var(--brand)}
+nav.tabs .n{background:var(--soft);border-radius:10px;padding:1px 7px;font-size:11px;margin-left:6px;color:var(--mute)}
+main{padding:18px 20px 60px;max-width:1500px;margin:0 auto}
+.drop{margin:8vh auto;max-width:620px;text-align:center;border:2px dashed var(--line);border-radius:16px;padding:48px 24px;background:var(--card)}
+.drop.over{border-color:var(--brand);background:var(--soft)}
+.drop h2{margin:0 0 8px;font-size:20px}
+.drop p{color:var(--mute);margin:6px 0 20px}
+.grid{display:grid;gap:14px}
+.kpis{grid-template-columns:repeat(auto-fit,minmax(190px,1fr));margin-bottom:14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;box-shadow:var(--shadow)}
+.kpi{cursor:default}
+.kpi.click{cursor:pointer}.kpi.click:hover{border-color:var(--brand)}
+.kpi .l{color:var(--mute);font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.3px}
+.kpi .v{font-size:26px;font-weight:700;margin:4px 0 2px;font-variant-numeric:tabular-nums}
+.kpi .s{color:var(--mute);font-size:12px}
+.kpi.bad .v{color:var(--bad)}.kpi.warn .v{color:var(--warn)}.kpi.ok .v{color:var(--ok)}
+.panels{grid-template-columns:repeat(auto-fit,minmax(340px,1fr));margin-bottom:14px}
+.card h3{margin:0 0 10px;font-size:13px;font-weight:700;display:flex;align-items:center;gap:8px}
+.card h3 small{color:var(--mute);font-weight:500}
+.bars{display:flex;flex-direction:column;gap:6px}
+.bar{display:grid;grid-template-columns:minmax(90px,38%) 1fr auto;gap:8px;align-items:center;cursor:pointer;padding:2px 4px;border-radius:6px}
+.bar:hover{background:var(--soft)}
+.bar.sel{background:var(--soft);outline:2px solid var(--brand)}
+.bar .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px}
+.bar .tr{height:10px;background:var(--soft);border-radius:5px;overflow:hidden}
+.bar .f{height:100%;border-radius:5px}
+.bar .n{font-size:12px;color:var(--mute);font-variant-numeric:tabular-nums;white-space:nowrap}
+.donutwrap{display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+.donutwrap svg{flex:none}
+.donutwrap .bars{flex:1;min-width:200px}
+.scroll-x{overflow-x:auto}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 12px;align-items:center}
+.fchip{background:var(--brand);color:#fff;border-radius:14px;padding:3px 6px 3px 12px;font-size:12px;display:inline-flex;gap:6px;align-items:center}
+.fchip b{cursor:pointer;background:rgba(255,255,255,.25);border-radius:50%;width:18px;height:18px;line-height:18px;text-align:center}
+.toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+.toolbar input[type=search],.toolbar select{border:1px solid var(--line);background:var(--card);color:var(--ink);padding:8px 10px;border-radius:8px;font:inherit}
+.toolbar input[type=search]{min-width:240px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{border:0;background:var(--card);padding:7px 12px;font-weight:600;color:var(--mute)}
+.seg button.on{background:var(--brand);color:#fff}
+.tablewrap{max-height:62vh;overflow:auto;border:1px solid var(--line);border-radius:12px;background:var(--card)}
+table{border-collapse:separate;border-spacing:0;width:100%}
+th,td{padding:8px 10px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}
+th{position:sticky;top:0;background:var(--soft);font-size:12px;text-transform:uppercase;letter-spacing:.3px;color:var(--mute);cursor:pointer;white-space:nowrap;z-index:2}
+th:hover{color:var(--ink)}
+td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+td.txt{max-width:340px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+td.rn{color:var(--mute);font-size:12px;width:1%}
+tr.od td:first-child{box-shadow:inset 3px 0 0 var(--bad)}
+tr.sn td:first-child{box-shadow:inset 3px 0 0 var(--warn)}
+tr.dn td{color:var(--mute)}
+tr.dn td.txt:first-of-type{text-decoration:line-through}
+.chip{display:inline-block;padding:2px 9px;border-radius:12px;font-size:12px;font-weight:600;background:color-mix(in srgb,var(--c) 16%,transparent);color:var(--c);white-space:nowrap}
+.more{text-align:center;padding:12px}
+.attn{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.attn li{display:grid;grid-template-columns:auto 1fr auto;gap:10px;padding:8px 0;border-bottom:1px solid var(--line);align-items:center}
+.attn li:last-child{border:0}
+.tag{background:var(--soft);color:var(--mute);border-radius:6px;padding:2px 7px;font-size:11px;font-weight:700;white-space:nowrap}
+.late{color:var(--bad);font-weight:700;font-size:12px;white-space:nowrap}
+.sub{color:var(--mute);font-size:12px}
+.sheetcards{grid-template-columns:repeat(auto-fill,minmax(260px,1fr))}
+.sc{cursor:pointer}.sc:hover{border-color:var(--brand)}
+.sc h4{margin:0 0 4px;font-size:15px}
+.prog{height:8px;border-radius:4px;background:var(--soft);overflow:hidden;margin:10px 0 6px}
+.prog i{display:block;height:100%;background:var(--ok)}
+.note{color:var(--mute);font-size:12px;margin-top:10px}
+.err{background:color-mix(in srgb,var(--bad) 12%,transparent);border:1px solid var(--bad);color:var(--bad);padding:10px 14px;border-radius:8px;margin:12px 0}
+h2.sec{font-size:15px;margin:22px 0 10px}
+input[type=checkbox]{width:17px;height:17px;cursor:pointer;accent-color:var(--ok)}
+.src{color:var(--mute);font-size:11px;margin-top:6px}
+
+.btn.sm{padding:6px 10px;font-size:13px}
+.banner{display:flex;gap:12px;align-items:center;flex-wrap:wrap;padding:9px 20px;background:color-mix(in srgb,var(--bad) 10%,var(--card));border-bottom:1px solid var(--line);font-weight:600;cursor:pointer}
+.banner.ok{background:color-mix(in srgb,var(--ok) 10%,var(--card));cursor:default}
+td.ed{background:color-mix(in srgb,var(--warn) 18%,transparent)}
+td[data-c]{cursor:cell}
+td input.cell{width:100%;min-width:120px;font:inherit;padding:4px 6px;border:2px solid var(--brand);border-radius:6px;background:var(--card);color:var(--ink)}
+.savebar{position:fixed;left:0;right:0;bottom:0;z-index:40;background:var(--ink);color:var(--bg);padding:10px 20px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.savebar .btn{color:var(--ink)}
+.toast{position:fixed;right:20px;bottom:70px;z-index:60;background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;max-width:420px;box-shadow:0 6px 24px rgba(0,0,0,.25)}
+.toast.err{background:var(--bad);color:#fff}
+dialog{border:1px solid var(--line);border-radius:14px;background:var(--card);color:var(--ink);padding:20px;max-width:520px;width:92vw}
+dialog::backdrop{background:rgba(15,23,42,.5)}
+dialog h3{margin:0 0 12px}
+dialog label{display:block;margin:10px 0 4px;font-weight:600;font-size:13px}
+dialog input{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;font:inherit;background:var(--card);color:var(--ink)}
+.lvl{display:flex;align-items:center;gap:8px;margin:0 0 8px;font-weight:700}
+.lvl i{width:10px;height:10px;border-radius:50%;display:inline-block}
+.pgrid{grid-template-columns:repeat(auto-fit,minmax(380px,1fr));align-items:start}
+.attn li.click{cursor:pointer}.attn li.click:hover{background:var(--soft)}
+table.mini td,table.mini th{padding:6px 10px;position:static;cursor:default}
+table.mini tr.click{cursor:pointer}table.mini tr.click:hover td{background:var(--soft)}
+</style>
+</head>
+<body>
+<header class="top">
+  <h1>📋 Quản lý tiến trình công việc</h1>
+  <span class="fname" id="fname"></span>
+  <span class="grow"></span>
+  <button class="btn sm" id="btnNotify" title="Nhắc việc trễ bằng thông báo của trình duyệt (khi đang mở trang)">🔔 Bật nhắc</button>
+  <button class="btn sm" id="btnImport" hidden title="Gộp file Excel xuất từ Odoo vào dữ liệu nguồn">⬆ Nhập file Odoo</button>
+  <button class="btn sm" id="btnSync" hidden title="Yêu cầu GitHub chạy đồng bộ từ Odoo ngay">🔄 Đồng bộ Odoo</button>
+  <button class="btn sm" id="btnRefresh" hidden>↻ Tải lại</button>
+  <button class="btn sm" id="btnGh">⚙ GitHub</button>
+  <button class="btn primary" id="btnPick">Chọn file Excel</button>
+  <input type="file" id="fileImp" accept=".xlsx,.xlsm" hidden>
+  <input type="file" id="file" accept=".xlsx,.xlsm" hidden>
+</header>
+<nav class="tabs" id="tabs" hidden></nav>
+<div id="banner" hidden></div>
+<main id="main">
+  <div class="drop" id="drop">
+    <h2>Chọn file Excel để xem dashboard</h2>
+    <p>Kéo thả file .xlsx vào đây, hoặc bấm nút bên dưới.<br>Ứng dụng đọc tất cả các sheet ngay trên máy bạn, dữ liệu không bị gửi đi đâu.</p>
+    <button class="btn primary" id="btnPick2">Chọn file Excel</button>
+    <div class="err" id="err" hidden></div>
+    <p class="note">Hoặc bấm “⚙ GitHub” để kết nối kho dữ liệu riêng tư và tự động tải file Excel nguồn.</p>
+  </div>
+</main>
+<div id="savebar" class="savebar" hidden></div>
+<div id="toast" class="toast" hidden></div>
+<dialog id="dlg">
+  <h3>Kết nối GitHub</h3>
+  <p class="sub">Dashboard đọc/ghi file Excel nằm trong repo dữ liệu <b>riêng tư</b> của bạn. Mã truy cập chỉ lưu trong trình duyệt này.</p>
+  <label>Tài khoản / tổ chức</label><input id="ghOwner" placeholder="Donniehieu">
+  <label>Tên repo dữ liệu (riêng tư)</label><input id="ghRepo" placeholder="po-data">
+  <label>Đường dẫn file Excel trong repo</label><input id="ghPath" placeholder="data/PO-data.xlsx">
+  <label>Nhánh</label><input id="ghBranch" placeholder="main">
+  <label>Mã truy cập (fine-grained token: Contents + Actions = Read &amp; write, chỉ cho repo dữ liệu)</label><input id="ghToken" type="password" placeholder="github_pat_…" autocomplete="off">
+  <div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap"><button class="btn primary" id="ghSave">Lưu &amp; tải dữ liệu</button><button class="btn" id="ghForget">Xoá mã truy cập</button><button class="btn" id="ghClose">Đóng</button></div>
+</dialog>
+
+<script>
+"use strict";
+/* ============ Tiện ích ============ */
+const $=(s,r=document)=>r.querySelector(s);
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const sod=d=>new Date(d.getFullYear(),d.getMonth(),d.getDate());
+const TODAY=sod(new Date());
+const DAY=864e5;
+const fmtD=d=>String(d.getDate()).padStart(2,"0")+"/"+String(d.getMonth()+1).padStart(2,"0")+"/"+d.getFullYear();
+const fmtDS=d=>String(d.getDate()).padStart(2,"0")+"/"+String(d.getMonth()+1).padStart(2,"0");
+const fmtN=n=>Number(n).toLocaleString("vi-VN",{maximumFractionDigits:2});
+function fmtBig(n){const a=Math.abs(n);
+  if(a>=1e9)return (n/1e9).toLocaleString("vi-VN",{maximumFractionDigits:2})+" tỷ";
+  if(a>=1e6)return (n/1e6).toLocaleString("vi-VN",{maximumFractionDigits:1})+" triệu";
+  return fmtN(n);}
+const store={get(k){try{return JSON.parse(localStorage.getItem(k)||"null")}catch(e){return null}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
+
+/* ============ Đọc .xlsx (không cần thư viện ngoài) ============ */
+const CRC_T=(()=>{const t=new Uint32Array(256);for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[n]=c>>>0}return t})();
+function crc32(b){let crc=-1;for(let i=0;i<b.length;i++)crc=(crc>>>8)^CRC_T[(crc^b[i])&255];return (crc^-1)>>>0}
+function zipIndex(buf){
+  const u8=new Uint8Array(buf),dv=new DataView(buf);
+  let e=u8.length-22;while(e>=0&&dv.getUint32(e,true)!==0x06054b50)e--;
+  if(e<0)throw new Error("Đây không phải file .xlsx hợp lệ");
+  const n=dv.getUint16(e+10,true),cdOff=dv.getUint32(e+16,true);let p=cdOff;const entries=[];
+  for(let i=0;i<n;i++){
+    if(dv.getUint32(p,true)!==0x02014b50)break;
+    const nl=dv.getUint16(p+28,true),el=dv.getUint16(p+30,true),cl=dv.getUint16(p+32,true);
+    entries.push({name:new TextDecoder().decode(u8.subarray(p+46,p+46+nl)),method:dv.getUint16(p+10,true),csize:dv.getUint32(p+20,true),off:dv.getUint32(p+42,true),cd:u8.slice(p,p+46+nl+el+cl)});
+    p+=46+nl+el+cl;
+  }
+  const by=Object.fromEntries(entries.map(x=>[x.name,x]));
+  return {u8,dv,entries,cdOff,async get(name){
+    const f=by[name];if(!f)return null;
+    const lnl=dv.getUint16(f.off+26,true),lel=dv.getUint16(f.off+28,true),st=f.off+30+lnl+lel;
+    const data=u8.subarray(st,st+f.csize);
+    if(f.method===0)return new TextDecoder().decode(data);
+    const ds=new Blob([data]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
+    return await new Response(ds).text();
+  }};
+}
+/* ghi lại zip: giữ nguyên các mục không đổi, chỉ thay các sheet đã sửa (lưu dạng không nén) */
+function buildZip(zi,rep){
+  const order=[...zi.entries].sort((a,b)=>a.off-b.off);
+  const parts=[],cds=[];let pos=0;
+  order.forEach((en,i)=>{
+    const end=i+1<order.length?order[i+1].off:zi.cdOff;
+    const cd=en.cd.slice();const c=new DataView(cd.buffer);
+    if(rep.has(en.name)){
+      const data=rep.get(en.name),nameB=new TextEncoder().encode(en.name),crc=crc32(data);
+      const lh=new Uint8Array(30+nameB.length),l=new DataView(lh.buffer);
+      l.setUint32(0,0x04034b50,true);l.setUint16(4,20,true);l.setUint16(6,0x0800,true);l.setUint16(8,0,true);
+      l.setUint16(10,c.getUint16(12,true),true);l.setUint16(12,c.getUint16(14,true),true);
+      l.setUint32(14,crc,true);l.setUint32(18,data.length,true);l.setUint32(22,data.length,true);
+      l.setUint16(26,nameB.length,true);l.setUint16(28,0,true);lh.set(nameB,30);
+      c.setUint16(8,0x0800,true);c.setUint16(10,0,true);c.setUint32(16,crc,true);c.setUint32(20,data.length,true);c.setUint32(24,data.length,true);c.setUint32(42,pos,true);
+      parts.push(lh,data);pos+=lh.length+data.length;
+    }else{
+      const part=zi.u8.subarray(en.off,end);c.setUint32(42,pos,true);parts.push(part);pos+=part.length;
+    }
+    cds.push(cd);
+  });
+  const cdStart=pos;let cdSize=0;for(const c of cds){parts.push(c);cdSize+=c.length}
+  const eo=new Uint8Array(22),d=new DataView(eo.buffer);
+  d.setUint32(0,0x06054b50,true);d.setUint16(8,cds.length,true);d.setUint16(10,cds.length,true);d.setUint32(12,cdSize,true);d.setUint32(16,cdStart,true);
+  parts.push(eo);
+  let tot=0;for(const p of parts)tot+=p.length;
+  const out=new Uint8Array(tot);let o=0;for(const p of parts){out.set(p,o);o+=p.length}
+  return out;
+}
+function colLetter(i){let s="";i++;while(i>0){const m=(i-1)%26;s=String.fromCharCode(65+m)+s;i=Math.floor((i-1)/26)}return s}
+const dateToSerial=d=>Date.UTC(d.getFullYear(),d.getMonth(),d.getDate(),d.getHours(),d.getMinutes(),d.getSeconds())/864e5+25569;
+function patchSheet(txt,edits){
+  const doc=new DOMParser().parseFromString(txt,"application/xml");
+  const ns=doc.documentElement.namespaceURI;const sd=doc.getElementsByTagName("sheetData")[0];
+  const rows=new Map();for(const r of sd.children)rows.set(+r.getAttribute("r"),r);
+  const styleCache={};
+  const styleFor=(n,col)=>{ // kiểu ô: lấy từ dòng gần nhất phía trên có cùng cột
+    if(styleCache[col]!==undefined)return styleCache[col];
+    let best=null,bn=0;
+    for(const [rn,r] of rows){if(rn<n&&rn>bn){for(const c of r.children){if(colNum(c.getAttribute("r"))===col&&c.getAttribute("s")){best=c.getAttribute("s");bn=rn}}}}
+    return styleCache[col]=best;
+  };
+  const byRow=new Map();for(const e of edits){if(!byRow.has(e.n))byRow.set(e.n,[]);byRow.get(e.n).push(e)}
+  for(const [n,list] of [...byRow].sort((a,b)=>a[0]-b[0])){
+    let row=rows.get(n);
+    if(!row){
+      row=doc.createElementNS(ns,"row");row.setAttribute("r",n);
+      let after=null;for(const r of sd.children){if(+r.getAttribute("r")<n)after=r;else break}
+      after?after.after(row):sd.prepend(row);rows.set(n,row);
+    }
+    row.removeAttribute("spans");
+    for(const e of list){
+      const ref=colLetter(e.col)+n;let cell=null;
+      for(const c of row.children)if(c.getAttribute("r")===ref){cell=c;break}
+      if(!cell){
+        cell=doc.createElementNS(ns,"c");cell.setAttribute("r",ref);
+        let after=null;for(const c of row.children){if(colNum(c.getAttribute("r"))<e.col)after=c;else break}
+        after?after.after(cell):row.prepend(cell);
+        const st=styleFor(n,e.col);if(st)cell.setAttribute("s",st);
+      }
+      while(cell.firstChild)cell.removeChild(cell.firstChild);
+      cell.removeAttribute("t");
+      const v=e.val;
+      if(v==null||v==="")continue;
+      if(typeof v==="number"||v instanceof Date){
+        const ve=doc.createElementNS(ns,"v");ve.textContent=String(v instanceof Date?dateToSerial(v):v);cell.appendChild(ve);
+      }else{
+        cell.setAttribute("t","inlineStr");
+        const is=doc.createElementNS(ns,"is"),t=doc.createElementNS(ns,"t");
+        t.setAttribute("xml:space","preserve");t.textContent=String(v);is.appendChild(t);cell.appendChild(is);
+      }
+    }
+  }
+  return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\r\n'+new XMLSerializer().serializeToString(doc.documentElement);
+}
+async function applyEdits(buf,edits){
+  const zi=zipIndex(buf);const by=new Map();
+  for(const e of edits){if(!by.has(e.path))by.set(e.path,[]);by.get(e.path).push(e)}
+  const rep=new Map();
+  for(const [path,list] of by){const t=await zi.get(path);if(t==null)throw new Error("Không tìm thấy "+path);rep.set(path,new TextEncoder().encode(patchSheet(t,list)))}
+  return buildZip(zi,rep);
+}
+const xml=t=>new DOMParser().parseFromString(t,"application/xml");
+const colNum=ref=>{let n=0;for(const ch of ref.replace(/[0-9]/g,""))n=n*26+ch.charCodeAt(0)-64;return n-1};
+function serialToDate(s){const d=new Date(Math.round((s-25569)*DAY));
+  return new Date(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate(),d.getUTCHours(),d.getUTCMinutes(),d.getUTCSeconds());}
+function isDateFmt(id,code){
+  if((id>=14&&id<=22)||(id>=27&&id<=36)||(id>=45&&id<=47)||(id>=50&&id<=58))return true;
+  if(!code||/^general/i.test(code))return false;
+  return /[ymdhs]/i.test(code.replace(/"[^"]*"/g,"").replace(/\[[^\]]*\]/g,"").replace(/\\./g,""));
+}
+async function parseXlsx(buf){
+  const z=zipIndex(buf);
+  const wbT=await z.get("xl/workbook.xml");if(!wbT)throw new Error("Thiếu xl/workbook.xml – không phải file Excel .xlsx");
+  const relT=await z.get("xl/_rels/workbook.xml.rels");
+  const rels={};for(const r of xml(relT).getElementsByTagName("Relationship"))rels[r.getAttribute("Id")]=r.getAttribute("Target");
+  // chuỗi dùng chung
+  const sst=[];const sstT=await z.get("xl/sharedStrings.xml");
+  if(sstT)for(const si of xml(sstT).getElementsByTagName("si")){
+    let s="";for(const t of si.getElementsByTagName("t")){if(t.parentNode.nodeName!=="rPh")s+=t.textContent}sst.push(s);}
+  // định dạng ngày
+  const dateXf=[];const stT=await z.get("xl/styles.xml");
+  if(stT){const sd=xml(stT);const codes={};
+    for(const nf of sd.getElementsByTagName("numFmt"))codes[nf.getAttribute("numFmtId")]=nf.getAttribute("formatCode");
+    const cx=sd.getElementsByTagName("cellXfs")[0];
+    if(cx)for(const xf of cx.children){const id=+xf.getAttribute("numFmtId");dateXf.push(isDateFmt(id,codes[id]))}}
+  const out=[];
+  for(const sh of xml(wbT).getElementsByTagName("sheet")){
+    if(sh.getAttribute("state")==="hidden"||sh.getAttribute("state")==="veryHidden")continue;
+    let tgt=rels[sh.getAttribute("r:id")];if(!tgt)continue;
+    tgt=tgt.startsWith("/")?tgt.slice(1):"xl/"+tgt;
+    const t=await z.get(tgt);if(!t)continue;
+    const grid=[];const fset=new Set();
+    for(const row of xml(t).getElementsByTagName("row")){
+      const rn=+row.getAttribute("r");const arr=[];
+      for(const c of row.getElementsByTagName("c")){
+        const ref=c.getAttribute("r");const ty=c.getAttribute("t");const s=+c.getAttribute("s")||0;
+        const vEl=c.getElementsByTagName("v")[0];let v=null;
+        if(c.getElementsByTagName("f").length)fset.add(rn+":"+colNum(ref));
+        if(ty==="inlineStr"){v=[...c.getElementsByTagName("t")].map(x=>x.textContent).join("")}
+        else if(vEl){const raw=vEl.textContent;
+          if(ty==="s")v=sst[+raw];
+          else if(ty==="str")v=raw;
+          else if(ty==="b")v=raw==="1";
+          else if(ty==="e")v=null;
+          else{const num=parseFloat(raw);v=isNaN(num)?raw:(dateXf[s]?serialToDate(num):num)}}
+        if(typeof v==="string"){v=v.replace(/\s+/g," ").trim();if(v==="")v=null}
+        if(v!==null)arr[colNum(ref)]=v;
+      }
+      grid[rn-1]=arr;
+    }
+    out.push({name:sh.getAttribute("name"),grid,path:tgt,fset});
+  }
+  return out;
+}
+
+/* ============ Phân tích từng sheet ============ */
+const DONE_RE=/hoàn thành|đã nhận hết|đã xuất hóa đơn|đã xong|đã thanh toán|đã nhận được tiền|\bxong\b|\bdone\b/i;
+const NOT_RE=/^(chưa|không|chờ|cần|đang)/i;
+const isDoneVal=v=>typeof v==="string"&&DONE_RE.test(v)&&!NOT_RE.test(v);
+const PALETTE=["#2563eb","#7c3aed","#0d9488","#db2777","#0891b2","#ea580c","#4f46e5","#65a30d","#9333ea","#0284c7"];
+function colorFor(v){
+  if(isDoneVal(v))return "#16a34a";
+  if(typeof v==="string"&&NOT_RE.test(v))return "#d97706";
+  let h=0;for(const ch of String(v))h=(h*31+ch.charCodeAt(0))>>>0;return PALETTE[h%PALETTE.length];
+}
+function analyze(raw){
+  const g=raw.grid;let maxC=0;for(let i=0;i<g.length;i++)if(g[i]&&g[i].length>maxC)maxC=g[i].length;
+  // dòng tiêu đề: dòng trong 10 dòng đầu có nhiều ô chữ nhất
+  let hr=-1,best=1;
+  for(let i=0;i<Math.min(g.length,10);i++){
+    const r=g[i];if(!r)continue;
+    const k=r.filter(x=>typeof x==="string").length;
+    if(k>best){best=k;hr=i}
+  }
+  if(hr<0)return {name:raw.name,cols:[],rows:[],empty:true};
+  const hdr=g[hr];
+  let rows=[];
+  for(let i=hr+1;i<g.length;i++){const r=g[i];if(r&&r.some(x=>x!=null))rows.push({n:i+1,v:Array.from({length:maxC},(_,c)=>r[c]??null)})}
+  // cột
+  let cols=[];
+  for(let c=0;c<maxC;c++){
+    const name=(hdr[c]!=null?String(hdr[c]):"");
+    const vals=rows.map(r=>r.v[c]).filter(x=>x!=null);
+    if(!name&&!vals.length)continue;
+    if(!vals.length)continue;
+    const nD=vals.filter(x=>x instanceof Date).length,nN=vals.filter(x=>typeof x==="number").length;
+    const strs=vals.filter(x=>typeof x==="string");
+    const distinct=new Set(vals.map(String)).size;
+    let type="text";
+    if(/^(stt|tt|no\.?)$/i.test(name))type="index";
+    else if(nD/vals.length>=.6)type="date";
+    else if(nN/vals.length>=.6)type="num";
+    else if(strs.length===vals.length&&vals.length>=3&&distinct<=20&&distinct<=.6*vals.length)type="cat";
+    cols.push({idx:c,name:name||("Cột "+String.fromCharCode(65+c)),type,distinct});
+  }
+  // loại dòng tổng cộng & dòng chỉ có STT
+  const dataCols=cols.filter(c=>c.type!=="index");
+  const pre=rows;
+  rows=rows.filter(r=>{
+    if(r.v.some(x=>typeof x==="string"&&/^tổng( tiền| cộng)?:?$/i.test(x)))return false;
+    return dataCols.some(c=>r.v[c.idx]!=null);
+  });
+  // nếu sheet có cột STT điền gần đủ thì bỏ các dòng không có STT (chữ ký, ghi chú cuối bảng)
+  const ix=cols.find(c=>c.type==="index");
+  const blank=ix?pre.filter(r=>!rows.includes(r)&&typeof r.v[ix.idx]==="number"&&r.v.every((x,i)=>i===ix.idx||x==null)).map(r=>({n:r.n,ix:r.v[ix.idx]})):[];
+  if(ix){const withIx=rows.filter(r=>r.v[ix.idx]!=null).length;if(withIx>=.5*rows.length&&withIx<rows.length)rows=rows.filter(r=>r.v[ix.idx]!=null)}
+  // chỉ giữ cột còn dữ liệu sau khi lọc
+  cols=cols.filter(c=>rows.some(r=>r.v[c.idx]!=null));
+  const sh={name:raw.name,cols,rows,hdrRow:hr+1,empty:rows.length===0,path:raw.path,fset:raw.fset||new Set(),lastRow:g.length,grid:g,maxC,blank,blank0:blank.slice()};
+  sh.cat=cols.filter(c=>c.type==="cat"&&c.distinct>=2);
+  sh.dates=cols.filter(c=>c.type==="date");
+  sh.nums=cols.filter(c=>c.type==="num");
+  sh.texts=cols.filter(c=>c.type==="text");
+  // cột tiền
+  let money=sh.nums.find(c=>/tổng|thành tiền|số tiền|giá trị/i.test(c.name));
+  if(!money&&sh.nums.length){let b=-1;for(const c of sh.nums){const s=rows.reduce((a,r)=>a+(+r.v[c.idx]||0),0);if(s>b){b=s;money=c}}}
+  if(money&&!/tiền|tổng|giá|thành|phí|nợ/i.test(money.name)&&!sh.rows.length)money=null;
+  sh.money=money||null;
+  sh.title=(sh.texts[0]||sh.cat[0]||cols[0]||{}).idx;
+  sh.sub=(sh.texts[1]||{}).idx;
+  // cột tiến độ: cột phân loại có giá trị "hoàn thành"
+  const withDone=sh.cat.filter(c=>rows.some(r=>isDoneVal(r.v[c.idx])));
+  sh.progIdx=withDone.length?withDone[0].idx:null;
+  // cột “đang kẹt ở đâu”: cột phân loại nhiều giá trị nhất (ngoài cột tiến độ), vd. Note
+  const blk=sh.cat.filter(c=>c.idx!==sh.progIdx&&c.distinct>=4).sort((a,b)=>b.distinct-a.distinct)[0];
+  sh.blockIdx=blk?blk.idx:null;
+  sh.dueIdx=sh.dates.length?sh.dates[0].idx:null;
+  sh.checklist=!sh.cat.length&&!sh.dates.length;
+  const hd=cols.find(c=>/hoàn thành/i.test(c.name));
+  sh.doneColIdx=hd?hd.idx:null;
+  sh.ui={filters:{},special:null,range:null,search:"",sort:null,shown:100,metric:"count"};
+  return sh;
+}
+function setStatus(sh){
+  for(const r of sh.rows){
+    r.st=null;r.done=null;
+    if(sh.progIdx!=null){r.done=isDoneVal(r.v[sh.progIdx])}
+    const due=sh.dueIdx!=null?r.v[sh.dueIdx]:null;
+    if(sh.progIdx!=null&&due instanceof Date&&!r.done){
+      const d=sod(due);
+      if(d<TODAY)r.st="overdue";else if(d-TODAY<=3*DAY)r.st="soon";
+    }
+  }
+}
+/* tick hoàn thành: nếu sheet có cột “Hoàn thành” thì ghi vào cột đó (như một chỉnh sửa), không thì chỉ lưu trong trình duyệt */
+const ckKey=sh=>"qlcv:"+state.fileName+":"+sh.name;
+function ckDone(sh,r){
+  if(sh.doneColIdx!=null){const v=r.v[sh.doneColIdx];return v!=null&&!/chưa/i.test(String(v))}
+  const m=sh._ck||(sh._ck=store.get(ckKey(sh))||{});
+  return !!m[r.n];
+}
+
+/* ============ Trạng thái ứng dụng ============ */
+const BASE_TITLE="Quản lý tiến trình công việc";
+const state={fileName:"",sheets:[],active:"overview",handle:null,buf:null,sha:null,pending:new Map(),src:"local"};
+function toast(msg,err){const t=$("#toast");t.textContent=msg;t.className="toast"+(err?" err":"");t.hidden=false;clearTimeout(toast._t);toast._t=setTimeout(()=>{t.hidden=true},err?9000:5000)}
+
+/* ---- GitHub ---- */
+const GH_KEY="qlcv:gh";
+const ghCfg=()=>Object.assign({owner:"Donniehieu",repo:"po-data",path:"data/PO-data.xlsx",branch:"main",token:""},store.get(GH_KEY)||{});
+const ghReady=()=>{const c=ghCfg();return !!(c.token&&c.owner&&c.repo&&c.path)};
+const ghUrl=(c,p)=>`https://api.github.com/repos/${encodeURIComponent(c.owner)}/${encodeURIComponent(c.repo)}/${p}`;
+const ghPath=c=>c.path.split("/").map(encodeURIComponent).join("/");
+const ghHead=c=>({Authorization:"Bearer "+c.token,Accept:"application/vnd.github+json","X-GitHub-Api-Version":"2022-11-28"});
+function b64ToBuf(b64){const bin=atob(b64.replace(/\s/g,""));const u=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);return u.buffer}
+function bufToB64(u8){let s="";for(let i=0;i<u8.length;i+=0x8000)s+=String.fromCharCode.apply(null,u8.subarray(i,i+0x8000));return btoa(s)}
+async function ghFetchFile(){
+  const c=ghCfg();const url=ghUrl(c,`contents/${ghPath(c)}?ref=${encodeURIComponent(c.branch||"main")}`);
+  const r=await fetch(url,{headers:ghHead(c),cache:"no-store"});
+  if(!r.ok)throw new Error(r.status===404?"Không tìm thấy file trên GitHub (kiểm tra tên repo, đường dẫn và quyền của mã truy cập)":r.status===401?"Mã truy cập GitHub không đúng hoặc đã hết hạn":"GitHub trả lỗi "+r.status);
+  const j=await r.json();let buf;
+  if(j.content&&j.encoding==="base64")buf=b64ToBuf(j.content);
+  else buf=await (await fetch(url,{headers:{...ghHead(c),Accept:"application/vnd.github.raw+json"},cache:"no-store"})).arrayBuffer();
+  return {buf,sha:j.sha,name:j.name};
+}
+async function ghPutFile(bytes,msg){
+  const c=ghCfg();
+  const r=await fetch(ghUrl(c,`contents/${ghPath(c)}`),{method:"PUT",headers:{...ghHead(c),"Content-Type":"application/json"},
+    body:JSON.stringify({message:msg,content:bufToB64(bytes),sha:state.sha,branch:c.branch||"main"})});
+  if(r.status===409||r.status===422){const e=new Error("conflict");e.conflict=true;throw e}
+  if(!r.ok)throw new Error("GitHub trả lỗi "+r.status+" khi ghi file (mã truy cập cần quyền Contents: Read and write)");
+  state.sha=(await r.json()).content.sha;
+}
+async function loadFromGitHub(){
+  try{
+    toast("Đang tải dữ liệu từ GitHub…");
+    const keep=state.active;const f=await ghFetchFile();
+    state.sha=f.sha;state.handle=null;
+    await loadBuffer(f.buf,f.name,{src:"github"});
+    if(typeof keep==="number"&&state.sheets[keep]){state.active=keep;renderTabs();render()}
+    toast("Đã tải “"+f.name+"” từ GitHub");
+  }catch(e){toast(e.message,true)}
+}
+
+/* ---- Nạp file ---- */
+async function loadBuffer(buf,name,opts={}){
+  const err=$("#err");
+  try{
+    const raw=await parseXlsx(buf);
+    state.buf=buf;state.fileName=name;state.src=opts.src||"local";state.pending.clear();
+    state.sheets=raw.map(analyze);
+    state.sheets.forEach(s=>{s.baseLast=s.lastRow;setStatus(s)});
+    state.active="overview";
+    $("#fname").textContent=name+(state.src==="github"?"  ·  GitHub":"");
+    $("#fname").title=name;
+    $("#btnRefresh").hidden=!(state.handle||state.src==="github");
+    $("#btnImport").hidden=false;
+    $("#btnSync").hidden=!ghReady();
+    renderTabs();render();updateChrome();notifyDaily();
+  }catch(e){
+    console.error(e);
+    if(err){err.hidden=false;err.textContent="Không đọc được file: "+e.message}
+    else toast("Không đọc được file: "+e.message,true);
+  }
+}
+const confirmLoss=()=>!state.pending.size||confirm("Có thay đổi chưa lưu. Tải file khác sẽ làm mất các thay đổi này. Tiếp tục?");
+async function pick(){
+  if(!confirmLoss())return;
+  if(window.showOpenFilePicker){
+    try{
+      const [h]=await showOpenFilePicker({types:[{description:"Excel",accept:{"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":[".xlsx",".xlsm"]}}]});
+      state.handle=h;const f=await h.getFile();await loadBuffer(await f.arrayBuffer(),f.name);return;
+    }catch(e){if(e&&e.name==="AbortError")return}
+  }
+  $("#file").click();
+}
+async function refresh(){
+  if(!confirmLoss())return;
+  if(state.src==="github"&&ghReady())return loadFromGitHub();
+  if(!state.handle)return;
+  try{const keep=state.active;const f=await state.handle.getFile();await loadBuffer(await f.arrayBuffer(),f.name);
+    if(typeof keep==="number"&&state.sheets[keep]){state.active=keep;renderTabs();render()}}catch(e){toast("Không làm mới được: "+e.message,true)}
+}
+$("#btnPick").onclick=pick;$("#btnPick2").onclick=pick;$("#btnRefresh").onclick=refresh;
+$("#file").onchange=async e=>{const f=e.target.files[0];if(!f)return;state.handle=null;await loadBuffer(await f.arrayBuffer(),f.name);e.target.value=""};
+addEventListener("dragover",e=>{e.preventDefault();const d=$("#drop");d&&d.classList.add("over")});
+addEventListener("dragleave",()=>{const d=$("#drop");d&&d.classList.remove("over")});
+addEventListener("drop",async e=>{e.preventDefault();const f=e.dataTransfer.files[0];if(!f||!confirmLoss())return;state.handle=null;await loadBuffer(await f.arrayBuffer(),f.name)});
+addEventListener("beforeunload",e=>{if(state.pending.size){e.preventDefault();e.returnValue=""}});
+
+/* ---- Hộp thoại GitHub ---- */
+$("#btnGh").onclick=()=>{const c=ghCfg();for(const k of ["owner","repo","path","branch","token"])$("#gh"+k[0].toUpperCase()+k.slice(1)).value=c[k]||"";$("#dlg").showModal()};
+$("#ghClose").onclick=()=>$("#dlg").close();
+$("#ghForget").onclick=()=>{const c=ghCfg();c.token="";store.set(GH_KEY,c);$("#ghToken").value="";$("#btnSync").hidden=true;toast("Đã xoá mã truy cập khỏi trình duyệt này")};
+$("#ghSave").onclick=async()=>{
+  const c={owner:$("#ghOwner").value.trim(),repo:$("#ghRepo").value.trim(),path:$("#ghPath").value.trim(),branch:$("#ghBranch").value.trim()||"main",token:$("#ghToken").value.trim()};
+  if(!c.owner||!c.repo||!c.path||!c.token){toast("Cần điền đủ tài khoản, repo, đường dẫn file và mã truy cập",true);return}
+  if(!confirmLoss())return;
+  store.set(GH_KEY,c);$("#dlg").close();await loadFromGitHub();
+};
+$("#btnSync").onclick=async()=>{
+  const c=ghCfg();if(!ghReady()){toast("Chưa kết nối GitHub",true);return}
+  try{
+    const r=await fetch(ghUrl(c,"actions/workflows/sync-odoo.yml/dispatches"),{method:"POST",headers:{...ghHead(c),"Content-Type":"application/json"},body:JSON.stringify({ref:c.branch||"main"})});
+    toast(r.status===204?"Đã yêu cầu đồng bộ từ Odoo. Đợi 1–3 phút rồi bấm “Tải lại”.":"Không gửi được yêu cầu ("+r.status+"). Mã truy cập cần quyền Actions: Read and write, và repo phải có workflow sync-odoo.yml.",r.status!==204);
+  }catch(e){toast("Không gửi được yêu cầu: "+e.message,true)}
+};
+
+/* ---- Sửa dữ liệu & ghi Excel ---- */
+const sameVal=(a,b)=>(a==null&&b==null)||(a instanceof Date&&b instanceof Date?+a===+b:a===b);
+const pkey=(si,n,c)=>si+"|"+n+"|"+c;
+function setCell(si,r,ci,val){
+  const sh=state.sheets[si];const old=r.v[ci];
+  if(sameVal(old,val))return false;
+  const k=pkey(si,r.n,ci),ex=state.pending.get(k);
+  const orig=ex?ex.old:old;
+  const key=ex?ex.key:(r.isNew||sh.title==null?null:String((ci===sh.title?old:r.v[sh.title])??""));
+  r.v[ci]=val;r._t=null;
+  if(sameVal(orig,val)&&!r.isNew)state.pending.delete(k);
+  else state.pending.set(k,{si,n:r.n,col:ci,val,old:orig,path:sh.path,key,isNew:!!r.isNew});
+  return true;
+}
+function addRow(si,silent){
+  const sh=state.sheets[si];
+  const ix=sh.cols.find(c=>c.type==="index");
+  const slot=sh.blank.length?sh.blank.shift():null; // dòng trống đã đánh sẵn STT thì dùng trước
+  let nn=slot?slot.n:Math.max(sh.hdrRow,...sh.rows.map(x=>x.n))+1; // dòng trống đầu tiên ngay sau dữ liệu
+  if(!slot)while((sh.grid[nn-1]&&sh.grid[nn-1].some(x=>x!=null))||sh.rows.some(x=>x.n===nn))nn++;
+  const r={n:nn,v:Array(sh.maxC).fill(null),isNew:true,st:null,done:null};
+  if(slot&&ix)r.v[ix.idx]=slot.ix;
+  sh.rows.push(r);
+  if(ix&&!slot){const mx=Math.max(0,...sh.rows.map(x=>typeof x.v[ix.idx]==="number"?x.v[ix.idx]:0));setCell(si,r,ix.idx,mx+1)}
+  if(!silent){const u=sh.ui;u.filters={};u.special=null;u.range=null;u.search="";u.sort=null;u.shown=Math.max(u.shown,sh.rows.length);renderSheet(sh);updateChrome();
+    const tr=document.querySelector(`#tbl tr[data-row="${r.n}"]`);if(tr){tr.scrollIntoView({block:"center"});const td=tr.querySelector("td[data-c]");if(td)startEdit(sh,td)}}
+  return r;
+}
+function updateSavebar(){
+  const sb=$("#savebar"),n=state.pending.size;
+  if(!n){sb.hidden=true;return}
+  const c=ghCfg();const dest=(ghReady()&&state.src==="github")?`GitHub ${esc(c.owner)}/${esc(c.repo)}`:"tải file mới về máy";
+  sb.hidden=false;
+  sb.innerHTML=`<span>✏ <b>${n}</b> ô đã sửa, chưa lưu → ${dest}</span><span class="grow"></span><button class="btn sm" id="sbUndo">Hoàn tác tất cả</button><button class="btn sm primary" id="sbSave">💾 Lưu vào Excel</button>`;
+  $("#sbUndo").onclick=undoAll;$("#sbSave").onclick=saveAll;
+}
+function undoAll(){
+  for(const e of state.pending.values()){const sh=state.sheets[e.si];const r=sh.rows.find(x=>x.n===e.n);if(r){r.v[e.col]=e.old;r._t=null}}
+  for(const sh of state.sheets){sh.rows=sh.rows.filter(r=>!r.isNew);sh.lastRow=sh.baseLast;sh.blank=sh.blank0.slice();setStatus(sh)}
+  state.pending.clear();render();updateChrome();toast("Đã hoàn tác các thay đổi chưa lưu");
+}
+let saving=false;
+async function saveAll(){
+  if(!state.pending.size||saving)return;saving=true;
+  try{
+    const edits=[...state.pending.values()];
+    const viaGh=ghReady()&&state.src==="github";
+    let bytes=await applyEdits(state.buf,edits);
+    const msg=`Dashboard: cập nhật ${edits.length} ô (${new Date().toLocaleString("vi-VN")})`;
+    if(viaGh){
+      try{await ghPutFile(bytes,msg)}
+      catch(e){
+        if(!e.conflict)throw e;
+        if(edits.some(x=>x.isNew))throw new Error("Dữ liệu trên GitHub vừa thay đổi (có thể do đồng bộ Odoo). Bấm “Tải lại” rồi nhập lại các dòng mới.");
+        const f=await ghFetchFile();const raw=await parseXlsx(f.buf);
+        for(const x of edits){
+          const sh=state.sheets[x.si];const g=(raw.find(s=>s.path===x.path)||{}).grid||[];
+          if(x.key!=null&&sh.title!=null){const cur=g[x.n-1]&&g[x.n-1][sh.title];if(String(cur??"")!==x.key)throw new Error(`Dòng ${x.n} trên GitHub đã khác (mã ${x.key}). Bấm “Tải lại” để lấy bản mới rồi sửa lại.`)}
+        }
+        state.sha=f.sha;bytes=await applyEdits(f.buf,edits);await ghPutFile(bytes,msg);
+      }
+      toast("Đã lưu vào GitHub ✔");
+    }else{
+      const a=document.createElement("a");
+      a.href=URL.createObjectURL(new Blob([bytes],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}));
+      a.download=state.fileName.replace(/\.xlsx?m?$/i,"")+"_da-cap-nhat.xlsx";a.click();setTimeout(()=>URL.revokeObjectURL(a.href),3000);
+      toast("Đã tải file mới về máy. Hãy thay file Excel nguồn bằng file này (hoặc kết nối GitHub để lưu tự động).");
+    }
+    state.buf=bytes.buffer;state.pending.clear();
+    for(const sh of state.sheets){sh.baseLast=sh.lastRow;sh.blank0=sh.blank.slice();sh.rows.forEach(r=>{r.isNew=false})}
+    render();updateChrome();
+  }catch(e){console.error(e);toast(e.message,true)}
+  finally{saving=false}
+}
+function startEdit(sh,td){
+  const n=+td.dataset.r,ci=+td.dataset.c,si=state.sheets.indexOf(sh);
+  const col=sh.cols.find(c=>c.idx===ci),r=sh.rows.find(x=>x.n===n);if(!col||!r)return;
+  if(sh.fset.has(n+":"+ci)){toast("Ô này là công thức trong Excel nên không sửa từ dashboard",true);return}
+  const cur=r.v[ci];let inp=document.createElement("input");inp.className="cell";td.textContent="";
+  const ymd=d=>d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+  if(col.type==="date"){inp.type="date";if(cur instanceof Date)inp.value=ymd(cur)}
+  else if(col.type==="num"){inp.type="number";inp.step="any";if(typeof cur==="number")inp.value=cur}
+  else{inp.type="text";inp.value=cur==null?"":(cur instanceof Date?fmtD(cur):String(cur));
+    if(col.type==="cat"){const dl=document.createElement("datalist");dl.id="dl"+ci;
+      [...new Set(sh.rows.map(x=>x.v[ci]).filter(x=>x!=null))].forEach(v=>{const o=document.createElement("option");o.value=v;dl.appendChild(o)});td.appendChild(dl);inp.setAttribute("list",dl.id)}}
+  td.appendChild(inp);inp.focus();if(inp.select&&inp.type==="text")inp.select();
+  let done=false;
+  const finish=commit=>{
+    if(done)return;done=true;
+    if(commit){
+      let v=inp.value;
+      if(col.type==="date"){if(v===""){v=null}else if(cur instanceof Date&&ymd(cur)===v){v=cur}else{const [y,m,d]=v.split("-").map(Number);v=new Date(y,m-1,d)}}
+      else if(col.type==="num"){v=v===""?null:parseFloat(v)}
+      else{v=v.trim()===""?null:v.trim()}
+      setCell(si,r,ci,v);setStatus(sh);
+    }
+    renderDyn(sh);updateChrome();
+  };
+  inp.onkeydown=e=>{if(e.key==="Enter")finish(true);else if(e.key==="Escape")finish(false)};
+  inp.onblur=()=>finish(true);
+}
+
+/* ---- Nhập file xuất từ Odoo ---- */
+const norm=s=>String(s??"").toLowerCase().normalize("NFC").replace(/\s+/g," ").trim();
+function parseAnyDate(v){
+  if(v instanceof Date||typeof v!=="string")return v;
+  let m=v.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
+  if(m)return new Date(+m[3],+m[2]-1,+m[1],+(m[4]||0),+(m[5]||0),+(m[6]||0));
+  m=v.match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2})(?::(\d{2}))?)?/);
+  if(m)return new Date(+m[1],+m[2]-1,+m[3],+(m[4]||0),+(m[5]||0),+(m[6]||0));
+  return v;
+}
+$("#btnImport").onclick=()=>$("#fileImp").click();
+$("#fileImp").onchange=async e=>{const f=e.target.files[0];e.target.value="";if(f)try{await importOdoo(f)}catch(err){console.error(err);toast("Không nhập được: "+err.message,true)}};
+async function importOdoo(file){
+  if(!state.sheets.length){toast("Hãy mở file Excel nguồn trước",true);return}
+  const imp=(await parseXlsx(await file.arrayBuffer())).map(analyze).find(s=>!s.empty);
+  if(!imp){toast("File không có dữ liệu",true);return}
+  const iNames=new Map(imp.cols.filter(c=>c.type!=="index").map(c=>[norm(c.name),c]));
+  let best=null,bs=0;
+  state.sheets.forEach((sh,i)=>{if(sh.empty)return;const k=sh.cols.filter(c=>iNames.has(norm(c.name))).length;if(k>bs){bs=k;best={sh,i}}});
+  if(!best||bs<3){toast("Không có sheet nào có các cột giống file Odoo (cần trùng ít nhất 3 tên cột).",true);return}
+  const {sh,i:si}=best;
+  const keyCol=sh.cols.find(c=>c.idx===sh.title);
+  if(!keyCol||!iNames.has(norm(keyCol.name))){toast("File Odoo thiếu cột khóa “"+(keyCol?keyCol.name:"?")+"”",true);return}
+  // cột Note/Ghi chú do người dùng nhập nên không bị ghi đè
+  const map=sh.cols.filter(c=>c.type!=="index"&&iNames.has(norm(c.name))&&!/^(note|ghi chú)$/i.test(c.name)).map(c=>({t:c,s:iNames.get(norm(c.name))}));
+  const kmap=map.find(m=>m.t.idx===sh.title);
+  const byKey=new Map(sh.rows.map(r=>[String(r.v[sh.title]??"").trim(),r]));
+  let upd=0,add=0;
+  for(const ir of imp.rows){
+    const key=String(ir.v[kmap.s.idx]??"").trim();if(!key)continue;
+    let r=byKey.get(key),isNew=false;
+    if(!r){r=addRow(si,true);byKey.set(key,r);isNew=true}
+    let ch=false;
+    for(const m of map){
+      let v=ir.v[m.s.idx];
+      if(m.t.type==="date")v=parseAnyDate(v);
+      if(m.t.type==="num"&&typeof v==="string"){const x=Number(v.replace(/\./g,"").replace(",","."));if(!isNaN(x))v=x}
+      if(v==null&&!isNew)continue; // Odoo để trống thì giữ nguyên dữ liệu đang có
+      if(setCell(si,r,m.t.idx,v))ch=true;
+    }
+    if(isNew)add++;else if(ch)upd++;
+  }
+  sh.ui.shown=Math.max(sh.ui.shown,100);setStatus(sh);
+  state.active=si;renderTabs();render();updateChrome();
+  toast(`Nhập từ “${imp.name}” vào sheet “${sh.name}”: ${upd} dòng cập nhật, ${add} dòng mới. Chưa ghi — bấm “Lưu vào Excel”.`);
+}
+
+/* ---- Nhắc việc & ưu tiên ---- */
+function collectItems(){
+  const out=[];
+  state.sheets.forEach((s,i)=>s.rows.forEach(r=>{
+    if(!r.st)return;
+    const due=r.v[s.dueIdx];const late=Math.round((TODAY-sod(due))/DAY);
+    const amt=s.money?+r.v[s.money.idx]||0:0;
+    const lvl=r.st==="soon"?"soon":(late>7||amt>=5e7?"urgent":"high");
+    out.push({s,i,r,due,late,amt,lvl,st:r.st});
+  }));
+  const rk={urgent:0,high:1,soon:2};
+  out.sort((a,b)=>rk[a.lvl]-rk[b.lvl]||(b.late-a.late)||(b.amt-a.amt));
+  return out;
+}
+function updateBanner(){
+  const b=$("#banner");if(!state.sheets.length){b.hidden=true;return}
+  const it=collectItems(),od=it.filter(x=>x.st==="overdue"),urg=it.filter(x=>x.lvl==="urgent"),sn=it.filter(x=>x.lvl==="soon");
+  b.hidden=false;
+  if(!od.length&&!sn.length){b.className="banner ok";b.textContent="✔ Không có việc quá hạn hoặc sắp đến hạn (tính đến "+fmtD(TODAY)+")";b.onclick=null;document.title=BASE_TITLE;return}
+  b.className="banner";
+  b.innerHTML=`<span>⚠ Hôm nay ${fmtD(TODAY)}:</span><span style="color:var(--bad)">${od.length} quá hạn${urg.length?` (${urg.length} khẩn)`:""}</span><span style="color:var(--warn)">${sn.length} sắp đến hạn</span><span class="grow"></span><span class="sub">Bấm để xem ưu tiên xử lý →</span>`;
+  b.onclick=()=>{state.active="priority";renderTabs();render();scrollTo(0,0)};
+  document.title=(od.length?`(${od.length}) `:"")+BASE_TITLE;
+}
+function notifyDaily(force){
+  if(!("Notification" in window)||Notification.permission!=="granted"){return}
+  const k="qlcv:notified",today=fmtD(TODAY);if(!force&&store.get(k)===today)return;
+  const it=collectItems(),od=it.filter(x=>x.st==="overdue");if(!od.length&&!force)return;
+  try{new Notification(od.length+" việc quá hạn",{body:od.slice(0,3).map(x=>`${x.r.v[x.s.title]} (trễ ${x.late} ngày)`).join("\n")});store.set(k,today)}catch(e){}
+}
+$("#btnNotify").onclick=async()=>{
+  if(!("Notification" in window)){toast("Trình duyệt này không hỗ trợ thông báo",true);return}
+  const p=await Notification.requestPermission();
+  toast(p==="granted"?"Đã bật nhắc việc. Thông báo chỉ hiện khi bạn đang mở trang này.":"Bạn chưa cho phép thông báo trong trình duyệt.",p!=="granted");
+  if(p==="granted")notifyDaily(true);
+};
+function updateChrome(){updateSavebar();updateBanner();const t=document.querySelector('#tabs [data-i="priority"] .n');if(t)t.textContent=collectItems().length}
+
+function goSheet(si,patch){const sh=state.sheets[si];sh.ui.filters={};sh.ui.special=null;sh.ui.range=null;sh.ui.search="";sh.ui.shown=100;Object.assign(sh.ui,patch||{});state.active=si;renderTabs();render();scrollTo(0,0)}
+
+function renderPriority(){
+  const it=collectItems();
+  const groups=[
+    {k:"urgent",t:"Khẩn – xử lý ngay",c:"var(--bad)",d:"Quá hạn hơn 7 ngày, hoặc quá hạn và giá trị từ 50 triệu"},
+    {k:"high",t:"Cao – quá hạn",c:"var(--warn)",d:"Quá hạn từ 1 đến 7 ngày"},
+    {k:"soon",t:"Sắp đến hạn (3 ngày tới)",c:"var(--brand)",d:"Hạn từ hôm nay đến 3 ngày tới, chưa hoàn thành"}];
+  let html=`<div class="note" style="margin:0 0 14px">Một dòng được tính là “trễ” khi ngày hạn đã qua mà cột tiến độ chưa ở mức hoàn thành (xem cột đang dùng ở từng sheet). Mức ưu tiên chỉ dựa vào số ngày trễ và giá trị đơn, không có số liệu nào được tự thêm.</div>`;
+  if(!it.length)html+=`<div class="card">Hiện không có dòng nào quá hạn hoặc sắp đến hạn. 🎉</div>`;
+  else{
+    html+=`<div class="grid pgrid">`;
+    for(const g of groups){
+      const list=it.filter(x=>x.lvl===g.k);const sum=list.reduce((a,x)=>a+x.amt,0);
+      html+=`<div class="card"><div class="lvl"><i style="background:${g.c}"></i>${g.t}<span class="tag">${list.length}</span>${sum?`<span class="sub" style="font-weight:500">· ${fmtBig(sum)}</span>`:""}</div><div class="sub" style="margin-bottom:8px">${g.d}</div>`;
+      if(!list.length)html+=`<div class="sub">Không có.</div>`;
+      else html+=`<ul class="attn">`+list.slice(0,12).map(x=>{
+        const blk=x.s.blockIdx!=null?x.r.v[x.s.blockIdx]:null;
+        return `<li class="click" data-go="${x.i}" data-q="${esc(String(x.r.v[x.s.title]??""))}"><span class="tag">${esc(x.s.name)}</span><div><b>${esc(x.r.v[x.s.title])}</b><div class="sub">${esc(x.s.sub!=null?x.r.v[x.s.sub]:"")}${x.amt?" · "+fmtN(x.amt):""}</div>${blk?`<span class="chip" style="--c:${colorFor(blk)}">${esc(blk)}</span>`:""}</div><span class="late" style="${x.lvl==="soon"?"color:var(--brand)":""}">${x.lvl==="soon"?(x.late<0?`còn ${-x.late} ngày`:"hôm nay"):`trễ ${x.late} ngày`}<div class="sub">hạn ${fmtD(x.due)}</div></span></li>`}).join("")+`</ul>`+(list.length>12?`<div class="note">… và ${list.length-12} dòng nữa. Mở sheet và bấm “Quá hạn” để xem đủ.</div>`:"");
+      html+=`</div>`;
+    }
+    html+=`</div>`;
+    // kẹt ở đâu
+    const kept=new Map();
+    for(const x of it.filter(x=>x.st==="overdue")){if(x.s.blockIdx==null)continue;const k=x.i+"|"+(x.r.v[x.s.blockIdx]??"(Trống)");kept.set(k,(kept.get(k)||0)+1)}
+    if(kept.size){
+      const arr=[...kept].sort((a,b)=>b[1]-a[1]).slice(0,10);const mx=arr[0][1];
+      html+=`<h2 class="sec">Đơn quá hạn đang kẹt ở đâu</h2><div class="card"><div class="bars">`+arr.map(([k,n])=>{const [i,v]=[+k.split("|")[0],k.split("|").slice(1).join("|")];
+        return `<div class="bar" data-goblk="${i}" data-v="${esc(v)}"><span class="t">${esc(v)}</span><span class="tr"><span class="f" style="display:block;width:${n/mx*100}%;background:${colorFor(v)}"></span></span><span class="n">${n} dòng</span></div>`}).join("")+`</div><div class="note">Theo cột “${esc(state.sheets[+arr[0][0].split("|")[0]].cols.find(c=>c.idx===state.sheets[+arr[0][0].split("|")[0]].blockIdx).name)}”. Bấm để lọc.</div></div>`;
+    }
+  }
+  // việc cần làm / đang chờ theo giá trị trạng thái
+  const rows=[];
+  state.sheets.forEach((s,i)=>s.cat.forEach(c=>{
+    const m=new Map();
+    for(const r of s.rows){const v=r.v[c.idx];if(typeof v==="string"&&/^(cần|chờ|đang chờ)/i.test(v)){const o=m.get(v)||{n:0,sum:0};o.n++;o.sum+=s.money?(+r.v[s.money.idx]||0):0;m.set(v,o)}}
+    for(const [v,o] of m)rows.push({s,i,c,v,...o});
+  }));
+  rows.sort((a,b)=>b.n-a.n);
+  if(rows.length){
+    html+=`<h2 class="sec">Việc đang chờ xử lý theo trạng thái</h2><div class="card scroll-x"><table class="mini"><thead><tr><th>Sheet</th><th>Cột</th><th>Trạng thái</th><th style="text-align:right">Số dòng</th><th style="text-align:right">Giá trị</th></tr></thead><tbody>`+
+      rows.slice(0,25).map(x=>`<tr class="click" data-gof="${x.i}" data-c="${x.c.idx}" data-v="${esc(x.v)}"><td>${esc(x.s.name)}</td><td>${esc(x.c.name)}</td><td><span class="chip" style="--c:${colorFor(x.v)}">${esc(x.v)}</span></td><td class="num">${x.n}</td><td class="num">${x.s.money?fmtBig(x.sum):""}</td></tr>`).join("")+`</tbody></table><div class="note">Gồm các giá trị bắt đầu bằng “Cần…” hoặc “Chờ…” trong các cột phân loại. Bấm một dòng để mở sheet đã lọc sẵn.</div></div>`;
+  }
+  $("#main").innerHTML=html;
+  const m=$("#main");
+  m.querySelectorAll("[data-go]").forEach(li=>li.onclick=()=>goSheet(+li.dataset.go,{search:li.dataset.q.toLowerCase()}));
+  m.querySelectorAll("[data-goblk]").forEach(b=>b.onclick=()=>{const si=+b.dataset.goblk,sh=state.sheets[si];goSheet(si,{special:"overdue",filters:{[sh.blockIdx]:b.dataset.v==="(Trống)"?"":b.dataset.v}})});
+  m.querySelectorAll("[data-gof]").forEach(tr=>tr.onclick=()=>goSheet(+tr.dataset.gof,{filters:{[tr.dataset.c]:tr.dataset.v}}));
+}
+
+/* ============ Giao diện ============ */
+function renderTabs(){
+  const t=$("#tabs");t.hidden=false;
+  const pc=collectItems().length;
+  t.innerHTML=`<button data-i="overview" class="${state.active==="overview"?"on":""}">Tổng quan</button><button data-i="priority" class="${state.active==="priority"?"on":""}">⚠ Ưu tiên xử lý<span class="n">${pc}</span></button>`+
+    state.sheets.map((s,i)=>`<button data-i="${i}" class="${state.active===i?"on":""}">${esc(s.name)}<span class="n">${s.rows.length}</span></button>`).join("");
+  t.querySelectorAll("button").forEach(b=>b.onclick=()=>{const v=b.dataset.i;state.active=(v==="overview"||v==="priority")?v:+v;renderTabs();render();scrollTo(0,0)});
+}
+function render(){state.active==="overview"?renderOverview():state.active==="priority"?renderPriority():renderSheet(state.sheets[state.active])}
+
+function sheetStats(sh){
+  const o={rows:sh.rows.length};
+  if(sh.checklist){const d=sh.rows.filter(r=>ckDone(sh,r)).length;o.done=d;o.pct=sh.rows.length?d/sh.rows.length:0}
+  else if(sh.progIdx!=null){const d=sh.rows.filter(r=>r.done).length;o.done=d;o.pct=sh.rows.length?d/sh.rows.length:0}
+  o.overdue=sh.rows.filter(r=>r.st==="overdue").length;
+  o.soon=sh.rows.filter(r=>r.st==="soon").length;
+  if(sh.money)o.sum=sh.rows.reduce((a,r)=>a+(+r.v[sh.money.idx]||0),0);
+  return o;
+}
+function kpi(label,val,sub,cls="",id=""){return `<div class="card kpi ${cls} ${id?"click":""}" ${id?`data-k="${id}"`:""}><div class="l">${esc(label)}</div><div class="v">${val}</div><div class="s">${sub||""}</div></div>`}
+
+function renderOverview(){
+  const sheets=state.sheets;const st=sheets.map(sheetStats);
+  const totRows=st.reduce((a,s)=>a+s.rows,0),totOd=st.reduce((a,s)=>a+s.overdue,0),totSoon=st.reduce((a,s)=>a+s.soon,0);
+  let html=`<div class="grid kpis">
+    ${kpi("Số sheet",sheets.length,"trong file "+esc(state.fileName))}
+    ${kpi("Tổng số dòng dữ liệu",fmtN(totRows),"cộng tất cả các sheet")}
+    ${kpi("Quá hạn chưa xong",fmtN(totOd),"hạn &lt; hôm nay ("+fmtD(TODAY)+") và chưa hoàn thành",totOd?"bad":"ok")}
+    ${kpi("Sắp đến hạn (3 ngày)",fmtN(totSoon),"chưa hoàn thành",totSoon?"warn":"ok")}
+  </div>`;
+  // thẻ từng sheet
+  html+=`<h2 class="sec">Các sheet trong file</h2><div class="grid sheetcards">`;
+  sheets.forEach((s,i)=>{
+    const x=st[i];
+    let line="";
+    if(x.pct!=null)line+=`<div class="prog"><i style="width:${(x.pct*100).toFixed(0)}%"></i></div><div class="sub">Hoàn thành ${x.done}/${x.rows} (${(x.pct*100).toFixed(0)}%)</div>`;
+    let extra=[];
+    if(x.sum!=null&&s.money)extra.push(`${/^tổng/i.test(s.money.name)?"":"Tổng "}${esc(s.money.name)}: <b>${fmtBig(x.sum)}</b>`);
+    if(x.overdue)extra.push(`<span class="late">${x.overdue} quá hạn</span>`);
+    html+=`<div class="card sc" data-i="${i}"><h4>${esc(s.name)}</h4><div class="sub">${x.rows} dòng · ${s.cols.length} cột</div>${line}<div class="sub" style="margin-top:6px">${extra.join(" · ")}</div></div>`;
+  });
+  html+=`</div>`;
+  // cần chú ý
+  const items=[];
+  sheets.forEach((s,i)=>s.rows.forEach(r=>{if(r.st==="overdue")items.push({s,i,r})}));
+  items.sort((a,b)=>a.r.v[a.s.dueIdx]-b.r.v[b.s.dueIdx]);
+  html+=`<h2 class="sec">Cần chú ý – quá hạn lâu nhất</h2><div class="card">`;
+  if(!items.length)html+=`<div class="sub">Không có dòng nào quá hạn (xét trên sheet có cột ngày và cột trạng thái hoàn thành).</div>`;
+  else{
+    html+=`<ul class="attn">`+items.slice(0,12).map(({s,i,r})=>{
+      const due=r.v[s.dueIdx];const late=Math.round((TODAY-sod(due))/DAY);
+      return `<li><span class="tag">${esc(s.name)}</span><div><b>${esc(r.v[s.title])}</b><div class="sub">${esc(s.sub!=null?r.v[s.sub]:"")}${s.money&&r.v[s.money.idx]!=null?" · "+fmtN(r.v[s.money.idx]):""} · dòng ${r.n}</div></div><span class="late">trễ ${late} ngày<div class="sub">hạn ${fmtD(due)}</div></span></li>`}).join("")+`</ul>`;
+    const per=sheets.map((s,i)=>({s,i,n:items.filter(x=>x.i===i).length})).filter(x=>x.n);
+    html+=`<div class="note">Xem đầy đủ: `+per.map(x=>`<a href="#" data-od="${x.i}">${esc(x.s.name)} (${x.n})</a>`).join(" · ")+`</div>`;
+  }
+  html+=`</div><div class="note">Cách tính: dòng "quá hạn" = có ngày hạn &lt; hôm nay và cột trạng thái chưa ở mức hoàn thành. Cột ngày / cột trạng thái có thể đổi trong từng sheet.</div>`;
+  $("#main").innerHTML=html;
+  $("#main").querySelectorAll(".sc").forEach(c=>c.onclick=()=>{state.active=+c.dataset.i;renderTabs();render();scrollTo(0,0)});
+  $("#main").querySelectorAll("[data-od]").forEach(a=>a.onclick=e=>{e.preventDefault();const s=state.sheets[+a.dataset.od];s.ui.special="overdue";state.active=+a.dataset.od;renderTabs();render();scrollTo(0,0)});
+}
+
+function rowsFor(sh,except){
+  const u=sh.ui;
+  return sh.rows.filter(r=>{
+    for(const k in u.filters){if(except===+k)continue;if(String(r.v[k]??"")!==u.filters[k])return false}
+    if(u.special&&except!=="special"&&r.st!==u.special)return false;
+    if(u.range&&except!=="range"){const d=r.v[sh.dueIdx];if(!(d instanceof Date)||d<u.range.from||d>=u.range.to)return false}
+    if(u.search){if(!(r._t||(r._t=r.v.map(x=>x instanceof Date?fmtD(x):String(x??"")).join(" ").toLowerCase())).includes(u.search))return false}
+    return true;
+  });
+}
+
+function renderSheet(sh){
+  if(sh.empty){$("#main").innerHTML=`<div class="card">Sheet <b>${esc(sh.name)}</b> không có dữ liệu dạng bảng để thống kê.</div>`;return}
+  const u=sh.ui;
+  const catOpts=sh.cat.map(c=>`<option value="${c.idx}" ${c.idx===sh.progIdx?"selected":""}>${esc(c.name)}</option>`).join("");
+  const dateOpts=sh.dates.map(c=>`<option value="${c.idx}" ${c.idx===sh.dueIdx?"selected":""}>${esc(c.name)}</option>`).join("");
+  $("#main").innerHTML=`
+    <div class="toolbar">
+      <input type="search" id="q" placeholder="Tìm kiếm trong sheet…" value="${esc(u.search)}">
+      ${sh.cat.length?`<label class="sub">Cột tiến độ <select id="selProg"><option value="">(không)</option>${catOpts}</select></label>`:""}
+      ${sh.dates.length?`<label class="sub">Cột hạn <select id="selDue"><option value="">(không)</option>${dateOpts}</select></label>`:""}
+      ${sh.money?`<span class="seg" id="seg"><button data-m="count" class="${u.metric==="count"?"on":""}">Đếm dòng</button><button data-m="sum" class="${u.metric==="sum"?"on":""}">Theo ${esc(sh.money.name)}</button></span>`:""}
+      <span class="grow"></span>
+      <button class="btn" id="btnAdd">＋ Thêm dòng</button>
+      <button class="btn" id="btnCsv">⬇ Xuất CSV (đang lọc)</button>
+    </div>
+    <div id="dyn"></div>
+    <div class="src">Nguồn: sheet “${esc(sh.name)}”, tiêu đề ở dòng ${sh.hdrRow}, ${sh.rows.length} dòng dữ liệu.</div>`;
+  $("#q").oninput=e=>{u.search=e.target.value.trim().toLowerCase();u.shown=100;renderDyn(sh)};
+  const sp=$("#selProg");if(sp)sp.onchange=e=>{sh.progIdx=e.target.value===""?null:+e.target.value;u.special=null;setStatus(sh);renderDyn(sh);updateChrome()};
+  const sd=$("#selDue");if(sd)sd.onchange=e=>{sh.dueIdx=e.target.value===""?null:+e.target.value;u.special=null;u.range=null;setStatus(sh);renderDyn(sh);updateChrome()};
+  const seg=$("#seg");if(seg)seg.querySelectorAll("button").forEach(b=>b.onclick=()=>{u.metric=b.dataset.m;seg.querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===b));renderDyn(sh)});
+  $("#btnCsv").onclick=()=>exportCsv(sh);
+  $("#btnAdd").onclick=()=>addRow(state.sheets.indexOf(sh));
+  renderDyn(sh);
+}
+
+function barsHtml(sh,colIdx,fr,metric){
+  const m=new Map();
+  for(const r of fr){const k=String(r.v[colIdx]??"");const w=metric==="sum"&&sh.money?(+r.v[sh.money.idx]||0):1;m.set(k,(m.get(k)||0)+w)}
+  const arr=[...m.entries()].sort((a,b)=>b[1]-a[1]);
+  const tot=arr.reduce((a,x)=>a+x[1],0)||1,mx=arr[0]?arr[0][1]:1;
+  const sel=sh.ui.filters[colIdx];
+  return `<div class="bars">`+arr.slice(0,14).map(([k,v])=>`<div class="bar ${sel===k?"sel":""}" data-c="${colIdx}" data-v="${esc(k)}" title="Bấm để lọc"><span class="t">${esc(k||"(Trống)")}</span><span class="tr"><span class="f" style="display:block;width:${(v/mx*100).toFixed(1)}%;background:${colorFor(k)}"></span></span><span class="n">${metric==="sum"?fmtBig(v):fmtN(v)} · ${(v/tot*100).toFixed(0)}%</span></div>`).join("")+`</div>`;
+}
+function donut(done,total,color){
+  const R=52,C=2*Math.PI*R,p=total?done/total:0;
+  return `<svg width="140" height="140" viewBox="0 0 140 140" role="img" aria-label="Tỷ lệ hoàn thành ${(p*100).toFixed(0)}%"><circle cx="70" cy="70" r="${R}" fill="none" stroke="var(--soft)" stroke-width="16"/><circle cx="70" cy="70" r="${R}" fill="none" stroke="${color}" stroke-width="16" stroke-dasharray="${(C*p).toFixed(1)} ${C.toFixed(1)}" transform="rotate(-90 70 70)" stroke-linecap="butt"/><text x="70" y="68" text-anchor="middle" font-size="26" font-weight="700" fill="currentColor">${(p*100).toFixed(0)}%</text><text x="70" y="88" text-anchor="middle" font-size="11" fill="var(--mute)">${done}/${total}</text></svg>`;
+}
+function timeline(sh,fr){
+  const di=sh.dueIdx;const ds=fr.map(r=>r.v[di]).filter(d=>d instanceof Date);
+  if(!ds.length)return "";
+  const min=sod(new Date(Math.min(...ds))),max=sod(new Date(Math.max(...ds)));
+  const span=(max-min)/DAY+1;const byWeek=span>45;
+  const key=d=>{d=sod(d);if(!byWeek)return +d;const wd=(d.getDay()+6)%7;return +new Date(d.getFullYear(),d.getMonth(),d.getDate()-wd)};
+  const step=byWeek?7*DAY:DAY;
+  const start=key(min),end=key(max);
+  const b=[];for(let t=start;t<=end;t+=step){b.push({t,from:new Date(t),done:0,open:0})}
+  const idx=new Map(b.map((x,i)=>[x.t,i]));
+  for(const r of fr){const d=r.v[di];if(!(d instanceof Date))continue;const x=b[idx.get(key(d))];if(!x)continue;(sh.progIdx!=null&&r.done)?x.done++:x.open++}
+  const mx=Math.max(1,...b.map(x=>x.done+x.open));
+  const bw=byWeek?44:Math.max(22,Math.min(40,900/b.length)),H=150,pad=22,W=b.length*bw+20;
+  let svg=`<svg width="${W}" height="${H+pad+10}" viewBox="0 0 ${W} ${H+pad+10}" role="img" aria-label="Số dòng theo ${byWeek?"tuần":"ngày"} của cột ${esc(sh.cols.find(c=>c.idx===di).name)}">`;
+  b.forEach((x,i)=>{
+    const X=10+i*bw,hO=x.open/mx*H,hD=x.done/mx*H;
+    const to=new Date(x.t+step);
+    const lbl=byWeek?`Tuần ${fmtDS(x.from)}–${fmtDS(new Date(x.t+6*DAY))}`:fmtD(x.from);
+    svg+=`<g class="tb" data-from="${x.t}" data-to="${+to}" style="cursor:pointer"><title>${lbl}: ${x.open+x.done} dòng (${x.done} xong, ${x.open} chưa xong)</title><rect x="${X}" y="0" width="${bw-4}" height="${H}" fill="transparent"/>`;
+    if(x.open)svg+=`<rect x="${X+2}" y="${H-hO-hD}" width="${bw-8}" height="${hO}" fill="var(--warn)" rx="2"/>`;
+    if(x.done)svg+=`<rect x="${X+2}" y="${H-hD}" width="${bw-8}" height="${hD}" fill="var(--ok)" rx="2"/>`;
+    if(x.open+x.done)svg+=`<text x="${X+bw/2-2}" y="${H-hO-hD-4}" text-anchor="middle" font-size="10" fill="var(--mute)">${x.open+x.done}</text>`;
+    const every=Math.ceil(36/bw);
+    if(i%every===0)svg+=`<text x="${X+bw/2-2}" y="${H+14}" text-anchor="middle" font-size="10" fill="var(--mute)">${fmtDS(x.from)}</text>`;
+    svg+=`</g>`;
+  });
+  // vạch "hôm nay"
+  const tk=key(TODAY);
+  if(TODAY>=min&&tk<=end+step){
+    const i=idx.get(tk);if(i!=null){const frac=byWeek?((TODAY-new Date(tk))/DAY)/7:0.5;const X=10+i*bw+frac*(bw-4);
+      svg+=`<line x1="${X}" x2="${X}" y1="0" y2="${H}" stroke="var(--bad)" stroke-dasharray="4 3"/><text x="${X+4}" y="10" font-size="10" fill="var(--bad)" font-weight="700">Hôm nay</text>`}
+  }
+  svg+=`</svg>`;
+  return `<div class="card"><h3>Tiến độ theo ${byWeek?"tuần":"ngày"} <small>cột “${esc(sh.cols.find(c=>c.idx===di).name)}” · <span style="color:var(--ok)">■</span> đã xong <span style="color:var(--warn)">■</span> chưa xong · bấm cột để lọc</small></h3><div class="scroll-x">${svg}</div></div>`;
+}
+
+function renderDyn(sh){
+  const u=sh.ui;const fr=rowsFor(sh);
+  const dyn=$("#dyn");
+  // chip bộ lọc
+  const chips=[];
+  for(const k in u.filters){const c=sh.cols.find(c=>c.idx===+k);chips.push(`<span class="fchip">${esc(c.name)}: ${esc(u.filters[k]||"(Trống)")} <b data-rm="${k}">×</b></span>`)}
+  if(u.special)chips.push(`<span class="fchip">${u.special==="overdue"?"Quá hạn":"Sắp đến hạn"} <b data-rm="special">×</b></span>`);
+  if(u.range)chips.push(`<span class="fchip">Khoảng ${fmtDS(u.range.from)}–${fmtDS(new Date(u.range.to-DAY))} <b data-rm="range">×</b></span>`);
+  let html=chips.length?`<div class="chips">${chips.join("")}<button class="btn" data-clear>Xoá tất cả bộ lọc</button></div>`:"";
+  // KPI
+  html+=`<div class="grid kpis">`;
+  html+=kpi("Số dòng",fmtN(fr.length),fr.length!==sh.rows.length?`trên tổng ${fmtN(sh.rows.length)}`:"tổng số dòng");
+  if(sh.money){const s=fr.reduce((a,r)=>a+(+r.v[sh.money.idx]||0),0);html+=kpi(/^tổng/i.test(sh.money.name)?sh.money.name:"Tổng "+sh.money.name,fmtBig(s),fmtN(s))}
+  if(sh.checklist){
+    const d=fr.filter(r=>ckDone(sh,r)).length;
+    html+=kpi("Đã tick hoàn thành",`${d}/${fr.length}`,fr.length?(d/fr.length*100).toFixed(0)+"%":"",d===fr.length&&fr.length?"ok":"");
+  }else if(sh.progIdx!=null){
+    const d=fr.filter(r=>r.done).length;
+    html+=kpi("Hoàn thành",fr.length?(d/fr.length*100).toFixed(0)+"%":"–",`${d}/${fr.length} · theo cột “${esc(sh.cols.find(c=>c.idx===sh.progIdx).name)}”`,"ok");
+    if(sh.dueIdx!=null){
+      const od=rowsFor(sh,"special").filter(r=>r.st==="overdue").length,sn=rowsFor(sh,"special").filter(r=>r.st==="soon").length;
+      html+=kpi("Quá hạn",fmtN(od),"bấm để lọc",od?"bad":"ok","overdue");
+      html+=kpi("Sắp đến hạn (3 ngày)",fmtN(sn),"bấm để lọc",sn?"warn":"ok","soon");
+    }
+  }
+  html+=`</div>`;
+  // biểu đồ
+  html+=`<div class="grid panels">`;
+  if(sh.progIdx!=null){
+    const f2=rowsFor(sh,sh.progIdx);const d=f2.filter(r=>isDoneVal(r.v[sh.progIdx])).length;
+    const pc=sh.cols.find(c=>c.idx===sh.progIdx);
+    html+=`<div class="card"><h3>${esc(pc.name)} <small>tiến độ chính</small></h3><div class="donutwrap">${donut(d,f2.length,"var(--ok)")}${barsHtml(sh,sh.progIdx,f2,u.metric)}</div></div>`;
+  }
+  for(const c of sh.cat){if(c.idx===sh.progIdx)continue;
+    html+=`<div class="card"><h3>${esc(c.name)}</h3>${barsHtml(sh,c.idx,rowsFor(sh,c.idx),u.metric)}</div>`}
+  if(sh.dueIdx!=null)html+=timeline(sh,rowsFor(sh,"range")).replace('class="card"','class="card" style="grid-column:1/-1"');
+  html+=`</div>`;
+  html+=`<div id="tbl"></div>`;
+  dyn.innerHTML=html;
+  // sự kiện
+  dyn.querySelectorAll(".bar").forEach(b=>b.onclick=()=>{const c=b.dataset.c,v=b.dataset.v;if(u.filters[c]===v)delete u.filters[c];else u.filters[c]=v;u.shown=100;renderDyn(sh)});
+  dyn.querySelectorAll(".tb").forEach(g=>g.onclick=()=>{const f=new Date(+g.dataset.from),t=new Date(+g.dataset.to);
+    if(u.range&&+u.range.from===+f)u.range=null;else u.range={from:f,to:t};u.shown=100;renderDyn(sh)});
+  dyn.querySelectorAll("[data-k]").forEach(k=>k.onclick=()=>{u.special=u.special===k.dataset.k?null:k.dataset.k;u.shown=100;renderDyn(sh)});
+  dyn.querySelectorAll("[data-rm]").forEach(b=>b.onclick=()=>{const k=b.dataset.rm;if(k==="special")u.special=null;else if(k==="range")u.range=null;else delete u.filters[k];renderDyn(sh)});
+  const cl=dyn.querySelector("[data-clear]");if(cl)cl.onclick=()=>{u.filters={};u.special=null;u.range=null;renderDyn(sh)};
+  renderTable(sh,fr);
+}
+
+function renderTable(sh,fr){
+  const u=sh.ui;let rows=fr.slice();
+  if(u.sort){const {i,dir}=u.sort;rows.sort((a,b)=>{const x=a.v[i],y=b.v[i];
+    if(x==null&&y==null)return 0;if(x==null)return 1;if(y==null)return -1;
+    const r=(typeof x==="number"&&typeof y==="number")||(x instanceof Date&&y instanceof Date)?(x-y):String(x).localeCompare(String(y),"vi");return r*dir})}
+  const cols=sh.cols.filter(c=>c.type!=="index");const si=state.sheets.indexOf(sh);
+  let h=`<h2 class="sec">Chi tiết (${fmtN(rows.length)} dòng) <small class="sub" style="font-weight:500">· bấm đúp vào ô để sửa</small></h2><div class="tablewrap"><table><thead><tr>${sh.checklist?"<th></th>":""}<th title="Số dòng trong file Excel">Dòng</th>`+
+    cols.map(c=>`<th data-s="${c.idx}">${esc(c.name)}${u.sort&&u.sort.i===c.idx?(u.sort.dir>0?" ▲":" ▼"):""}</th>`).join("")+`</tr></thead><tbody>`;
+  for(const r of rows.slice(0,u.shown)){
+    const dn=sh.checklist?ckDone(sh,r):(sh.progIdx!=null&&r.done);
+    h+=`<tr data-row="${r.n}" class="${r.st==="overdue"?"od":r.st==="soon"?"sn":""} ${dn?"dn":""}">`;
+    if(sh.checklist)h+=`<td><input type="checkbox" data-ck="${r.n}" ${dn?"checked":""} aria-label="Hoàn thành"></td>`;
+    h+=`<td class="rn">${r.n}</td>`;
+    for(const c of cols){const v=r.v[c.idx];let cell="";
+      if(v==null)cell="";
+      else if(v instanceof Date)cell=fmtD(v);
+      else if(typeof v==="number"){cell=fmtN(v)}
+      else if(c.type==="cat")cell=`<span class="chip" style="--c:${colorFor(v)}">${esc(v)}</span>`;
+      else cell=esc(v);
+      const cls=typeof v==="number"?"num":(c.type==="text"?"txt":"");
+      const edited=state.pending.has(pkey(si,r.n,c.idx));
+      h+=`<td class="${cls} ${edited?"ed":""}" data-r="${r.n}" data-c="${c.idx}" ${c.type==="text"&&v?`title="${esc(v)}"`:""}>${cell}</td>`}
+    h+=`</tr>`;
+  }
+  h+=`</tbody></table></div>`;
+  if(rows.length>u.shown)h+=`<div class="more"><button class="btn" id="more">Hiện thêm (còn ${rows.length-u.shown} dòng)</button></div>`;
+  const t=$("#tbl");t.innerHTML=h;
+  t.querySelectorAll("th[data-s]").forEach(th=>th.onclick=()=>{const i=+th.dataset.s;u.sort=u.sort&&u.sort.i===i?{i,dir:-u.sort.dir}:{i,dir:1};renderTable(sh,fr)});
+  const mo=$("#more");if(mo)mo.onclick=()=>{u.shown+=200;renderTable(sh,fr)};
+  t.querySelectorAll("td[data-c]").forEach(td=>td.ondblclick=()=>startEdit(sh,td));
+  t.querySelectorAll("[data-ck]").forEach(cb=>cb.onchange=()=>{
+    const n=+cb.dataset.ck,r=sh.rows.find(x=>x.n===n);
+    if(sh.doneColIdx!=null){setCell(si,r,sh.doneColIdx,cb.checked?"Đã xong "+fmtDS(TODAY):null)}
+    else{const m=sh._ck||(sh._ck=store.get(ckKey(sh))||{});m[n]=cb.checked;store.set(ckKey(sh),m)}
+    renderDyn(sh);updateChrome();});
+}
+
+function exportCsv(sh){
+  const fr=rowsFor(sh);const cols=sh.cols.filter(c=>c.type!=="index");
+  const q=v=>{v=v==null?"":(v instanceof Date?fmtD(v):String(v));return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v};
+  const lines=[["Dòng",...cols.map(c=>c.name)].map(q).join(",")];
+  for(const r of fr)lines.push([r.n,...cols.map(c=>r.v[c.idx])].map(q).join(","));
+  const a=document.createElement("a");a.href=URL.createObjectURL(new Blob(["﻿"+lines.join("\r\n")],{type:"text/csv;charset=utf-8"}));
+  a.download=sh.name+"_loc.csv";a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+}
+if(ghReady())loadFromGitHub();
+</script>
+</body>
+</html>
