@@ -2,6 +2,9 @@
 <html lang="vi">
 <head>
 <meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://api.github.com; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none'">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#2563eb">
 <meta name="mobile-web-app-capable" content="yes">
@@ -170,17 +173,41 @@ table.hist td{vertical-align:top}
   dialog{padding:14px}
   .attn li{grid-template-columns:1fr auto}.attn li .tag{display:none}
 }
-
-/* ---- Cấu hình NCC ---- */
-#ndlg{max-width:940px}
-#ndlg .nwrap{max-height:50vh;overflow:auto;border:1px solid var(--line);border-radius:8px;margin-top:10px}
-#ndlg table{width:100%;border-collapse:collapse;font-size:13px;min-width:680px}
-#ndlg th{position:sticky;top:0;background:var(--card);text-align:left;padding:7px 8px;border-bottom:1px solid var(--line);z-index:1}
-#ndlg td{padding:3px 4px;border-bottom:1px solid var(--line)}
-#ndlg td input{padding:6px 8px}
-#ndlg textarea{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;font:inherit;background:var(--card);color:var(--ink)}
-#ndlg details{margin-top:10px}
-#ndlg summary{cursor:pointer;font-weight:600;font-size:13px}
+.fb{border:0;background:none;color:var(--mute);padding:0 3px;margin-left:4px;border-radius:4px;font-size:12px;cursor:pointer}
+.fb:hover{background:var(--line);color:var(--ink)}.fb.on{color:#fff;background:var(--brand)}
+.fp{position:fixed;z-index:70;width:300px;max-height:min(560px,86vh);display:flex;flex-direction:column;gap:8px;background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,.35);padding:12px;text-transform:none;letter-spacing:0;font-weight:400;color:var(--ink)}
+.fp select,.fp input[type=text],.fp input[type=number],.fp input[type=date]{width:100%;padding:6px 8px;border:1px solid var(--line);border-radius:7px;font:inherit;background:var(--card);color:var(--ink)}
+.fp .row{display:grid;grid-template-columns:118px 1fr;gap:6px}
+.fp .join{display:flex;gap:14px;font-size:13px;color:var(--mute)}
+.fp .list{overflow:auto;border:1px solid var(--line);border-radius:8px;padding:4px 6px;min-height:80px;flex:1}
+.fp .list label{display:flex;gap:7px;align-items:center;padding:3px 0;font-size:13px;cursor:pointer}
+.fp .list label span.n{margin-left:auto;color:var(--mute);font-size:11px}
+.fp .ft{display:flex;gap:8px;justify-content:flex-end}
+.fp h4{margin:0;font-size:13px;display:flex;justify-content:space-between;align-items:center}
+td.flag,th.flag{text-align:center;width:1%}
+.stp{display:inline-flex;gap:2px;margin-left:6px;vertical-align:middle;white-space:nowrap}
+.stp button{border:1px solid var(--line);background:var(--card);border-radius:6px;padding:0 6px;font-size:12px;line-height:20px}
+.stp button.nx{background:var(--brand);border-color:var(--brand);color:#fff}
+.stp button:disabled{opacity:.35;cursor:default}
+td.wfnote{white-space:nowrap}
+@media (max-width:700px){.fp{left:8px!important;right:8px;width:auto;top:auto!important;bottom:8px;max-height:80vh}}
+.bulk{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:8px 12px;margin:0 0 10px;background:color-mix(in srgb,var(--brand) 12%,var(--card));border:1px solid var(--brand);border-radius:10px}
+.bulk select{padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink);font:inherit}
+.stk{display:inline-block;margin-left:6px;padding:0 6px;border-radius:10px;font-size:11px;font-weight:700;color:var(--bad);background:color-mix(in srgb,var(--bad) 14%,transparent)}
+.sug{margin-left:6px;border:1px dashed var(--ok);background:color-mix(in srgb,var(--ok) 12%,transparent);color:var(--ok);border-radius:8px;padding:0 7px;font-size:12px;font-weight:700}
+@media (max-width:700px){
+  .tablewrap.cards{max-height:none;border:0;background:none;overflow:visible}
+  table.cardtbl,table.cardtbl tbody{display:block}
+  table.cardtbl thead{display:none}
+  table.cardtbl tr{display:grid;grid-template-columns:1fr 1fr;gap:4px 12px;padding:12px;margin:0 0 10px;border:1px solid var(--line);border-radius:12px;background:var(--card);box-shadow:var(--shadow)}
+  table.cardtbl td{display:block;border:0;padding:0;max-width:none;white-space:normal;text-align:left!important;overflow:visible}
+  table.cardtbl td::before{content:attr(data-l);display:block;font-size:10px;text-transform:uppercase;letter-spacing:.3px;color:var(--mute)}
+  table.cardtbl td.rn,table.cardtbl td.sel,table.cardtbl td:last-child{display:none}
+  table.cardtbl td.wide,table.cardtbl td.wfnote{grid-column:1/-1}
+  table.cardtbl tr.od td:first-child{box-shadow:none}table.cardtbl tr.od{border-left:4px solid var(--bad)}table.cardtbl tr.sn{border-left:4px solid var(--warn)}
+  table.cardtbl td.flag::before{display:inline;margin-right:6px}
+  table.cardtbl td.flag{display:flex;align-items:center}
+}
 </style>
 </head>
 <body>
@@ -196,7 +223,7 @@ table.hist td{vertical-align:top}
   <button class="btn sm" id="btnImport" hidden title="Gộp file Excel xuất từ Odoo vào dữ liệu nguồn">⬆ Nhập file Odoo</button>
   <button class="btn sm" id="btnSync" hidden title="Yêu cầu GitHub chạy đồng bộ từ Odoo ngay">🔄 Đồng bộ Odoo</button>
   <button class="btn sm" id="btnRefresh" hidden>↻ Tải lại</button>
-  <button class="btn sm" id="btnNcc" title="Cấu hình số tài khoản, tên và ngân hàng thụ hưởng cho từng nhà cung cấp (dùng cho script tự điền trên Odoo)">🏦 NCC</button>
+  <button class="btn sm" id="btnTheme" title="Đổi giao diện sáng/tối">🌓</button>
   <button class="btn sm" id="btnGh">⚙ GitHub</button>
   <button class="btn primary" id="btnPick">Chọn file Excel</button>
   <input type="file" id="fileImp" accept=".xlsx,.xlsm" hidden>
@@ -225,27 +252,6 @@ table.hist td{vertical-align:top}
   <label>Nhánh</label><input id="ghBranch" placeholder="main">
   <label>Mã truy cập (fine-grained token: Contents + Actions = Read &amp; write, chỉ cho repo dữ liệu)</label><input id="ghToken" type="password" placeholder="github_pat_…" autocomplete="off">
   <div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap"><button class="btn primary" id="ghSave">Lưu &amp; tải dữ liệu</button><button class="btn" id="ghForget">Xoá mã truy cập</button><button class="btn" id="ghClose">Đóng</button></div>
-</dialog>
-
-<dialog id="ndlg">
-  <h3>🏦 Tài khoản thụ hưởng theo nhà cung cấp</h3>
-  <p class="sub">Nhập một lần cho từng NCC. Dữ liệu lưu trong file <b>ncc-bank.json</b> cạnh file Excel trên repo GitHub riêng tư của bạn. Script trên Odoo sẽ đọc file này để tự điền vào phiếu thanh toán. <b>Tên NCC phải trùng với tên NCC trên Odoo</b> (không phân biệt hoa thường và dấu).</p>
-  <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-    <input id="nSearch" placeholder="Tìm NCC…" style="flex:1;min-width:160px">
-    <button class="btn sm" id="nAdd">＋ Thêm NCC</button>
-    <button class="btn sm" id="nTpl" title="Tải file Excel mẫu (đã điền sẵn danh sách NCC hiện có và các NCC trong dữ liệu dashboard)">⬇ Tải file mẫu</button>
-    <button class="btn sm" id="nUp" title="Chọn file Excel đã điền để đọc vào danh sách bên dưới">⬆ Tải file Excel lên</button>
-    <input type="file" id="nFile" accept=".xlsx,.xlsm" hidden>
-    <span class="sub" id="nState"></span>
-  </div>
-  <div class="nwrap"><table><thead><tr><th style="width:30%">Nhà cung cấp</th><th style="width:20%">Số tài khoản</th><th style="width:26%">Tên người thụ hưởng</th><th style="width:20%">Ngân hàng</th><th style="width:4%"></th></tr></thead><tbody id="nBody"></tbody></table></div>
-  <datalist id="nNames"></datalist>
-  <details><summary>Dán nhiều NCC từ Excel</summary>
-    <p class="sub">Copy các dòng từ Excel theo đúng thứ tự 4 cột: Nhà cung cấp, Số tài khoản, Tên người thụ hưởng, Ngân hàng. NCC đã có sẽ được cập nhật.</p>
-    <textarea id="nPaste" rows="4" placeholder="CÔNG TY ABC&#9;0123456789&#9;CONG TY ABC&#9;Vietcombank"></textarea>
-    <button class="btn sm" id="nPasteGo" style="margin-top:8px">Thêm các dòng đã dán</button>
-  </details>
-  <div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap"><button class="btn primary" id="nSave">Lưu lên GitHub</button><button class="btn" id="nClose">Đóng</button></div>
 </dialog>
 
 <script>
@@ -353,7 +359,10 @@ function patchSheet(txt,edits){
       cell.removeAttribute("t");
       const v=e.val;
       if(v==null||v==="")continue;
-      if(typeof v==="number"||v instanceof Date){
+      if(e.txt&&v instanceof Date){
+        cell.setAttribute("t","inlineStr");
+        const is=doc.createElementNS(ns,"is"),t=doc.createElementNS(ns,"t");t.textContent=String(v.getDate()).padStart(2,"0")+"/"+String(v.getMonth()+1).padStart(2,"0")+"/"+v.getFullYear();is.appendChild(t);cell.appendChild(is);
+      }else if(typeof v==="number"||v instanceof Date){
         const ve=doc.createElementNS(ns,"v");ve.textContent=String(v instanceof Date?dateToSerial(v):v);cell.appendChild(ve);
       }else{
         cell.setAttribute("t","inlineStr");
@@ -435,6 +444,24 @@ function colorFor(v){
   if(typeof v==="string"&&NOT_RE.test(v))return "#d97706";
   let h=0;for(const ch of String(v))h=(h*31+ch.charCodeAt(0))>>>0;return PALETTE[h%PALETTE.length];
 }
+/* ---- Quy trình PO (cột Note) ---- */
+const WF_DEBT=["Chờ báo giá","Chờ gửi duyệt PO","Chờ duyệt PO","Chờ gửi NCC","Đã gửi NCC","Chờ nhận hàng","Cần lập hóa đơn","Chờ KT xác nhận công nợ","Hoàn thành"];
+const WF_PRE=["Chờ báo giá","Chờ gửi duyệt PO","Chờ duyệt PO","Chờ gửi NCC","Đã gửi NCC","Chờ làm TT","Đã gửi UNC","Chờ nhận hàng","Cần lập hóa đơn","Chờ KT xác nhận công nợ","Hoàn thành"];
+const WF_ALL=WF_PRE,WF_DONE="Hoàn thành";
+const wfn=x=>String(x??"").normalize("NFC").toLowerCase().replace(/\s+/g," ").trim();
+const WF_SYN={"chờ bao giá":"Chờ báo giá","chờ duyệt":"Chờ duyệt PO","chờ gửi duyệt":"Chờ gửi duyệt PO","đã hoàn thành":"Hoàn thành","chờ kt xác nhận":"Chờ KT xác nhận công nợ"};
+const wfCanon=x=>{const k=wfn(x);return WF_SYN[k]||WF_ALL.find(a=>wfn(a)===k)||String(x).trim()};
+const isPay=v=>v!=null&&/^(x|có|co|1|true|yes|y|✓|✔)$/i.test(String(v).trim());
+function wfDerive(sh,r){
+  const st=sh.stIdx!=null?wfn(r.v[sh.stIdx]):"",rc=sh.rcIdx!=null?wfn(r.v[sh.rcIdx]):"";
+  if(st==="dự thảo"&&rc==="")return "Chờ báo giá";
+  if(st==="đã phê duyệt"&&rc==="chưa nhận")return "Chờ gửi NCC";
+  return "Chờ báo giá";
+}
+const dueOf=(sh,r)=>{const c=sh.cmtIdx!=null?r.v[sh.cmtIdx]:null;return c instanceof Date?c:(sh.dueIdx!=null?r.v[sh.dueIdx]:null)};
+function wfOf(sh,r){const n=r.v[sh.noteIdx];return n!=null&&String(n).trim()!==""?wfCanon(n):wfDerive(sh,r)}
+const seqOf=(sh,r)=>sh.payIdx!=null&&isPay(r.v[sh.payIdx])?WF_PRE:WF_DEBT;
+const cellVal=(sh,r,i)=>sh.wf&&i===sh.noteIdx?r.wf:r.v[i];
 function analyze(raw){
   const g=raw.grid;let maxC=0;for(let i=0;i<g.length;i++)if(g[i]&&g[i].length>maxC)maxC=g[i].length;
   // dòng tiêu đề: dòng trong 10 dòng đầu có nhiều ô chữ nhất
@@ -450,11 +477,13 @@ function analyze(raw){
   for(let i=hr+1;i<g.length;i++){const r=g[i];if(r&&r.some(x=>x!=null))rows.push({n:i+1,v:Array.from({length:maxC},(_,c)=>r[c]??null)})}
   // cột
   let cols=[];
+  const hasKey=hdr.some(h=>/^mã đơn hàng$/i.test(String(h||"").trim()));
+  const FORCE_RE=/^(thanh toán trước|ghi chú|trạng thái quy trình|note|ngày đổi trạng thái|ngày cam kết giao)$/i;
   for(let c=0;c<maxC;c++){
     const name=(hdr[c]!=null?String(hdr[c]):"");
     const vals=rows.map(r=>r.v[c]).filter(x=>x!=null);
     if(!name&&!vals.length)continue;
-    if(!vals.length)continue;
+    if(!vals.length&&!(hasKey&&FORCE_RE.test(name.trim())))continue;
     const nD=vals.filter(x=>x instanceof Date).length,nN=vals.filter(x=>typeof x==="number").length;
     const strs=vals.filter(x=>typeof x==="string");
     const distinct=new Set(vals.map(String)).size;
@@ -477,10 +506,19 @@ function analyze(raw){
   const blank=ix?pre.filter(r=>!rows.includes(r)&&typeof r.v[ix.idx]==="number"&&r.v.every((x,i)=>i===ix.idx||x==null)).map(r=>({n:r.n,ix:r.v[ix.idx]})):[];
   if(ix){const withIx=rows.filter(r=>r.v[ix.idx]!=null).length;if(withIx>=.5*rows.length&&withIx<rows.length)rows=rows.filter(r=>r.v[ix.idx]!=null)}
   // chỉ giữ cột còn dữ liệu sau khi lọc
-  cols=cols.filter(c=>rows.some(r=>r.v[c.idx]!=null));
+  cols=cols.filter(c=>rows.some(r=>r.v[c.idx]!=null)||(hasKey&&FORCE_RE.test(c.name.trim())));
+  const wfNote=hasKey?cols.find(c=>/^note$/i.test(c.name.trim())):null;
+  const wfPay=hasKey?cols.find(c=>/^thanh toán trước$/i.test(c.name.trim())):null;
+  if(hasKey)for(const c of cols){ // ngày lưu dạng chữ dd/mm/yyyy trong Excel nên tự đọc về dạng ngày
+    if(!/^(ngày đổi trạng thái|ngày cam kết giao)$/i.test(c.name.trim()))continue;
+    c.type="date";c.txtDate=true;
+    for(const r of rows){const v=r.v[c.idx];if(typeof v==="string"){const d=parseAnyDate(v);r.v[c.idx]=d instanceof Date?d:null}}
+  }
+  if(wfNote){wfNote.type="cat";wfNote.distinct=Math.max(wfNote.distinct,2)}
+  if(wfPay)wfPay.type="flag";
   const sh={name:raw.name,cols,rows,hdrRow:hr+1,empty:rows.length===0,path:raw.path,fset:raw.fset||new Set(),lastRow:g.length,grid:g,maxC,blank,blank0:blank.slice()};
   sh.cat=cols.filter(c=>c.type==="cat"&&c.distinct>=2);
-  sh.dates=cols.filter(c=>c.type==="date");
+  sh.dates=cols.filter(c=>c.type==="date"&&!c.txtDate);
   sh.nums=cols.filter(c=>c.type==="num");
   sh.texts=cols.filter(c=>c.type==="text");
   // cột tiền
@@ -500,12 +538,24 @@ function analyze(raw){
   sh.checklist=!sh.cat.length&&!sh.dates.length;
   const hd=cols.find(c=>/hoàn thành/i.test(c.name));
   sh.doneColIdx=hd?hd.idx:null;
-  sh.ui={filters:{},special:null,range:null,search:"",sort:null,shown:100,metric:"count"};
+  if(wfNote){
+    sh.wf=true;sh.noteIdx=wfNote.idx;sh.payIdx=wfPay?wfPay.idx:null;
+    const f=re=>{const c=cols.find(c=>re.test(c.name.trim()));return c?c.idx:null};
+    sh.stIdx=f(/^trạng thái quy trình$/i);sh.rcIdx=f(/^trạng thái phiếu nhập kho$/i);sh.ivIdx=f(/^trạng thái hóa đơn$/i);sh.chgIdx=f(/^ngày đổi trạng thái$/i);sh.cmtIdx=f(/^ngày cam kết giao$/i);
+    sh.progIdx=sh.noteIdx;sh.blockIdx=null;
+  }
+  sh.ui={filters:{},cf:{},special:null,range:null,search:"",sort:null,shown:100,metric:"count"};
   return sh;
 }
 function setStatus(sh){
   for(const r of sh.rows){
     r.st=null;r.done=null;
+    if(sh.wf){
+      r.wf=wfOf(sh,r);r.done=r.wf===WF_DONE; // đã “Hoàn thành” thì không bao giờ tính là trễ
+      const d0=dueOf(sh,r);
+      if(!r.done&&d0 instanceof Date){const d=sod(d0);if(d<TODAY)r.st="overdue";else if(d-TODAY<=3*DAY)r.st="soon"}
+      r._t=null;continue;
+    }
     if(sh.progIdx!=null){r.done=isDoneVal(r.v[sh.progIdx])}
     const due=sh.dueIdx!=null?r.v[sh.dueIdx]:null;
     if(sh.progIdx!=null&&due instanceof Date&&!r.done){
@@ -538,11 +588,15 @@ function b64ToBuf(b64){const bin=atob(b64.replace(/\s/g,""));const u=new Uint8Ar
 function bufToB64(u8){let s="";for(let i=0;i<u8.length;i+=0x8000)s+=String.fromCharCode.apply(null,u8.subarray(i,i+0x8000));return btoa(s)}
 async function ghFetchFile(){
   const c=ghCfg();const url=ghUrl(c,`contents/${ghPath(c)}?ref=${encodeURIComponent(c.branch||"main")}`);
-  const r=await fetch(url,{headers:ghHead(c),cache:"no-store"});
+  const cached=await kvGet(ghCacheKey());
+  const hd=ghHead(c);if(cached&&cached.etag&&cached.buf)hd["If-None-Match"]=cached.etag;
+  const r=await fetch(url,{headers:hd,cache:"no-store"});
+  if(r.status===304&&cached&&cached.buf)return {buf:cached.buf,sha:cached.sha,name:cached.name};
   if(!r.ok)throw new Error(r.status===404?"Không tìm thấy file trên GitHub (kiểm tra tên repo, đường dẫn và quyền của mã truy cập)":r.status===401?"Mã truy cập GitHub không đúng hoặc đã hết hạn":"GitHub trả lỗi "+r.status);
   const j=await r.json();let buf;
   if(j.content&&j.encoding==="base64")buf=b64ToBuf(j.content);
   else buf=await (await fetch(url,{headers:{...ghHead(c),Accept:"application/vnd.github.raw+json"},cache:"no-store"})).arrayBuffer();
+  kvSet(ghCacheKey(),{etag:r.headers.get("ETag"),buf,sha:j.sha,name:j.name});
   return {buf,sha:j.sha,name:j.name};
 }
 async function ghPutFile(bytes,msg){
@@ -559,7 +613,7 @@ async function loadFromGitHub(silent){
     const keep=state.active;
     const fc0=await ghFileCommit().catch(()=>null); // lấy mốc commit trước khi tải file để không bỏ sót thay đổi
     const f=await ghFetchFile();
-    state.sha=f.sha;state.handle=null;
+    state.sha=f.sha;state.handle=null;state.stale=false;
     await loadBuffer(f.buf,f.name,{src:"github"});
     ods.fileSha=fc0?fc0.sha:null;
     if(keep!=="overview"&&(typeof keep!=="number"||state.sheets[keep])){state.active=keep;renderTabs();render()}
@@ -647,12 +701,13 @@ const pkey=(si,n,c)=>si+"|"+n+"|"+c;
 function setCell(si,r,ci,val,keyOv){
   const sh=state.sheets[si];const old=r.v[ci];
   if(sameVal(old,val))return false;
+  if(state.stale){toast('Đang cập nhật dữ liệu mới nhất từ GitHub, chưa sửa được. Nếu mất mạng, bản đang xem chỉ để đọc.',true);return false}
   const k=pkey(si,r.n,ci),ex=state.pending.get(k);
   const orig=ex?ex.old:old;
   const key=ex?ex.key:(keyOv!==undefined?keyOv:(r.isNew||sh.title==null?null:String((ci===sh.title?old:r.v[sh.title])??"")));
   r.v[ci]=val;r._t=null;
   if(sameVal(orig,val)&&!r.isNew)state.pending.delete(k);
-  else state.pending.set(k,{si,n:r.n,col:ci,val,old:orig,path:sh.path,key,isNew:!!r.isNew,via:state.via});
+  else state.pending.set(k,{si,n:r.n,col:ci,val,old:orig,path:sh.path,key,isNew:!!r.isNew,via:state.via,txt:!!(sh.cols.find(c=>c.idx===ci)||{}).txtDate});
   return true;
 }
 function addRow(si,silent){
@@ -697,7 +752,7 @@ const canAutoSave=()=>(state.src==="github"&&ghReady())||!!state.handle;
 let saving=false,again=false,autoTimer=null;
 function scheduleAutoSave(){
   clearTimeout(autoTimer);
-  if(!state.auto||state.saveErr||!(state.pending.size||state.pendingDel.size)||!canAutoSave())return;
+  if(!state.auto||state.saveErr||state.stale||!(state.pending.size||state.pendingDel.size)||!canAutoSave())return;
   autoTimer=setTimeout(()=>{
     const a=document.activeElement;
     if(a&&a.classList&&a.classList.contains("cell")){scheduleAutoSave();return} // đang gõ dở thì chờ
@@ -728,6 +783,7 @@ function undoAll(){
 }
 async function saveAll(auto){
   if(saving){again=true;return}
+  if(state.stale){toast('Chưa tải được dữ liệu mới nhất từ GitHub nên chưa lưu (tránh ghi đè). Bấm ↻ Tải lại rồi thử lại.',true);return}
   if(!state.pending.size&&!state.pendingDel.size)return;
   const target=(state.src==="github"&&ghReady())?"gh":(state.handle?"file":"download");
   if(auto===true&&target==="download")return; // không tự tải file về liên tục
@@ -907,7 +963,7 @@ function startEdit(sh,td){
   else if(col.type==="num"){inp.type="number";inp.step="any";if(typeof cur==="number")inp.value=cur}
   else{inp.type="text";inp.value=cur==null?"":(cur instanceof Date?fmtD(cur):String(cur));
     if(col.type==="cat"){const dl=document.createElement("datalist");dl.id="dl"+ci;
-      [...new Set(sh.rows.map(x=>x.v[ci]).filter(x=>x!=null))].forEach(v=>{const o=document.createElement("option");o.value=v;dl.appendChild(o)});td.appendChild(dl);inp.setAttribute("list",dl.id)}}
+      [...new Set([...(sh.wf&&ci===sh.noteIdx?WF_ALL:[]),...sh.rows.map(x=>x.v[ci]).filter(x=>x!=null)])].forEach(v=>{const o=document.createElement("option");o.value=v;dl.appendChild(o)});td.appendChild(dl);inp.setAttribute("list",dl.id)}}
   td.appendChild(inp);if(inp.type==="text")attachMic(inp,td);inp.focus();if(inp.select&&inp.type==="text")inp.select();
   let done=false;
   const finish=commit=>{
@@ -917,7 +973,9 @@ function startEdit(sh,td){
       if(col.type==="date"){if(v===""){v=null}else if(cur instanceof Date&&ymd(cur)===v){v=cur}else{const [y,m,d]=v.split("-").map(Number);v=new Date(y,m-1,d)}}
       else if(col.type==="num"){v=v===""?null:parseFloat(v)}
       else{v=v.trim()===""?null:v.trim()}
-      state.via="dashboard";setCell(si,r,ci,v);setStatus(sh);
+      if(sh.wf&&ci===sh.noteIdx&&typeof v==="string")v=wfCanon(v);
+      if(sh.wf&&ci===sh.noteIdx){setWf(si,r,v);setStatus(sh)}
+      else{state.via="dashboard";setCell(si,r,ci,v);setStatus(sh)}
     }
     dropIfEmpty(sh,si,r);
     renderDyn(sh);updateChrome();
@@ -976,15 +1034,25 @@ async function importOdoo(file){
 /* ---- Nhắc việc & ưu tiên ---- */
 function collectItems(){
   const out=[];
-  state.sheets.forEach((s,i)=>s.rows.forEach(r=>{
-    if(!r.st)return;
-    const due=r.v[s.dueIdx];const late=Math.round((TODAY-sod(due))/DAY);
-    const amt=s.money?+r.v[s.money.idx]||0:0;
-    const lvl=r.st==="soon"?"soon":(late>7||amt>=5e7?"urgent":"high");
-    out.push({s,i,r,due,late,amt,lvl,st:r.st});
+  state.sheets.forEach((sh,i)=>sh.rows.forEach(r=>{
+    const wf=sh.wf;
+    if(wf&&r.done)return; // PO đã “Hoàn thành” thì thoát khỏi danh sách xử lý dù trễ hay không
+    const quote=wf&&r.wf==="Chờ báo giá";
+    if(!r.st&&!quote)return;
+    const due=dueOf(sh,r);const late=due instanceof Date?Math.round((TODAY-sod(due))/DAY):0;
+    const amt=sh.money?+r.v[sh.money.idx]||0:0;
+    let lvl=r.st==="soon"?"soon":(late>7||amt>=5e7?"urgent":"high"),tier=2;
+    if(!r.st)lvl="urgent";
+    if(quote){lvl="urgent";tier=0}
+    else if(wf&&sh.payIdx!=null&&isPay(r.v[sh.payIdx])&&r.st==="overdue"){
+      const k=WF_PRE.indexOf(r.wf);
+      if(k>=0&&k<WF_PRE.indexOf("Đã gửi UNC")){lvl="urgent";tier=1} // trả trước, đang kẹt trước khi gửi UNC
+    }
+    out.push({s:sh,i,r,due,late,amt,lvl,tier,st:r.st||"quote",wfs:wf?r.wf:null});
   }));
   const rk={urgent:0,high:1,soon:2};
-  out.sort((a,b)=>rk[a.lvl]-rk[b.lvl]||(b.late-a.late)||(b.amt-a.amt));
+  const dk=x=>x.due instanceof Date?+sod(x.due):Infinity;
+  out.sort((a,b)=>a.tier-b.tier||(a.tier===0?dk(a)-dk(b):a.tier===1?(b.late-a.late||b.amt-a.amt):(rk[a.lvl]-rk[b.lvl]||(b.late-a.late)||(b.amt-a.amt))));
   return out;
 }
 function updateBanner(){
@@ -1011,15 +1079,15 @@ $("#btnNotify").onclick=async()=>{
 };
 function updateChrome(){updateSavebar();scheduleAutoSave();updateBanner();if(typeof renderMsgs==="function")renderMsgs();const t=document.querySelector('#tabs [data-i="priority"] .n');if(t)t.textContent=collectItems().length}
 
-function goSheet(si,patch){const sh=state.sheets[si];sh.ui.filters={};sh.ui.special=null;sh.ui.range=null;sh.ui.search="";sh.ui.shown=100;Object.assign(sh.ui,patch||{});state.active=si;renderTabs();render();scrollTo(0,0)}
+function goSheet(si,patch){const sh=state.sheets[si];sh.ui.filters={};sh.ui.cf={};sh.ui.special=null;sh.ui.range=null;sh.ui.search="";sh.ui.shown=100;Object.assign(sh.ui,patch||{});state.active=si;renderTabs();render();scrollTo(0,0)}
 
 function renderPriority(){
   const it=collectItems();
   const groups=[
-    {k:"urgent",t:"Khẩn – xử lý ngay",c:"var(--bad)",d:"Quá hạn hơn 7 ngày, hoặc quá hạn và giá trị từ 50 triệu"},
+    {k:"urgent",t:"Khẩn – xử lý ngay",c:"var(--bad)",d:"Thứ tự: (1) PO Chờ báo giá, ngày nhận dự kiến gần nhất lên trước; (2) PO trả trước đã trễ và chưa gửi UNC, trễ nhiều nhất lên trước; (3) còn lại quá hạn hơn 7 ngày hoặc từ 50 triệu"},
     {k:"high",t:"Cao – quá hạn",c:"var(--warn)",d:"Quá hạn từ 1 đến 7 ngày"},
     {k:"soon",t:"Sắp đến hạn (3 ngày tới)",c:"var(--brand)",d:"Hạn từ hôm nay đến 3 ngày tới, chưa hoàn thành"}];
-  let html=`<div class="note" style="margin:0 0 14px">Một dòng được tính là “trễ” khi ngày hạn đã qua mà cột tiến độ chưa ở mức hoàn thành (xem cột đang dùng ở từng sheet). Mức ưu tiên chỉ dựa vào số ngày trễ và giá trị đơn, không có số liệu nào được tự thêm.</div>`;
+  let html=`<div class="note" style="margin:0 0 14px">Một dòng được tính là “trễ” khi ngày hạn đã qua mà chưa hoàn thành (với sheet PO: cột Note chưa là “Hoàn thành”; PO đã Hoàn thành không bao giờ tính là trễ). Mức ưu tiên chỉ dựa vào số ngày trễ và giá trị đơn, không có số liệu nào được tự thêm.</div>`;
   if(!it.length)html+=`<div class="card">Hiện không có dòng nào quá hạn hoặc sắp đến hạn. 🎉</div>`;
   else{
     html+=`<div class="grid pgrid">`;
@@ -1028,36 +1096,51 @@ function renderPriority(){
       html+=`<div class="card"><div class="lvl"><i style="background:${g.c}"></i>${g.t}<span class="tag">${list.length}</span>${sum?`<span class="sub" style="font-weight:500">· ${fmtBig(sum)}</span>`:""}</div><div class="sub" style="margin-bottom:8px">${g.d}</div>`;
       if(!list.length)html+=`<div class="sub">Không có.</div>`;
       else html+=`<ul class="attn">`+list.slice(0,12).map(x=>{
-        const blk=x.s.blockIdx!=null?x.r.v[x.s.blockIdx]:null;
-        return `<li class="click" data-go="${x.i}" data-q="${esc(String(x.r.v[x.s.title]??""))}"><span class="tag">${esc(x.s.name)}</span><div><a class="ol" href="#" data-code="${esc(x.r.v[x.s.title])}" title="Mở Odoo để tìm đơn này"><b>${esc(x.r.v[x.s.title])}</b></a><div class="sub">${esc(x.s.sub!=null?x.r.v[x.s.sub]:"")}${x.amt?" · "+fmtN(x.amt):""}</div>${blk?`<span class="chip" style="--c:${colorFor(blk)}">${esc(blk)}</span>`:""}</div><span class="late" style="${x.lvl==="soon"?"color:var(--brand)":""}">${x.lvl==="soon"?(x.late<0?`còn ${-x.late} ngày`:"hôm nay"):`trễ ${x.late} ngày`}<div class="sub">hạn ${fmtD(x.due)}</div></span></li>`}).join("")+`</ul>`+(list.length>12?`<div class="note">… và ${list.length-12} dòng nữa. Mở sheet và bấm “Quá hạn” để xem đủ.</div>`:"");
+        const blk=x.wfs||(x.s.blockIdx!=null?x.r.v[x.s.blockIdx]:null);
+        return `<li class="click" data-go="${x.i}" data-q="${esc(String(x.r.v[x.s.title]??""))}"><span class="tag">${esc(x.s.name)}</span><div><a class="ol" href="#" data-code="${esc(x.r.v[x.s.title])}" title="Mở Odoo để tìm đơn này"><b>${esc(x.r.v[x.s.title])}</b></a><div class="sub">${esc(x.s.sub!=null?x.r.v[x.s.sub]:"")}${x.amt?" · "+fmtN(x.amt):""}${x.wfs&&stuckDays(x.s,x.r)>=STUCK()?` · <span style="color:var(--bad)">⏱ ở bước này ${stuckDays(x.s,x.r)} ngày</span>`:""}</div>${blk?`<span class="chip" style="--c:${colorFor(blk)}">${esc(blk)}</span>`:""}</div><span class="late" style="${x.late<=0?"color:var(--brand)":""}">${x.late>0?`trễ ${x.late} ngày`:(x.late<0?`còn ${-x.late} ngày`:"hôm nay")}<div class="sub">${x.due instanceof Date?"hạn "+fmtD(x.due):"chưa có hạn"}</div></span></li>`}).join("")+`</ul>`+(list.length>12?`<div class="note">… và ${list.length-12} dòng nữa. Mở sheet và bấm “Quá hạn” để xem đủ.</div>`:"");
       html+=`</div>`;
     }
     html+=`</div>`;
     // kẹt ở đâu
     const kept=new Map();
-    for(const x of it.filter(x=>x.st==="overdue")){if(x.s.blockIdx==null)continue;const k=x.i+"|"+(x.r.v[x.s.blockIdx]??"(Trống)");kept.set(k,(kept.get(k)||0)+1)}
-    if(kept.size){
-      const arr=[...kept].sort((a,b)=>b[1]-a[1]).slice(0,10);const mx=arr[0][1];
-      html+=`<h2 class="sec">Đơn quá hạn đang kẹt ở đâu</h2><div class="card"><div class="bars">`+arr.map(([k,n])=>{const [i,v]=[+k.split("|")[0],k.split("|").slice(1).join("|")];
-        return `<div class="bar" data-goblk="${i}" data-v="${esc(v)}"><span class="t">${esc(v)}</span><span class="tr"><span class="f" style="display:block;width:${n/mx*100}%;background:${colorFor(v)}"></span></span><span class="n">${n} dòng</span></div>`}).join("")+`</div><div class="note">Theo cột “${esc(state.sheets[+arr[0][0].split("|")[0]].cols.find(c=>c.idx===state.sheets[+arr[0][0].split("|")[0]].blockIdx).name)}”. Bấm để lọc.</div></div>`;
+    for(const x of it.filter(x=>x.st==="overdue")){
+      const v=x.wfs||(x.s.blockIdx!=null?x.r.v[x.s.blockIdx]:undefined);if(v===undefined)continue;
+      const k=x.i+"|"+(v??"(Trống)");kept.set(k,(kept.get(k)||0)+1)}
+    const arr=[...kept].sort((a,b)=>b[1]-a[1]).slice(0,10).map(([k,n])=>({i:+k.split("|")[0],v:k.split("|").slice(1).join("|"),n,done:false}));
+    // PO đã Hoàn thành luôn nằm cuối bảng (không tính là trễ)
+    state.sheets.forEach((sh,i)=>{if(!sh.wf)return;const n=sh.rows.filter(r=>r.done).length;if(n)arr.push({i,v:WF_DONE,n,done:true})});
+    if(arr.length){
+      const mx=Math.max(...arr.map(x=>x.n));
+      html+=`<h2 class="sec">Đơn quá hạn đang kẹt ở đâu</h2><div class="card"><div class="bars">`+arr.map(x=>
+        `<div class="bar" data-goblk="${x.i}" data-v="${esc(x.v)}" data-done="${x.done?1:0}"><span class="t">${esc(x.v)}${x.done?" ✔":""}</span><span class="tr"><span class="f" style="display:block;width:${x.n/mx*100}%;background:${colorFor(x.v)}"></span></span><span class="n">${x.n} dòng</span></div>`).join("")+`</div><div class="note">Sắp theo số đơn quá hạn giảm dần; “Hoàn thành” luôn ở cuối (đã xong thì không tính là trễ). Bấm để lọc.</div></div>`;
     }
   }
-  // việc cần làm / đang chờ theo giá trị trạng thái
-  const rows=[];
-  state.sheets.forEach((s,i)=>s.cat.forEach(c=>{
-    const m=new Map();
-    for(const r of s.rows){const v=r.v[c.idx];if(typeof v==="string"&&/^(cần|chờ|đang chờ)/i.test(v)){const o=m.get(v)||{n:0,sum:0};o.n++;o.sum+=s.money?(+r.v[s.money.idx]||0):0;m.set(v,o)}}
-    for(const [v,o] of m)rows.push({s,i,c,v,...o});
-  }));
-  rows.sort((a,b)=>b.n-a.n);
+  // việc cần làm / đang chờ theo giá trị trạng thái: lý do khác lên đầu, rồi các bước quy trình PO theo thứ tự
+  const rowsA=[],rowsB=[];
+  state.sheets.forEach((sh,i)=>{
+    sh.cat.forEach(c=>{
+      if(sh.wf&&c.idx===sh.noteIdx)return;
+      const m=new Map();
+      for(const r of sh.rows){const v=r.v[c.idx];if(typeof v==="string"&&/^(cần|chờ|đang chờ)/i.test(v)){const o=m.get(v)||{n:0,sum:0};o.n++;o.sum+=sh.money?(+r.v[sh.money.idx]||0):0;m.set(v,o)}}
+      for(const [v,o] of m)rowsA.push({s:sh,i,c,v,...o});
+    });
+    if(sh.wf){
+      const m=new Map();
+      for(const r of sh.rows){if(r.done)continue;const o=m.get(r.wf)||{n:0,sum:0};o.n++;o.sum+=sh.money?(+r.v[sh.money.idx]||0):0;m.set(r.wf,o)}
+      const nc=sh.cols.find(c=>c.idx===sh.noteIdx);
+      for(const [v,o] of m)rowsB.push({s:sh,i,c:nc,v,...o,ord:WF_ALL.indexOf(v)<0?100:WF_ALL.indexOf(v)});
+    }
+  });
+  rowsA.sort((a,b)=>b.n-a.n);rowsB.sort((a,b)=>a.ord-b.ord||b.n-a.n);
+  const rows=[...rowsA,...rowsB];
   if(rows.length){
     html+=`<h2 class="sec">Việc đang chờ xử lý theo trạng thái</h2><div class="card scroll-x"><table class="mini"><thead><tr><th>Sheet</th><th>Cột</th><th>Trạng thái</th><th style="text-align:right">Số dòng</th><th style="text-align:right">Giá trị</th></tr></thead><tbody>`+
-      rows.slice(0,25).map(x=>`<tr class="click" data-gof="${x.i}" data-c="${x.c.idx}" data-v="${esc(x.v)}"><td>${esc(x.s.name)}</td><td>${esc(x.c.name)}</td><td><span class="chip" style="--c:${colorFor(x.v)}">${esc(x.v)}</span></td><td class="num">${x.n}</td><td class="num">${x.s.money?fmtBig(x.sum):""}</td></tr>`).join("")+`</tbody></table><div class="note">Gồm các giá trị bắt đầu bằng “Cần…” hoặc “Chờ…” trong các cột phân loại. Bấm một dòng để mở sheet đã lọc sẵn.</div></div>`;
+      rows.slice(0,40).map(x=>`<tr class="click" data-gof="${x.i}" data-c="${x.c.idx}" data-v="${esc(x.v)}"><td>${esc(x.s.name)}</td><td>${esc(x.c.name)}</td><td><span class="chip" style="--c:${colorFor(x.v)}">${esc(x.v)}</span></td><td class="num">${x.n}</td><td class="num">${x.s.money?fmtBig(x.sum):""}</td></tr>`).join("")+`</tbody></table><div class="note">Các lý do khác ở trên; tiếp theo là PO theo bước quy trình từ “Chờ báo giá” đến “Chờ KT xác nhận công nợ” (không gồm PO đã Hoàn thành). Bấm một dòng để mở sheet đã lọc sẵn.</div></div>`;
   }
   $("#main").innerHTML=html;
   const m=$("#main");
   m.querySelectorAll("[data-go]").forEach(li=>li.onclick=()=>goSheet(+li.dataset.go,{search:li.dataset.q.toLowerCase()}));
-  m.querySelectorAll("[data-goblk]").forEach(b=>b.onclick=()=>{const si=+b.dataset.goblk,sh=state.sheets[si];goSheet(si,{special:"overdue",filters:{[sh.blockIdx]:b.dataset.v==="(Trống)"?"":b.dataset.v}})});
+  m.querySelectorAll("[data-goblk]").forEach(b=>b.onclick=()=>{const si=+b.dataset.goblk,sh=state.sheets[si];const ci=sh.wf?sh.noteIdx:sh.blockIdx;goSheet(si,{special:b.dataset.done==="1"?null:"overdue",filters:{[ci]:b.dataset.v==="(Trống)"?"":b.dataset.v}})});
   m.querySelectorAll("[data-gof]").forEach(tr=>tr.onclick=()=>goSheet(+tr.dataset.gof,{filters:{[tr.dataset.c]:tr.dataset.v}}));
 }
 
@@ -1065,11 +1148,11 @@ function renderPriority(){
 function renderTabs(){
   const t=$("#tabs");t.hidden=false;
   const pc=collectItems().length;
-  t.innerHTML=`<button data-i="overview" class="${state.active==="overview"?"on":""}">Tổng quan</button><button data-i="priority" class="${state.active==="priority"?"on":""}">⚠ Ưu tiên xử lý<span class="n">${pc}</span></button><button data-i="history" class="${state.active==="history"?"on":""}">🕘 Lịch sử</button>`+
+  t.innerHTML=`<button data-i="overview" class="${state.active==="overview"?"on":""}">Tổng quan</button><button data-i="priority" class="${state.active==="priority"?"on":""}">⚠ Ưu tiên xử lý<span class="n">${pc}</span></button>${state.sheets.some(s=>s.wf)?`<button data-i="suppliers" class="${state.active==="suppliers"?"on":""}">🏭 Nhà cung cấp</button>`:""}<button data-i="history" class="${state.active==="history"?"on":""}">🕘 Lịch sử</button>`+
     state.sheets.map((s,i)=>`<button data-i="${i}" class="${state.active===i?"on":""}">${esc(s.name)}<span class="n">${s.rows.length}</span></button>`).join("");
-  t.querySelectorAll("button").forEach(b=>b.onclick=()=>{const v=b.dataset.i;state.active=(v==="overview"||v==="priority"||v==="history")?v:+v;renderTabs();render();scrollTo(0,0)});
+  t.querySelectorAll("button").forEach(b=>b.onclick=()=>{const v=b.dataset.i;state.active=(v==="overview"||v==="priority"||v==="history"||v==="suppliers")?v:+v;renderTabs();render();scrollTo(0,0)});
 }
-function render(){state.active==="overview"?renderOverview():state.active==="priority"?renderPriority():state.active==="history"?renderHistory():renderSheet(state.sheets[state.active])}
+function render(){state.active==="overview"?renderOverview():state.active==="priority"?renderPriority():state.active==="history"?renderHistory():state.active==="suppliers"?renderSuppliers():renderSheet(state.sheets[state.active])}
 
 function sheetStats(sh){
   const o={rows:sh.rows.length};
@@ -1125,10 +1208,11 @@ function renderOverview(){
 function rowsFor(sh,except){
   const u=sh.ui;
   return sh.rows.filter(r=>{
-    for(const k in u.filters){if(except===+k)continue;if(String(r.v[k]??"")!==u.filters[k])return false}
+    for(const k in u.filters){if(except===+k)continue;if(String(cellVal(sh,r,+k)??"")!==u.filters[k])return false}
+    for(const k in u.cf){if(!cfTest(sh,r,+k,u.cf[k]))return false}
     if(u.special&&except!=="special"&&r.st!==u.special)return false;
     if(u.range&&except!=="range"){const d=r.v[sh.dueIdx];if(!(d instanceof Date)||d<u.range.from||d>=u.range.to)return false}
-    if(u.search){if(!(r._t||(r._t=r.v.map(x=>x instanceof Date?fmtD(x):String(x??"")).join(" ").toLowerCase())).includes(u.search))return false}
+    if(u.search){if(!(r._t||(r._t=r.v.map(x=>x instanceof Date?fmtD(x):String(x??"")).join(" ").toLowerCase()+" "+String(r.wf||"").toLowerCase())).includes(u.search))return false}
     return true;
   });
 }
@@ -1145,7 +1229,11 @@ function renderSheet(sh){
       ${sh.dates.length?`<label class="sub">Cột hạn <select id="selDue"><option value="">(không)</option>${dateOpts}</select></label>`:""}
       ${sh.money?`<span class="seg" id="seg"><button data-m="count" class="${u.metric==="count"?"on":""}">Đếm dòng</button><button data-m="sum" class="${u.metric==="sum"?"on":""}">Theo ${esc(sh.money.name)}</button></span>`:""}
       <span class="grow"></span>
+      <select id="selView" title="Chế độ xem đã lưu"><option value="">Chế độ xem…</option>${viewsOf(sh).map((v,i)=>`<option value="${i}">${esc(v.name)}</option>`).join("")}</select>
+      <button class="btn sm" id="btnSaveView" title="Lưu bộ lọc/tìm kiếm hiện tại thành chế độ xem">💾 Lưu xem</button>
+      <button class="btn sm" id="btnDelView" title="Xóa chế độ xem đang chọn">🗑</button>
       <button class="btn" id="btnAdd">＋ Thêm dòng</button>
+      <button class="btn" id="btnXlsx">⬇ Xuất Excel (đang lọc)</button>
       <button class="btn" id="btnCsv">⬇ Xuất CSV (đang lọc)</button>
     </div>
     <div id="dyn"></div>
@@ -1155,14 +1243,19 @@ function renderSheet(sh){
   const sd=$("#selDue");if(sd)sd.onchange=e=>{sh.dueIdx=e.target.value===""?null:+e.target.value;u.special=null;u.range=null;setStatus(sh);renderDyn(sh);updateChrome()};
   const seg=$("#seg");if(seg)seg.querySelectorAll("button").forEach(b=>b.onclick=()=>{u.metric=b.dataset.m;seg.querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===b));renderDyn(sh)});
   $("#btnCsv").onclick=()=>exportCsv(sh);
+  $("#btnXlsx").onclick=()=>exportXlsx(sh);
+  $("#selView").onchange=e=>{const v=viewsOf(sh)[+e.target.value];if(v){applyView(sh,v);renderSheet(sh)}};
+  $("#btnSaveView").onclick=()=>{const name=(prompt("Tên chế độ xem (vd. Chờ báo giá NCC X):")||"").trim();if(!name)return;const l=viewsOf(sh).filter(v=>v.name!==name);l.push({name,...snapView(u)});store.set(viewsKey(sh),l);renderSheet(sh);toast("Đã lưu chế độ xem “"+name+"”")};
+  $("#btnDelView").onclick=()=>{const i=$("#selView").value;if(i==="")return toast("Hãy chọn một chế độ xem để xóa",true);const l=viewsOf(sh);const [d]=l.splice(+i,1);store.set(viewsKey(sh),l);renderSheet(sh);toast("Đã xóa chế độ xem “"+d.name+"”")};
   $("#btnAdd").onclick=()=>addRow(state.sheets.indexOf(sh));
   renderDyn(sh);
 }
 
 function barsHtml(sh,colIdx,fr,metric){
   const m=new Map();
-  for(const r of fr){const k=String(r.v[colIdx]??"");const w=metric==="sum"&&sh.money?(+r.v[sh.money.idx]||0):1;m.set(k,(m.get(k)||0)+w)}
+  for(const r of fr){const k=String(cellVal(sh,r,colIdx)??"");const w=metric==="sum"&&sh.money?(+r.v[sh.money.idx]||0):1;m.set(k,(m.get(k)||0)+w)}
   const arr=[...m.entries()].sort((a,b)=>b[1]-a[1]);
+  if(sh.wf&&colIdx===sh.noteIdx){const o=k=>{const i=WF_ALL.indexOf(k);return i<0?100:i};arr.sort((a,b)=>o(a[0])-o(b[0])||b[1]-a[1])}
   const tot=arr.reduce((a,x)=>a+x[1],0)||1,mx=arr[0]?arr[0][1]:1;
   const sel=sh.ui.filters[colIdx];
   return `<div class="bars">`+arr.slice(0,14).map(([k,v])=>`<div class="bar ${sel===k?"sel":""}" data-c="${colIdx}" data-v="${esc(k)}" title="Bấm để lọc"><span class="t">${esc(k||"(Trống)")}</span><span class="tr"><span class="f" style="display:block;width:${(v/mx*100).toFixed(1)}%;background:${colorFor(k)}"></span></span><span class="n">${metric==="sum"?fmtBig(v):fmtN(v)} · ${(v/tot*100).toFixed(0)}%</span></div>`).join("")+`</div>`;
@@ -1213,6 +1306,7 @@ function renderDyn(sh){
   // chip bộ lọc
   const chips=[];
   for(const k in u.filters){const c=sh.cols.find(c=>c.idx===+k);chips.push(`<span class="fchip">${esc(c.name)}: ${esc(u.filters[k]||"(Trống)")} <b data-rm="${k}">×</b></span>`)}
+  for(const k in u.cf){const c=sh.cols.find(c=>c.idx===+k);if(c)chips.push(`<span class="fchip">${esc(c.name)}: ${esc(cfDescribe(sh,c,u.cf[k]))} <b data-rmf="${k}">×</b></span>`)}
   if(u.special)chips.push(`<span class="fchip">${u.special==="overdue"?"Quá hạn":"Sắp đến hạn"} <b data-rm="special">×</b></span>`);
   if(u.range)chips.push(`<span class="fchip">Khoảng ${fmtDS(u.range.from)}–${fmtDS(new Date(u.range.to-DAY))} <b data-rm="range">×</b></span>`);
   let html=chips.length?`<div class="chips">${chips.join("")}<button class="btn" data-clear>Xoá tất cả bộ lọc</button></div>`:"";
@@ -1236,7 +1330,7 @@ function renderDyn(sh){
   // biểu đồ
   html+=`<div class="grid panels">`;
   if(sh.progIdx!=null){
-    const f2=rowsFor(sh,sh.progIdx);const d=f2.filter(r=>isDoneVal(r.v[sh.progIdx])).length;
+    const f2=rowsFor(sh,sh.progIdx);const d=f2.filter(r=>sh.wf?r.done:isDoneVal(r.v[sh.progIdx])).length;
     const pc=sh.cols.find(c=>c.idx===sh.progIdx);
     html+=`<div class="card"><h3>${esc(pc.name)} <small>tiến độ chính</small></h3><div class="donutwrap">${donut(d,f2.length,"var(--ok)")}${barsHtml(sh,sh.progIdx,f2,u.metric)}</div></div>`;
   }
@@ -1252,7 +1346,8 @@ function renderDyn(sh){
     if(u.range&&+u.range.from===+f)u.range=null;else u.range={from:f,to:t};u.shown=100;renderDyn(sh)});
   dyn.querySelectorAll("[data-k]").forEach(k=>k.onclick=()=>{u.special=u.special===k.dataset.k?null:k.dataset.k;u.shown=100;renderDyn(sh)});
   dyn.querySelectorAll("[data-rm]").forEach(b=>b.onclick=()=>{const k=b.dataset.rm;if(k==="special")u.special=null;else if(k==="range")u.range=null;else delete u.filters[k];renderDyn(sh)});
-  const cl=dyn.querySelector("[data-clear]");if(cl)cl.onclick=()=>{u.filters={};u.special=null;u.range=null;renderDyn(sh)};
+  dyn.querySelectorAll("[data-rmf]").forEach(b=>b.onclick=()=>{delete u.cf[b.dataset.rmf];u.shown=100;renderDyn(sh)});
+  const cl=dyn.querySelector("[data-clear]");if(cl)cl.onclick=()=>{u.filters={};u.cf={};u.special=null;u.range=null;renderDyn(sh)};
   renderTable(sh,fr);
 }
 
@@ -1261,15 +1356,29 @@ function renderTable(sh,fr){
   if(u.sort){const {i,dir}=u.sort;rows.sort((a,b)=>{const x=a.v[i],y=b.v[i];
     if(x==null&&y==null)return 0;if(x==null)return 1;if(y==null)return -1;
     const r=(typeof x==="number"&&typeof y==="number")||(x instanceof Date&&y instanceof Date)?(x-y):String(x).localeCompare(String(y),"vi");return r*dir})}
-  const cols=sh.cols.filter(c=>c.type!=="index");const si=state.sheets.indexOf(sh);
-  let h=`<h2 class="sec">Chi tiết (${fmtN(rows.length)} dòng) <small class="sub" style="font-weight:500">· bấm đúp vào ô để sửa</small></h2><div class="tablewrap"><table><thead><tr>${sh.checklist?"<th></th>":""}<th title="Số dòng trong file Excel">Dòng</th>`+
-    cols.map(c=>`<th data-s="${c.idx}">${esc(c.name)}${u.sort&&u.sort.i===c.idx?(u.sort.dir>0?" ▲":" ▼"):""}</th>`).join("")+`<th></th></tr></thead><tbody>`;
+  let cols=sh.cols.filter(c=>c.type!=="index");const si=state.sheets.indexOf(sh);
+  if(sh.wf&&sh.payIdx!=null){const pc=cols.find(c=>c.idx===sh.payIdx);cols=[pc,...cols.filter(c=>c!==pc)]} // cột tick thanh toán trước đứng đầu
+  const hint=sh.wf&&sh.payIdx==null?`<div class="note">Chưa có cột “Thanh toán trước” và “Ghi chú” trong file Excel. Bấm “🔄 Đồng bộ Odoo” một lần để script tự thêm các cột này.</div>`:"";
+  const selSet=u.sel||(u.sel=new Set());
+  const sugN=sh.wf?sh.rows.filter(r=>sugDone(sh,r)).length:0;
+  const sugBar=sugN?`<div class="bulk" style="border-color:var(--ok);background:color-mix(in srgb,var(--ok) 10%,var(--card))">💡 <b>${sugN} PO</b> Odoo báo đã nhận hết hàng và đã xuất hóa đơn, chưa đặt Hoàn thành.<span class="grow"></span><button class="btn sm" data-sugall>Đặt Hoàn thành tất cả</button></div>`:"";
+  let h=hint+sugBar+bulkBar(sh)+`<h2 class="sec">Chi tiết (${fmtN(rows.length)} dòng) <small class="sub" style="font-weight:500">· ${matchMedia("(pointer:coarse)").matches?"chạm":"bấm đúp"} vào ô để sửa · bấm ▾ ở tiêu đề để lọc</small></h2><div class="tablewrap ${sh.wf?"cards":""}"><table class="${sh.wf?"cardtbl":""}"><thead><tr>${sh.checklist?"<th></th>":""}${sh.wf?'<th class="flag"><input type="checkbox" data-selall title="Chọn tất cả dòng đang hiện"></th>':""}<th title="Số dòng trong file Excel">Dòng</th>`+
+    cols.map(c=>{const on=u.cf[c.idx]?" on":"";const lab=c.type==="flag"?"TT trước":c.name;return `<th data-s="${c.idx}" class="${c.type==="flag"?"flag":""}" title="${c.type==="flag"?"Tick = PO thanh toán trước (luồng có Chờ làm TT / Đã gửi UNC)":""}">${esc(lab)}${u.sort&&u.sort.i===c.idx?(u.sort.dir>0?" ▲":" ▼"):""}<button class="fb${on}" data-f="${c.idx}" title="Lọc cột này">▾</button></th>`}).join("")+`<th></th></tr></thead><tbody>`;
   for(const r of rows.slice(0,u.shown)){
     const dn=sh.checklist?ckDone(sh,r):(sh.progIdx!=null&&r.done);
     h+=`<tr data-row="${r.n}" class="${r.st==="overdue"?"od":r.st==="soon"?"sn":""} ${dn?"dn":""}">`;
     if(sh.checklist)h+=`<td><input type="checkbox" data-ck="${r.n}" ${dn?"checked":""} aria-label="Hoàn thành"></td>`;
+    if(sh.wf)h+=`<td class="flag sel"><input type="checkbox" data-sel="${r.n}" ${selSet.has(r.n)?"checked":""} aria-label="Chọn dòng"></td>`;
     h+=`<td class="rn">${r.n}</td>`;
     for(const c of cols){const v=r.v[c.idx];let cell="";
+      if(c.type==="flag"){h+=`<td class="flag" data-l="TT trước"><input type="checkbox" data-pay="${r.n}" ${isPay(v)?"checked":""} aria-label="Thanh toán trước" title="Tick = thanh toán trước"></td>`;continue}
+      if(sh.wf&&c.idx===sh.noteIdx){
+        const raw=v!=null&&String(v).trim()!=="";const seq=seqOf(sh,r),i=seq.indexOf(r.wf);
+        const nx=i>=0?seq[i+1]:null;
+        const edited=state.pending.has(pkey(si,r.n,c.idx));
+        const sd=stuckDays(sh,r),stk=!r.done&&sd!=null&&sd>=STUCK()?`<span class="stk" title="Đã ở bước này ${sd} ngày (từ ${fmtD(r.v[sh.chgIdx])})">⏱ ${sd} ngày</span>`:"";
+        const sg=sugDone(sh,r)?`<button class="sug" data-sug="${r.n}" title="Odoo báo đã nhận hết hàng và đã xuất hóa đơn. Bấm để đặt Hoàn thành">💡 Hoàn thành?</button>`:"";
+        h+=`<td class="wfnote ${edited?"ed":""}" data-l="Trạng thái (Note)" data-r="${r.n}" data-c="${c.idx}"><span class="chip" style="--c:${colorFor(r.wf)}" ${raw?"":'title="Tự gán theo trạng thái Odoo vì cột Note đang trống"'}>${esc(r.wf)}${raw?"":" *"}</span>${stk}<span class="stp"><button data-stp="${r.n}|-1" title="Lùi một bước" ${i>0||(i<0)?"":"disabled"}>◀</button><button class="nx" data-stp="${r.n}|1" title="${nx?"Chuyển sang: "+esc(nx):(i<0?"Trạng thái tự nhập: bấm để về bước đầu":"Đã ở bước cuối")}" ${nx||i<0?"":"disabled"}>▶</button></span>${sg}</td>`;continue}
       if(v==null)cell="";
       else if(v instanceof Date)cell=fmtD(v);
       else if(typeof v==="number"){cell=fmtN(v)}
@@ -1278,16 +1387,28 @@ function renderTable(sh,fr){
       if(v!=null&&c.idx===sh.title&&/mã đơn|số po|^po$/i.test(c.name))cell=`<a class="ol" href="#" data-code="${esc(v)}" title="Mở Odoo để tìm đơn này">${cell}</a>`;
       const cls=typeof v==="number"?"num":(c.type==="text"?"txt":"");
       const edited=state.pending.has(pkey(si,r.n,c.idx));
-      h+=`<td class="${cls} ${edited?"ed":""}" data-r="${r.n}" data-c="${c.idx}" ${c.type==="text"&&v?`title="${esc(v)}"`:""}>${cell}</td>`}
+      h+=`<td class="${cls} ${edited?"ed":""} ${c.idx===sh.title||c.idx===sh.sub?"wide":""}" data-l="${esc(c.name)}" data-r="${r.n}" data-c="${c.idx}" ${c.type==="text"&&v?`title="${esc(v)}"`:""}>${cell}</td>`}
     h+=`<td><button class="rowdel" data-del="${r.n}" title="Xóa dòng này">🗑</button></td></tr>`;
   }
   h+=`</tbody></table></div>`;
   if(rows.length>u.shown)h+=`<div class="more"><button class="btn" id="more">Hiện thêm (còn ${rows.length-u.shown} dòng)</button></div>`;
   const t=$("#tbl");t.innerHTML=h;
+  t.querySelectorAll("[data-f]").forEach(b=>b.onclick=e=>{e.stopPropagation();openFilter(sh,+b.dataset.f,b,()=>renderDyn(sh))});
+  t.querySelectorAll("[data-pay],[data-sel],[data-selall],[data-sug]").forEach(cb=>cb.onclick=e=>e.stopPropagation());
+  t.querySelectorAll("[data-sel]").forEach(cb=>cb.onchange=()=>{cb.checked?selSet.add(+cb.dataset.sel):selSet.delete(+cb.dataset.sel);renderTable(sh,fr)});
+  const sa=t.querySelector("[data-selall]");if(sa){const vis=rows.slice(0,u.shown);sa.checked=vis.length>0&&vis.every(r=>selSet.has(r.n));sa.onchange=()=>{vis.forEach(r=>sa.checked?selSet.add(r.n):selSet.delete(r.n));renderTable(sh,fr)}}
+  t.querySelectorAll("[data-sug]").forEach(b=>b.onclick=()=>{const r=sh.rows.find(x=>x.n===+b.dataset.sug);if(r&&setWf(si,r,WF_DONE)){setStatus(sh);renderDyn(sh);updateChrome();toast(r.v[sh.title]+": đã đặt Hoàn thành")}});
+  const sga=t.querySelector("[data-sugall]");if(sga)sga.onclick=()=>{let k=0;for(const r of sh.rows)if(sugDone(sh,r)&&setWf(si,r,WF_DONE))k++;setStatus(sh);renderDyn(sh);updateChrome();toast(`Đã đặt Hoàn thành cho ${k} PO.`)};
+  t.querySelectorAll("[data-bk]").forEach(b=>b.onclick=()=>{const k=b.dataset.bk;if(k==="clear"){u.sel=new Set();renderTable(sh,fr)}else if(k==="step1")bulkApply(si,"step",1);else if(k==="step-1")bulkApply(si,"step",-1);else bulkApply(si,k)});
+  const bks=t.querySelector("#bkSet");if(bks)bks.onchange=()=>{if(bks.value)bulkApply(si,"set",bks.value)};
+  t.querySelectorAll("[data-pay]").forEach(cb=>cb.onchange=()=>{const r=sh.rows.find(x=>x.n===+cb.dataset.pay);state.via="dashboard";setCell(si,r,sh.payIdx,cb.checked?"Có":null);setStatus(sh);renderDyn(sh);updateChrome()});
+  t.querySelectorAll("[data-stp]").forEach(b=>{b.onclick=e=>{e.stopPropagation();const [n,d]=b.dataset.stp.split("|");stepStatus(si,+n,+d)};b.ondblclick=e=>e.stopPropagation()});
   t.querySelectorAll("th[data-s]").forEach(th=>th.onclick=()=>{const i=+th.dataset.s;u.sort=u.sort&&u.sort.i===i?{i,dir:-u.sort.dir}:{i,dir:1};renderTable(sh,fr)});
-  const mo=$("#more");if(mo)mo.onclick=()=>{u.shown+=200;renderTable(sh,fr)};
+  const mo=$("#more");
+  if(mo){mo.onclick=()=>{u.shown+=200;renderTable(sh,fr)};
+    if("IntersectionObserver" in window){const io=new IntersectionObserver(es=>{if(es[0].isIntersecting){io.disconnect();u.shown+=200;renderTable(sh,fr)}},{rootMargin:"300px"});io.observe(mo)}} // cuộn tới cuối tự tải thêm
   const touch=matchMedia("(pointer:coarse)").matches;
-  t.querySelectorAll("td[data-c]").forEach(td=>{td.ondblclick=()=>startEdit(sh,td);if(touch)td.onclick=e=>{if(!td.querySelector("input"))startEdit(sh,td)}});
+  t.querySelectorAll("td[data-c]").forEach(td=>{td.ondblclick=()=>startEdit(sh,td);if(touch)td.onclick=e=>{if(!td.querySelector("input")&&!e.target.closest("button,.ol"))startEdit(sh,td)}});
   t.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>deleteRow(si,+b.dataset.del));
   t.querySelectorAll("[data-ck]").forEach(cb=>cb.onchange=()=>{
     const n=+cb.dataset.ck,r=sh.rows.find(x=>x.n===n);
@@ -1300,7 +1421,7 @@ function exportCsv(sh){
   const fr=rowsFor(sh);const cols=sh.cols.filter(c=>c.type!=="index");
   const q=v=>{v=v==null?"":(v instanceof Date?fmtD(v):String(v));return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v};
   const lines=[["Dòng",...cols.map(c=>c.name)].map(q).join(",")];
-  for(const r of fr)lines.push([r.n,...cols.map(c=>r.v[c.idx])].map(q).join(","));
+  for(const r of fr)lines.push([r.n,...cols.map(c=>cellVal(sh,r,c.idx))].map(q).join(","));
   const a=document.createElement("a");a.href=URL.createObjectURL(new Blob(["﻿"+lines.join("\r\n")],{type:"text/csv;charset=utf-8"}));
   a.download=sh.name+"_loc.csv";a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000);
 }
@@ -1407,6 +1528,228 @@ document.addEventListener("visibilitychange",()=>{
   if(state.src==="github")odooSchedule(300);
 });
 
+/* ---- Bộ lọc kiểu Excel: chứa / không chứa / bằng …, nhiều điều kiện, danh sách giá trị ---- */
+const OPS={
+  text:[["contains","chứa"],["notcontains","không chứa"],["eq","bằng"],["neq","khác"],["starts","bắt đầu bằng"],["ends","kết thúc bằng"],["empty","là ô trống"],["notempty","không trống"]],
+  num:[["eq","="],["neq","≠"],["gt",">"],["gte","≥"],["lt","<"],["lte","≤"],["empty","là ô trống"],["notempty","không trống"]],
+  date:[["eq","đúng ngày"],["before","trước ngày"],["after","sau ngày"],["onbefore","đến hết ngày"],["onafter","từ ngày"],["empty","là ô trống"],["notempty","không trống"]]};
+const opKind=c=>c.type==="num"?"num":c.type==="date"?"date":"text";
+const dispVal=v=>v==null||v===""?"(Trống)":v instanceof Date?fmtD(v):typeof v==="number"?fmtN(v):String(v);
+const NOVAL=new Set(["empty","notempty"]);
+function condTest(v,kind,cd){
+  if(!cd||!cd.op)return true;
+  const e=v==null||v==="";
+  if(cd.op==="empty")return e;if(cd.op==="notempty")return !e;
+  if(cd.v===""||cd.v==null)return true; // điều kiện chưa nhập giá trị thì bỏ qua
+  if(kind==="num"){if(e)return false;const x=+v,y=parseFloat(String(cd.v).replace(",","."));if(isNaN(y))return true;
+    return {eq:x===y,neq:x!==y,gt:x>y,gte:x>=y,lt:x<y,lte:x<=y}[cd.op]}
+  if(kind==="date"){if(!(v instanceof Date))return false;const [Y,M,D]=String(cd.v).split("-").map(Number);if(!Y)return true;
+    const a=+sod(v),b=+new Date(Y,M-1,D);return {eq:a===b,before:a<b,after:a>b,onbefore:a<=b,onafter:a>=b}[cd.op]}
+  const t=wfn(v instanceof Date?fmtD(v):v),q=wfn(cd.v);
+  return {contains:t.includes(q),notcontains:!t.includes(q),eq:t===q,neq:t!==q,starts:t.startsWith(q),ends:t.endsWith(q)}[cd.op];
+}
+function cfTest(sh,r,idx,f){
+  const c=sh.cols.find(c=>c.idx===idx);if(!c)return true;
+  const v=cellVal(sh,r,idx);
+  if(f.vals&&!f.vals.has(dispVal(v)))return false;
+  const kind=opKind(c),has=x=>x&&x.op&&(NOVAL.has(x.op)||(x.v!==""&&x.v!=null));
+  const a=has(f.c1),b=has(f.c2);
+  if(a&&b)return f.join==="or"?(condTest(v,kind,f.c1)||condTest(v,kind,f.c2)):(condTest(v,kind,f.c1)&&condTest(v,kind,f.c2));
+  if(a)return condTest(v,kind,f.c1);if(b)return condTest(v,kind,f.c2);
+  return true;
+}
+function cfDescribe(sh,c,f){
+  const kind=opKind(c),ops=Object.fromEntries(OPS[kind]);const parts=[];
+  const one=x=>x&&x.op&&(NOVAL.has(x.op)||x.v)?`${ops[x.op]}${NOVAL.has(x.op)?"":" “"+x.v+"”"}`:"";
+  const a=one(f.c1),b=one(f.c2);
+  if(a&&b)parts.push(a+(f.join==="or"?" HOẶC ":" VÀ ")+b);else if(a||b)parts.push(a||b);
+  if(f.vals)parts.push(f.vals.size+" giá trị");
+  return parts.join(" · ")||"đang lọc";
+}
+let fpop=null;
+function closeFilter(){if(fpop){fpop.remove();fpop=null}document.removeEventListener("mousedown",fpOut,true);document.removeEventListener("keydown",fpEsc,true)}
+const fpOut=e=>{if(fpop&&!fpop.contains(e.target)&&!e.target.closest("[data-f]"))closeFilter()};
+const fpEsc=e=>{if(e.key==="Escape")closeFilter()};
+function openFilter(sh,idx,anchor,done){
+  const had=fpop&&fpop.dataset.k===sh.name+"|"+idx;closeFilter();if(had)return;
+  const c=sh.cols.find(c=>c.idx===idx),kind=opKind(c),u=sh.ui,cur=u.cf[idx]||{};
+  const m=new Map();for(const r of sh.rows){const k=dispVal(cellVal(sh,r,idx));m.set(k,(m.get(k)||0)+1)}
+  let vals=[...m];
+  if(sh.wf&&idx===sh.noteIdx){const o=k=>{const i=WF_ALL.indexOf(k);return i<0?100:i};vals.sort((a,b)=>o(a[0])-o(b[0])||String(a[0]).localeCompare(String(b[0]),"vi"))}
+  else if(kind==="num")vals.sort((a,b)=>parseFloat(String(a[0]).replace(/\./g,"").replace(",","."))-parseFloat(String(b[0]).replace(/\./g,"").replace(",",".")));
+  else vals.sort((a,b)=>String(a[0]).localeCompare(String(b[0]),"vi"));
+  const sel=new Set(cur.vals||vals.map(x=>x[0]));
+  const opts=(o,s)=>`<option value="">(không lọc)</option>`+OPS[kind].map(([k,l])=>`<option value="${k}" ${s===k?"selected":""}>${l}</option>`).join("");
+  const itype=kind==="num"?"number":kind==="date"?"date":"text";
+  const d=document.createElement("div");d.className="fp";d.dataset.k=sh.name+"|"+idx;
+  d.innerHTML=`<h4><span>Lọc: ${esc(c.name)}</span><button class="btn sm" data-x aria-label="Đóng">✕</button></h4>
+   <div style="display:flex;gap:6px"><button class="btn sm" data-sort="1">A→Z / nhỏ→lớn</button><button class="btn sm" data-sort="-1">Z→A / lớn→nhỏ</button></div>
+   <div class="row"><select id="fo1">${opts(0,(cur.c1||{}).op)}</select><input id="fv1" type="${itype}" step="any" placeholder="giá trị" value="${esc((cur.c1||{}).v||"")}"></div>
+   <div class="join"><label><input type="radio" name="fj" value="and" ${cur.join!=="or"?"checked":""}> VÀ</label><label><input type="radio" name="fj" value="or" ${cur.join==="or"?"checked":""}> HOẶC</label></div>
+   <div class="row"><select id="fo2">${opts(0,(cur.c2||{}).op)}</select><input id="fv2" type="${itype}" step="any" placeholder="giá trị" value="${esc((cur.c2||{}).v||"")}"></div>
+   <input type="text" id="fs" placeholder="Tìm trong danh sách giá trị…">
+   <div class="list"><label><input type="checkbox" id="fall"> <b>(Chọn tất cả)</b></label><div id="fl"></div></div>
+   <div class="ft"><button class="btn sm" data-clr>Xóa lọc cột</button><button class="btn sm primary" data-ok>Áp dụng</button></div>`;
+  document.body.appendChild(d);fpop=d;
+  const fl=d.querySelector("#fl"),fall=d.querySelector("#fall"),fs=d.querySelector("#fs");
+  let shown=[];
+  const draw=()=>{
+    const q=wfn(fs.value);shown=vals.filter(([k])=>!q||wfn(k).includes(q));
+    fl.innerHTML=shown.slice(0,400).map(([k,n])=>`<label><input type="checkbox" data-v="${esc(k)}" ${sel.has(k)?"checked":""}> <span>${esc(k)}</span><span class="n">${n}</span></label>`).join("")+(shown.length>400?`<div class="sub">… còn ${shown.length-400} giá trị, hãy gõ để thu hẹp</div>`:"");
+    fall.checked=shown.length>0&&shown.every(([k])=>sel.has(k));
+    fl.querySelectorAll("input").forEach(i=>i.onchange=()=>{i.checked?sel.add(i.dataset.v):sel.delete(i.dataset.v);fall.checked=shown.every(([k])=>sel.has(k))});
+  };
+  fall.onchange=()=>{shown.forEach(([k])=>fall.checked?sel.add(k):sel.delete(k));draw()};
+  fs.oninput=draw;draw();
+  const place=()=>{if(matchMedia("(max-width:700px)").matches)return;const r=anchor.getBoundingClientRect();d.style.top=Math.min(r.bottom+6,innerHeight-d.offsetHeight-8)+"px";d.style.left=Math.max(8,Math.min(r.left,innerWidth-d.offsetWidth-8))+"px"};
+  place();
+  d.querySelector("[data-x]").onclick=closeFilter;
+  d.querySelectorAll("[data-sort]").forEach(b=>b.onclick=()=>{u.sort={i:idx,dir:+b.dataset.sort};closeFilter();done()});
+  d.querySelector("[data-clr]").onclick=()=>{delete u.cf[idx];closeFilter();u.shown=100;done()};
+  d.querySelector("[data-ok]").onclick=()=>{
+    const cd=(o,v)=>{const op=d.querySelector(o).value;return op?{op,v:d.querySelector(v).value}:null};
+    const f={c1:cd("#fo1","#fv1"),c2:cd("#fo2","#fv2"),join:d.querySelector('input[name=fj]:checked').value,vals:sel.size===vals.length?null:new Set(sel)};
+    const none=!f.vals&&!(f.c1&&(NOVAL.has(f.c1.op)||f.c1.v))&&!(f.c2&&(NOVAL.has(f.c2.op)||f.c2.v));
+    if(none)delete u.cf[idx];else u.cf[idx]=f;
+    closeFilter();u.shown=100;done();
+  };
+  d.addEventListener("keydown",e=>{if(e.key==="Enter"&&e.target.tagName==="INPUT"&&e.target.type!=="checkbox"&&e.target.type!=="radio"&&e.target.id!=="fs")d.querySelector("[data-ok]").click()});
+  setTimeout(()=>{document.addEventListener("mousedown",fpOut,true);document.addEventListener("keydown",fpEsc,true)},0);
+}
+
+/* ====== Mốc thời gian, hàng loạt, chế độ xem, xuất xlsx, nhà cung cấp, theme, cache ====== */
+const STUCK=()=>+store.get("qlcv:stuck")||5;
+const stuckDays=(sh,r)=>sh.chgIdx!=null&&r.v[sh.chgIdx] instanceof Date?Math.round((TODAY-sod(r.v[sh.chgIdx]))/DAY):null;
+function sugDone(sh,r){ // Odoo báo đã nhận hết VÀ đã xuất hóa đơn -> gợi ý Hoàn thành
+  if(r.done||sh.rcIdx==null||sh.ivIdx==null)return false;
+  const rc=wfn(r.v[sh.rcIdx]),iv=wfn(r.v[sh.ivIdx]);
+  const got=/^(đã nhận|nhận hết|nhận đủ|nhận toàn bộ)/.test(rc)&&!/(một phần|chưa)/.test(rc);
+  const inv=/(đã (xuất|lập|ghi).*hóa đơn|hóa đơn đầy đủ|fully billed)/.test(iv)&&!/(chưa|một phần|nháp)/.test(iv);
+  return got&&inv;
+}
+function setWf(si,r,status){
+  const sh=state.sheets[si];state.via="dashboard";
+  const ch=setCell(si,r,sh.noteIdx,status);
+  if(ch&&sh.chgIdx!=null)setCell(si,r,sh.chgIdx,new Date(TODAY)); // ghi ngày đổi trạng thái
+  return ch;
+}
+function nextWf(sh,r,dir){
+  const seq=seqOf(sh,r),cur=r.wf,i=seq.indexOf(cur);let ni;
+  if(i>=0)ni=i+dir;
+  else{const u=WF_ALL.indexOf(cur);
+    if(u<0)ni=dir>0?0:-1;
+    else if(dir>0)ni=seq.findIndex(x=>WF_ALL.indexOf(x)>u);
+    else{ni=-1;seq.forEach((x,j)=>{if(WF_ALL.indexOf(x)<u)ni=j})}}
+  return ni<0||ni>=seq.length?null:seq[ni];
+}
+function stepStatus(si,n,dir){
+  const sh=state.sheets[si],r=sh.rows.find(x=>x.n===n);if(!r)return;
+  const nv=nextWf(sh,r,dir),cur=r.wf;
+  if(!nv){toast(dir>0?"PO này đã ở bước cuối của quy trình.":"PO này đang ở bước đầu của quy trình.");return}
+  if(!setWf(si,r,nv))return;setStatus(sh);renderDyn(sh);updateChrome();
+  toast(`${r.v[sh.title]}: ${cur} → ${nv}`);
+}
+/* hàng loạt */
+function bulkApply(si,kind,arg){
+  const sh=state.sheets[si],u=sh.ui,sel=u.sel||new Set();let ok=0,skip=0;
+  for(const n of sel){
+    const r=sh.rows.find(x=>x.n===n);if(!r)continue;
+    if(kind==="pay"||kind==="unpay"){state.via="dashboard";if(setCell(si,r,sh.payIdx,kind==="pay"?"Có":null))ok++;else skip++}
+    else if(kind==="step"){const nv=nextWf(sh,r,arg);if(nv&&setWf(si,r,nv))ok++;else skip++}
+    else if(kind==="set"){if(setWf(si,r,arg))ok++;else skip++}
+  }
+  u.sel=new Set();setStatus(sh);renderDyn(sh);updateChrome();
+  toast(`Đã cập nhật ${ok} PO${skip?`, bỏ qua ${skip} (đã ở trạng thái đó / hết bước)`:""}.`);
+}
+function bulkBar(sh){
+  const n=sh.ui.sel?sh.ui.sel.size:0;if(!sh.wf||!n)return "";
+  return `<div class="bulk"><b>${n} PO đã chọn</b>${sh.payIdx!=null?`<button class="btn sm" data-bk="pay">☑ Tick TT trước</button><button class="btn sm" data-bk="unpay">☐ Bỏ tick</button>`:""}<button class="btn sm" data-bk="step1">▶ Tiến 1 bước</button><button class="btn sm" data-bk="step-1">◀ Lùi 1 bước</button><select id="bkSet"><option value="">Đặt trạng thái…</option>${WF_ALL.map(x=>`<option>${x}</option>`).join("")}</select><span class="grow"></span><button class="btn sm" data-bk="clear">Bỏ chọn</button></div>`;
+}
+/* chế độ xem đã lưu */
+const viewsKey=sh=>"qlcv:views:"+sh.name;
+const viewsOf=sh=>store.get(viewsKey(sh))||[];
+function snapView(u){return{filters:{...u.filters},cf:Object.fromEntries(Object.entries(u.cf).map(([k,f])=>[k,{...f,vals:f.vals?[...f.vals]:null}])),search:u.search,special:u.special,sort:u.sort}}
+function applyView(sh,v){
+  const u=sh.ui;u.filters={...(v.filters||{})};u.cf=Object.fromEntries(Object.entries(v.cf||{}).map(([k,f])=>[k,{...f,vals:f.vals?new Set(f.vals):null}]));
+  u.search=v.search||"";u.special=v.special||null;u.sort=v.sort||null;u.range=null;u.shown=100;
+}
+/* xuất .xlsx (đang lọc) */
+function makeZipStored(files){
+  const enc=new TextEncoder(),parts=[],cds=[];let pos=0;
+  for(const [name,txt] of files){
+    const nb=enc.encode(name),data=enc.encode(txt),crc=crc32(data);
+    const lh=new Uint8Array(30+nb.length),l=new DataView(lh.buffer);
+    l.setUint32(0,0x04034b50,true);l.setUint16(4,20,true);l.setUint16(6,0x0800,true);l.setUint16(8,0,true);l.setUint32(14,crc,true);l.setUint32(18,data.length,true);l.setUint32(22,data.length,true);l.setUint16(26,nb.length,true);lh.set(nb,30);
+    const cd=new Uint8Array(46+nb.length),c=new DataView(cd.buffer);
+    c.setUint32(0,0x02014b50,true);c.setUint16(4,20,true);c.setUint16(6,20,true);c.setUint16(8,0x0800,true);c.setUint32(16,crc,true);c.setUint32(20,data.length,true);c.setUint32(24,data.length,true);c.setUint16(28,nb.length,true);c.setUint32(42,pos,true);cd.set(nb,46);
+    parts.push(lh,data);pos+=lh.length+data.length;cds.push(cd);
+  }
+  let sz=0;for(const c of cds){parts.push(c);sz+=c.length}
+  const eo=new Uint8Array(22),d=new DataView(eo.buffer);
+  d.setUint32(0,0x06054b50,true);d.setUint16(8,cds.length,true);d.setUint16(10,cds.length,true);d.setUint32(12,sz,true);d.setUint32(16,pos,true);parts.push(eo);
+  return new Blob(parts,{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
+}
+const xe=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])).replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g,"");
+function exportXlsx(sh){
+  const fr=rowsFor(sh);const cols=sh.cols.filter(c=>c.type!=="index");
+  const rowsX=[`<row r="1">`+cols.map((c,j)=>`<c r="${colLetter(j)}1" t="inlineStr" s="2"><is><t>${xe(c.name)}</t></is></c>`).join("")+`</row>`];
+  fr.forEach((r,i)=>{
+    const n=i+2;
+    rowsX.push(`<row r="${n}">`+cols.map((c,j)=>{
+      const v=cellVal(sh,r,c.idx),ref=colLetter(j)+n;
+      if(v==null||v==="")return "";
+      if(v instanceof Date)return `<c r="${ref}" s="1"><v>${dateToSerial(v)}</v></c>`;
+      if(typeof v==="number")return `<c r="${ref}"><v>${v}</v></c>`;
+      return `<c r="${ref}" t="inlineStr"><is><t xml:space="preserve">${xe(v)}</t></is></c>`;
+    }).join("")+`</row>`);
+  });
+  const H='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n',NS='xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"';
+  const sname=xe(sh.name.replace(/[\\\/?*\[\]:]/g,"").slice(0,31)||"Du lieu");
+  const files=[
+   ["[Content_Types].xml",H+'<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>'],
+   ["_rels/.rels",H+'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>'],
+   ["xl/workbook.xml",H+`<workbook ${NS} xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="${sname}" sheetId="1" r:id="rId1"/></sheets></workbook>`],
+   ["xl/_rels/workbook.xml.rels",H+'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>'],
+   ["xl/styles.xml",H+`<styleSheet ${NS}><numFmts count="1"><numFmt numFmtId="164" formatCode="dd/mm/yyyy"/></numFmts><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="3"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/></cellXfs></styleSheet>`],
+   ["xl/worksheets/sheet1.xml",H+`<worksheet ${NS}><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><sheetData>${rowsX.join("")}</sheetData><autoFilter ref="A1:${colLetter(cols.length-1)}${fr.length+1}"/></worksheet>`]];
+  const a=document.createElement("a");a.href=URL.createObjectURL(makeZipStored(files));
+  a.download=sh.name.replace(/[^\w\- ]+/g,"_")+"_loc.xlsx";a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+}
+/* nhà cung cấp */
+function renderSuppliers(){
+  const q=(state.supQ||"").toLowerCase();const out=[];
+  state.sheets.forEach((sh,si)=>{
+    if(!sh.wf)return;const sc=sh.cols.find(c=>/^nhà cung cấp$/i.test(c.name.trim()));if(!sc)return;
+    const m=new Map();
+    for(const r of sh.rows){
+      const k=String(r.v[sc.idx]??"(Trống)"),o=m.get(k)||{k,si,sc:sc.idx,n:0,open:0,late:0,quote:0,maxLate:0,sum:0,sumOpen:0};
+      const amt=sh.money?+r.v[sh.money.idx]||0:0;o.n++;o.sum+=amt;
+      if(!r.done){o.open++;o.sumOpen+=amt;if(r.wf==="Chờ báo giá")o.quote++;
+        if(r.st==="overdue"){o.late++;const d=dueOf(sh,r);if(d instanceof Date)o.maxLate=Math.max(o.maxLate,Math.round((TODAY-sod(d))/DAY))}}
+      m.set(k,o);
+    }
+    out.push(...m.values());
+  });
+  const L=out.filter(o=>!q||o.k.toLowerCase().includes(q)).sort((a,b)=>b.late-a.late||b.maxLate-a.maxLate||b.sumOpen-a.sumOpen);
+  $("#main").innerHTML=`<div class="toolbar"><input type="search" id="supq" placeholder="Tìm nhà cung cấp…" value="${esc(state.supQ||"")}"><span class="sub">${L.length} nhà cung cấp · sắp theo số PO trễ giảm dần</span></div>
+   <div class="card scroll-x"><table class="mini"><thead><tr><th>Nhà cung cấp</th><th style="text-align:right">Số PO</th><th style="text-align:right">Đang mở</th><th style="text-align:right">Trễ</th><th style="text-align:right">Chờ báo giá</th><th style="text-align:right">Trễ lâu nhất</th><th style="text-align:right">Giá trị đang mở</th></tr></thead><tbody>`+
+   L.slice(0,300).map((o,i)=>`<tr class="click" data-sup="${i}"><td>${esc(o.k)}</td><td class="num">${o.n}</td><td class="num">${o.open}</td><td class="num" style="${o.late?"color:var(--bad);font-weight:700":""}">${o.late}</td><td class="num">${o.quote}</td><td class="num">${o.maxLate?o.maxLate+" ngày":""}</td><td class="num">${fmtBig(o.sumOpen)}</td></tr>`).join("")+`</tbody></table></div><div class="note">“Trễ” = PO chưa Hoàn thành và đã quá ngày nhận hàng. Bấm một dòng để mở sheet PO đã lọc theo nhà cung cấp đó.</div>`;
+  $("#supq").oninput=e=>{state.supQ=e.target.value;const p=e.target.selectionStart;renderSuppliers();const n=$("#supq");n.focus();n.setSelectionRange(p,p)};
+  $("#main").querySelectorAll("[data-sup]").forEach(tr=>tr.onclick=()=>{const o=L[+tr.dataset.sup];goSheet(o.si,{filters:{[o.sc]:o.k==="(Trống)"?"":o.k}})});
+}
+/* giao diện sáng/tối */
+function applyTheme(){const t=store.get("qlcv:theme");if(t)document.documentElement.dataset.theme=t;else delete document.documentElement.dataset.theme;const b=$("#btnTheme");if(b)b.textContent=t==="dark"?"🌙":t==="light"?"☀":"🌓"}
+function cycleTheme(){const t=store.get("qlcv:theme");store.set("qlcv:theme",t==="dark"?"light":t==="light"?null:"dark");applyTheme()}
+/* lưu bản Excel gần nhất trong trình duyệt để mở tức thì; ETag để giảm gọi GitHub */
+const idbOpen=()=>new Promise((res,rej)=>{const q=indexedDB.open("qlcv",1);q.onupgradeneeded=()=>q.result.createObjectStore("kv");q.onsuccess=()=>res(q.result);q.onerror=()=>rej(q.error)});
+async function kvGet(k){try{const db=await idbOpen();return await new Promise(res=>{const r=db.transaction("kv").objectStore("kv").get(k);r.onsuccess=()=>res(r.result||null);r.onerror=()=>res(null)})}catch(e){return null}}
+async function kvSet(k,v){try{const db=await idbOpen();await new Promise(res=>{const t=db.transaction("kv","readwrite");t.objectStore("kv").put(v,k);t.oncomplete=res;t.onerror=res;t.onabort=res})}catch(e){}}
+const ghCacheKey=()=>{const c=ghCfg();return `gh:${c.owner}/${c.repo}/${c.path}@${c.branch||"main"}`};
+async function bootCache(){
+  const c=await kvGet(ghCacheKey());
+  if(c&&c.buf){try{await loadBuffer(c.buf,c.name,{src:"github"});state.sha=c.sha;state.stale=true;setSaveState("Bản lưu trong máy, đang cập nhật…","warn")}catch(e){}}
+}
+
 /* ---- Mở Odoo để tìm đơn hàng ---- */
 const ODOO_LIST=()=>store.get("qlcv:odoourl")||"https://erp.dekko.com.vn/odoo/action-1572";
 let odooIds=null;
@@ -1432,11 +1775,26 @@ document.addEventListener("click",e=>{const a=e.target.closest&&e.target.closest
 
 /* ---- Nhập bằng giọng nói (Web Speech API) ---- */
 const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+function micError(code){
+  const ua=navigator.userAgent||"";
+  const inApp=/Zalo|FBAN|FBAV|FB_IAB|Messenger|Instagram|Line\/|MicroMessenger|; wv\)/i.test(ua);
+  let m;
+  if(location.protocol==="file:")m="Trang đang mở từ file trên máy nên trình duyệt chặn micro. Hãy mở bằng địa chỉ https://… (GitHub Pages).";
+  else if(inApp)m="Bạn đang mở trang trong ứng dụng khác (Zalo/Messenger/Facebook…), các ứng dụng này chặn micro. Hãy bấm menu ⋮ → “Mở bằng Chrome/Safari” rồi thử lại.";
+  else if(code==="not-allowed")m="Micro đang bị chặn cho trang này. Chrome: bấm biểu tượng ổ khóa cạnh địa chỉ → Cài đặt trang web → Micrô → Cho phép, rồi tải lại trang. iPhone: Cài đặt → Safari → Micrô → Cho phép (và bật Cài đặt → Chung → Bàn phím → Đọc chính tả).";
+  else if(code==="service-not-allowed")m="Trình duyệt không cho dùng dịch vụ nhận dạng giọng nói. iPhone: bật Cài đặt → Chung → Bàn phím → Đọc chính tả. Android: dùng Chrome và bật Google Voice Typing.";
+  else if(code==="no-speech")m="Không nghe thấy giọng nói, hãy thử lại.";
+  else if(code==="audio-capture")m="Không tìm thấy micro trên thiết bị.";
+  else if(code==="network")m="Nhận dạng giọng nói cần có mạng Internet.";
+  else m="Lỗi nhận dạng giọng nói: "+code;
+  toast(m,true);
+}
 function listen(onText,onEnd){
-  if(!SR){toast("Trình duyệt này không hỗ trợ nhập giọng nói. Hãy dùng Chrome, Edge hoặc Safari (iPhone).",true);return null}
+  if(!SR){toast("Trình duyệt này không hỗ trợ nhập giọng nói. Hãy dùng Chrome, Edge hoặc Safari (iPhone). Nếu đang mở trong Zalo/Messenger, hãy mở bằng Chrome/Safari.",true);return null}
+  if(!isSecureContext){micError("not-allowed");return null}
   const rc=new SR();rc.lang="vi-VN";rc.interimResults=true;rc.continuous=false;let fin="";
   rc.onresult=e=>{let it="";for(let i=e.resultIndex;i<e.results.length;i++){const t=e.results[i][0].transcript;if(e.results[i].isFinal)fin+=t+" ";else it+=t}onText((fin+it).trim(),!it)};
-  rc.onerror=e=>{const m={"not-allowed":"Bạn chưa cho phép dùng micro cho trang này.","service-not-allowed":"Trình duyệt chặn nhận dạng giọng nói.","no-speech":"Không nghe thấy giọng nói, hãy thử lại.","audio-capture":"Không tìm thấy micro."};toast(m[e.error]||"Lỗi nhận dạng giọng nói: "+e.error,true)};
+  rc.onerror=e=>micError(e.error);
   rc.onend=()=>onEnd&&onEnd();
   try{rc.start()}catch(e){toast("Không bật được micro: "+e.message,true);return null}
   return rc;
@@ -1454,10 +1812,13 @@ function attachMic(inp,td){
   };
   td.appendChild(b);
 }
-function noteCol(sh){return sh.cols.find(c=>/^(note|ghi chú)$/i.test(String(c.name).trim()))}
+function noteCol(sh){
+  const g=sh.cols.find(c=>/^ghi chú$/i.test(String(c.name).trim()));if(g)return g;
+  return sh.wf?null:sh.cols.find(c=>/^note$/i.test(String(c.name).trim())); // sheet PO: Note là trạng thái quy trình nên không ghi chú tự do vào đó
+}
 function voiceNote(si,rn){
   const sh=state.sheets[si],r=sh.rows.find(x=>x.n===rn),nc=noteCol(sh);
-  if(!r||!nc){toast("Sheet này không có cột Note/Ghi chú để ghi.",true);return}
+  if(!r||!nc){toast(sh.wf?"Chưa có cột “Ghi chú” trong Excel. Bấm “🔄 Đồng bộ Odoo” một lần để tạo cột này (cột Note dùng cho trạng thái quy trình).":"Sheet này không có cột Note/Ghi chú để ghi.",true);return}
   const d=$("#vdlg"),ta=$("#vtxt"),mic=$("#vmic");
   $("#vtitle").textContent="Ghi chú cho "+(r.v[sh.title]??"");
   ta.value="";$("#vsave").disabled=false;
@@ -1496,7 +1857,7 @@ function renderMsgs(){
   $("#msgbody").innerHTML=L.length?L.slice(0,60).map(x=>{
     const vend=x.s.sub!=null?x.r.v[x.s.sub]:"";
     return `<div class="msg" style="--c:${lvlC[x.lvl]}"><div class="mh"><a class="ol" href="#" data-code="${esc(x.r.v[x.s.title])}" title="Mở Odoo để tìm đơn này"><b>${esc(x.r.v[x.s.title])}</b></a><span class="late">trễ ${x.late} ngày</span></div>
-      <div class="sub">${esc(vend||"")}${x.amt?" · "+fmtN(x.amt):""} · hạn ${fmtD(x.due)} · ${esc(x.s.name)}</div>
+      <div class="sub">${x.wfs?`<span class="chip" style="--c:${colorFor(x.wfs)}">${esc(x.wfs)}</span> `:""}${esc(vend||"")}${x.amt?" · "+fmtN(x.amt):""} · hạn ${fmtD(x.due)} · ${esc(x.s.name)}</div>
       <div class="ma"><button class="btn sm" data-mo="${esc(x.r.v[x.s.title])}">🔍 Tìm trên Odoo</button><button class="btn sm" data-mv="${x.i}|${x.r.n}">🎤 Ghi chú</button><button class="btn sm" data-mg="${x.i}|${esc(String(x.r.v[x.s.title]))}">📄 Xem dòng</button><button class="btn sm" data-mx="${esc(x.key)}" title="Ẩn tin này đến hết hôm nay">✕</button></div></div>`}).join("")+(L.length>60?`<div class="note">… và ${L.length-60} đơn nữa. Xem tab “Ưu tiên xử lý”.</div>`:""):`<div class="sub" style="padding:18px 8px">Không có đơn nào trễ hẹn. 🎉</div>`;
   const b=$("#msgbody");
   b.querySelectorAll("[data-mo]").forEach(x=>x.onclick=()=>openOdoo(x.dataset.mo));
@@ -1514,185 +1875,14 @@ function renderMsgs(){
   $("#msgx").onclick=()=>{msgs.open=false;renderMsgs()};
 })();
 
-/* ---- Cấu hình tài khoản thụ hưởng theo NCC (script trên Odoo đọc file này) ---- */
-const nccPath=()=>{const c=ghCfg(),i=c.path.lastIndexOf("/");return (i>=0?c.path.slice(0,i+1):"")+"ncc-bank.json"};
-const nccUrl=c=>ghUrl(c,`contents/${nccPath().split("/").map(encodeURIComponent).join("/")}`);
-const nccKey=s=>String(s||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/đ/gi,"d").toLowerCase().replace(/[^a-z0-9]+/g," ").trim();
-const ncc={items:[],sha:null,dirty:false,loaded:false};
-function nccSetState(t,cls){const e=$("#nState");e.textContent=t||"";e.className="sub "+(cls||"")}
-async function nccLoad(){
-  const c=ghCfg();
-  const r=await fetch(nccUrl(c)+`?ref=${encodeURIComponent(c.branch||"main")}`,{headers:ghHead(c),cache:"no-store"});
-  if(r.status===404){ncc.items=[];ncc.sha=null;ncc.loaded=true;return}
-  if(!r.ok)throw new Error(r.status===401?"Mã truy cập GitHub không đúng hoặc đã hết hạn":"GitHub trả lỗi "+r.status+" khi đọc danh sách NCC");
-  const j=await r.json();let d={};
-  try{d=JSON.parse(new TextDecoder().decode(new Uint8Array(b64ToBuf(j.content))))}catch(e){}
-  ncc.items=(Array.isArray(d.items)?d.items:[]).map(x=>({name:x.name||"",acc:x.acc||"",holder:x.holder||"",bank:x.bank||""}));
-  ncc.sha=j.sha;ncc.loaded=true;
-}
-async function nccSave(){
-  const c=ghCfg();
-  const seen=new Set(),items=[];
-  for(const x of ncc.items){
-    const name=x.name.trim();if(!name)continue;
-    const k=nccKey(name);if(seen.has(k))throw new Error("NCC “"+name+"” bị nhập trùng, hãy xoá bớt một dòng.");
-    seen.add(k);items.push({name,acc:x.acc.trim(),holder:x.holder.trim(),bank:x.bank.trim()});
-  }
-  const body={message:"Dashboard: cập nhật tài khoản thụ hưởng NCC",branch:c.branch||"main",
-    content:bufToB64(new TextEncoder().encode(JSON.stringify({version:1,updated:new Date().toISOString(),items},null,1)))};
-  if(ncc.sha)body.sha=ncc.sha;
-  const r=await fetch(nccUrl(c),{method:"PUT",headers:{...ghHead(c),"Content-Type":"application/json"},body:JSON.stringify(body)});
-  if(r.status===409||r.status===422)throw new Error("File NCC vừa thay đổi ở nơi khác. Hãy đóng cửa sổ này, mở lại rồi nhập lại phần vừa sửa.");
-  if(!r.ok)throw new Error("GitHub trả lỗi "+r.status+" khi ghi file NCC (mã truy cập cần quyền Contents: Read and write)");
-  const j=await r.json();ncc.sha=j.content.sha;ncc.dirty=false;
-  ncc.items=items;
-}
-function nccVendorNames(){
-  const set=new Set();
-  try{for(const sh of state.sheets||[])for(const col of sh.cols||[])if(/nhà cung cấp|\bncc\b|vendor|nhà cc/i.test(col.name||""))
-    for(const r of sh.rows||[]){const v=r.v&&r.v[col.idx];if(v!=null&&String(v).trim())set.add(String(v).trim())}}catch(e){}
-  return [...set].sort((a,b)=>a.localeCompare(b,"vi")).slice(0,2000);
-}
-function nccRender(){
-  const q=nccKey($("#nSearch").value);
-  const rows=[];
-  ncc.items.forEach((x,i)=>{if(q&&!nccKey(x.name).includes(q))return;
-    rows.push(`<tr data-i="${i}"><td><input data-k="name" list="nNames" value="${esc(x.name)}" placeholder="Tên NCC trên Odoo"></td><td><input data-k="acc" value="${esc(x.acc)}" inputmode="numeric" placeholder="Số tài khoản"></td><td><input data-k="holder" value="${esc(x.holder)}" placeholder="Tên người thụ hưởng"></td><td><input data-k="bank" value="${esc(x.bank)}" placeholder="VD: Vietcombank"></td><td><button class="btn sm" data-del="${i}" title="Xoá NCC này">✕</button></td></tr>`)});
-  $("#nBody").innerHTML=rows.join("")||`<tr><td colspan="5" class="sub" style="padding:14px">${ncc.items.length?"Không có NCC nào khớp.":"Chưa có NCC nào. Bấm “＋ Thêm NCC” hoặc dán từ Excel."}</td></tr>`;
-  $("#nNames").innerHTML=nccVendorNames().map(n=>`<option value="${esc(n)}">`).join("");
-  nccSetState(ncc.items.length+" NCC"+(ncc.dirty?" · chưa lưu":""),ncc.dirty?"warn":"");
-}
-$("#btnNcc").onclick=async()=>{
-  if(!ghReady()){toast("Hãy kết nối GitHub trước (nút ⚙ GitHub).",true);return}
-  $("#nSearch").value="";$("#ndlg").showModal();nccSetState("Đang tải…");
-  try{await nccLoad();ncc.dirty=false;nccRender()}
-  catch(e){nccSetState("");toast(e.message,true)}
-};
-$("#nSearch").oninput=nccRender;
-$("#nAdd").onclick=()=>{ncc.items.unshift({name:"",acc:"",holder:"",bank:""});ncc.dirty=true;$("#nSearch").value="";nccRender();const i=$("#nBody input");if(i)i.focus()};
-$("#nBody").addEventListener("input",e=>{
-  const tr=e.target.closest("tr[data-i]");if(!tr||!e.target.dataset.k)return;
-  ncc.items[+tr.dataset.i][e.target.dataset.k]=e.target.value;ncc.dirty=true;nccSetState(ncc.items.length+" NCC · chưa lưu","warn");
-});
-$("#nBody").addEventListener("click",e=>{
-  const b=e.target.closest("[data-del]");if(!b)return;
-  const x=ncc.items[+b.dataset.del];
-  if(x&&(x.name||x.acc)&&!confirm("Xoá NCC “"+(x.name||"(chưa đặt tên)")+"” khỏi danh sách?"))return;
-  ncc.items.splice(+b.dataset.del,1);ncc.dirty=true;nccRender();
-});
-$("#nPasteGo").onclick=()=>{
-  const lines=$("#nPaste").value.split(/\r?\n/).map(l=>l.split("\t")).filter(a=>a.length>=2&&a[0].trim());
-  if(!lines.length){toast("Không đọc được dòng nào. Hãy copy từ Excel (các cột cách nhau bằng Tab).",true);return}
-  let add=0,upd=0;
-  for(const a of lines){
-    const it={name:a[0].trim(),acc:(a[1]||"").trim(),holder:(a[2]||"").trim(),bank:(a[3]||"").trim()};
-    const ex=ncc.items.find(x=>nccKey(x.name)===nccKey(it.name));
-    if(ex){Object.assign(ex,it);upd++}else{ncc.items.push(it);add++}
-  }
-  ncc.dirty=true;$("#nPaste").value="";nccRender();toast(`Đã thêm ${add}, cập nhật ${upd} NCC. Nhớ bấm “Lưu lên GitHub”.`);
-};
-/* ---- File Excel mẫu: xuất ra và đọc lại ---- */
-const NCC_HEAD=["Nhà cung cấp (tên trên Odoo)","Số tài khoản","Tên người thụ hưởng","Ngân hàng"];
-function nccZip(files){ // tạo file zip (không nén) từ [[tên, Uint8Array], …]
-  const enc=new TextEncoder(),parts=[],cds=[];let pos=0;
-  for(const [name,data] of files){
-    const nb=enc.encode(name),crc=crc32(data);
-    const lh=new Uint8Array(30+nb.length),l=new DataView(lh.buffer);
-    l.setUint32(0,0x04034b50,true);l.setUint16(4,20,true);l.setUint16(6,0x0800,true);l.setUint16(8,0,true);
-    l.setUint16(10,0,true);l.setUint16(12,0x21,true);l.setUint32(14,crc,true);l.setUint32(18,data.length,true);l.setUint32(22,data.length,true);
-    l.setUint16(26,nb.length,true);l.setUint16(28,0,true);lh.set(nb,30);
-    const cd=new Uint8Array(46+nb.length),c=new DataView(cd.buffer);
-    c.setUint32(0,0x02014b50,true);c.setUint16(4,20,true);c.setUint16(6,20,true);c.setUint16(8,0x0800,true);c.setUint16(10,0,true);
-    c.setUint16(12,0,true);c.setUint16(14,0x21,true);c.setUint32(16,crc,true);c.setUint32(20,data.length,true);c.setUint32(24,data.length,true);
-    c.setUint16(28,nb.length,true);c.setUint32(42,pos,true);cd.set(nb,46);
-    parts.push(lh,data);pos+=lh.length+data.length;cds.push(cd);
-  }
-  const start=pos;let size=0;for(const cd of cds){parts.push(cd);size+=cd.length}
-  const eo=new Uint8Array(22),d=new DataView(eo.buffer);
-  d.setUint32(0,0x06054b50,true);d.setUint16(8,cds.length,true);d.setUint16(10,cds.length,true);d.setUint32(12,size,true);d.setUint32(16,start,true);
-  parts.push(eo);
-  let tot=0;for(const x of parts)tot+=x.length;
-  const out=new Uint8Array(tot);let o=0;for(const x of parts){out.set(x,o);o+=x.length}
-  return out;
-}
-function nccTemplateBytes(rows){ // rows: [[tên, stk, chủ TK, ngân hàng], …]
-  const enc=new TextEncoder(),NS='xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"';
-  const cell=(r,c,v,st)=>{const ref=colLetter(c)+r;return (v===""||v==null)?`<c r="${ref}" s="${st}"/>`:`<c r="${ref}" s="${st}" t="inlineStr"><is><t xml:space="preserve">${esc(v)}</t></is></c>`};
-  const all=[NCC_HEAD,...rows];
-  const sd=all.map((a,i)=>`<row r="${i+1}">${[0,1,2,3].map(c=>cell(i+1,c,a[c],i===0?1:2)).join("")}</row>`).join("");
-  const sheet1=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet ${NS}><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><cols><col min="1" max="1" width="44" style="2" customWidth="1"/><col min="2" max="2" width="24" style="2" customWidth="1"/><col min="3" max="3" width="34" style="2" customWidth="1"/><col min="4" max="4" width="26" style="2" customWidth="1"/></cols><sheetData>${sd}</sheetData></worksheet>`;
-  const help=["HƯỚNG DẪN ĐIỀN FILE","1. Điền ở sheet “NCC”: mỗi dòng là một nhà cung cấp, 4 cột theo đúng thứ tự có sẵn. Không đổi tên hoặc xoá dòng tiêu đề.","2. Cột “Nhà cung cấp” phải trùng tên NCC trên Odoo (không phân biệt hoa thường và dấu).","3. Cột “Số tài khoản”: các ô đã đặt sẵn định dạng văn bản để không mất số 0 ở đầu. Hãy gõ hoặc dán đúng số tài khoản.","4. Dòng nào chưa có số tài khoản sẽ được bỏ qua khi tải lên.","5. Điền xong, lưu file rồi vào dashboard bấm 🏦 NCC → “Tải file Excel lên”, kiểm tra lại danh sách và bấm “Lưu lên GitHub”."];
-  const sheet2=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet ${NS}><cols><col min="1" max="1" width="120" customWidth="1"/></cols><sheetData>${help.map((t,i)=>`<row r="${i+1}">${cell(i+1,0,t,i===0?1:0)}</row>`).join("")}</sheetData></worksheet>`;
-  const styles=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet ${NS}><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Calibri"/></font></fonts><fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF2563EB"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="3"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"/><xf numFmtId="49" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`;
-  const wb=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook ${NS} xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="NCC" sheetId="1" r:id="rId1"/><sheet name="Hướng dẫn" sheetId="2" r:id="rId2"/></sheets></workbook>`;
-  const wbRels=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet2.xml"/><Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`;
-  const rels=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`;
-  const ct=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/worksheets/sheet2.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>`;
-  return nccZip([["[Content_Types].xml",enc.encode(ct)],["_rels/.rels",enc.encode(rels)],["xl/workbook.xml",enc.encode(wb)],["xl/_rels/workbook.xml.rels",enc.encode(wbRels)],["xl/styles.xml",enc.encode(styles)],["xl/worksheets/sheet1.xml",enc.encode(sheet1)],["xl/worksheets/sheet2.xml",enc.encode(sheet2)]]);
-}
-// Đọc bảng từ lưới ô của một sheet → danh sách NCC
-function nccFromGrid(g){
-  const colOf=h=>{const k=nccKey(h);
-    if(/nguoi thu huong|chu tai khoan|chu tk|holder/.test(k))return "holder";
-    if(/so tai khoan|so tk|\bstk\b|account/.test(k))return "acc";
-    if(/ngan hang|bank/.test(k))return "bank";
-    if(/nha cung cap|\bncc\b|vendor/.test(k))return "name";
-    return null};
-  let hr=-1,map={};
-  for(let i=0;i<Math.min(g.length,10);i++){
-    const m={};(g[i]||[]).forEach((v,c)=>{const t=typeof v==="string"?colOf(v):null;if(t&&m[t]==null)m[t]=c});
-    if(m.name!=null&&m.acc!=null){hr=i;map=m;break}
-  }
-  if(hr<0){hr=0;map={name:0,acc:1,holder:2,bank:3}} // không thấy tiêu đề: coi như đúng thứ tự mẫu
-  const txt=v=>v==null?"":(typeof v==="number"?(Number.isInteger(v)?v.toLocaleString("fullwide",{useGrouping:false}):String(v)):(v instanceof Date?"":String(v).trim()));
-  const items=[];let noAcc=0,numeric=0;
-  for(let i=hr+1;i<g.length;i++){
-    const r=g[i]||[];const name=txt(r[map.name]);if(!name)continue;
-    const raw=map.acc!=null?r[map.acc]:null;if(typeof raw==="number")numeric++;
-    const acc=txt(raw).replace(/\s+/g,"");
-    if(!acc){noAcc++;continue}
-    items.push({name,acc,holder:map.holder!=null?txt(r[map.holder]):"",bank:map.bank!=null?txt(r[map.bank]):""});
-  }
-  return {items,noAcc,numeric};
-}
-$("#nTpl").onclick=()=>{
-  const rows=ncc.items.filter(x=>x.name.trim()).map(x=>[x.name,x.acc,x.holder,x.bank]);
-  const have=new Set(rows.map(r=>nccKey(r[0])));
-  for(const n of nccVendorNames())if(!have.has(nccKey(n))){rows.push([n,"","",""]);have.add(nccKey(n))}
-  const a=document.createElement("a");
-  a.href=URL.createObjectURL(new Blob([nccTemplateBytes(rows)],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}));
-  a.download="Mau-tai-khoan-thu-huong-NCC.xlsx";a.click();setTimeout(()=>URL.revokeObjectURL(a.href),3000);
-  toast("Đã tạo file mẫu"+(rows.length?` với ${rows.length} NCC điền sẵn tên`:"")+". Điền số tài khoản, tên người thụ hưởng, ngân hàng rồi tải lên lại.");
-};
-$("#nUp").onclick=()=>$("#nFile").click();
-$("#nFile").onchange=async e=>{const f=e.target.files[0];e.target.value="";if(f)try{await nccImport(f)}catch(err){console.error(err);toast("Không đọc được file: "+err.message,true)}};
-async function nccImport(file){
-  const sheets=await parseXlsx(await file.arrayBuffer());
-  if(!sheets.length){toast("File không có sheet nào để đọc.",true);return}
-  const pick=sheets.find(x=>nccKey(x.name)==="ncc")||sheets[0];
-  const res=nccFromGrid(pick.grid);
-  if(!res.items.length){toast(`Không có dòng nào có đủ tên NCC và số tài khoản${res.noAcc?` (${res.noAcc} dòng chưa có số tài khoản)`:""}.`,true);return}
-  let add=0,upd=0;
-  for(const it of res.items){
-    const ex=ncc.items.find(x=>nccKey(x.name)===nccKey(it.name));
-    if(ex){ex.acc=it.acc;if(it.holder)ex.holder=it.holder;if(it.bank)ex.bank=it.bank;upd++}else{ncc.items.push(it);add++}
-  }
-  ncc.dirty=true;$("#nSearch").value="";nccRender();
-  toast(`Đã đọc ${res.items.length} NCC: thêm ${add}, cập nhật ${upd}`+(res.noAcc?`, bỏ qua ${res.noAcc} dòng chưa có số tài khoản`:"")+(res.numeric?`. Lưu ý: ${res.numeric} số tài khoản trong file đang ở dạng số nên có thể mất số 0 ở đầu, hãy kiểm tra`:"")+". Kiểm tra lại rồi bấm “Lưu lên GitHub”.");
-}
-$("#nSave").onclick=async()=>{
-  const btn=$("#nSave");btn.disabled=true;nccSetState("Đang lưu…");
-  try{await nccSave();nccRender();toast("✔ Đã lưu "+ncc.items.length+" NCC lên GitHub")}
-  catch(e){nccSetState(ncc.items.length+" NCC · chưa lưu","warn");toast(e.message,true)}
-  finally{btn.disabled=false}
-};
-$("#nClose").onclick=()=>{if(ncc.dirty&&!confirm("Có thay đổi chưa lưu. Đóng và bỏ thay đổi?"))return;ncc.dirty=false;$("#ndlg").close()};
-
 $("#chkAuto").checked=state.auto;
 $("#chkSync").checked=state.autosync;
 $("#chkSync").onchange=e=>{state.autosync=e.target.checked;store.set("qlcv:autosync",state.autosync)};
 $("#chkAuto").onchange=e=>{state.auto=e.target.checked;store.set("qlcv:auto",state.auto);state.saveErr=null;updateChrome()};
-if(ghReady())loadFromGitHub();
+applyTheme();$("#btnTheme").onclick=cycleTheme;
+document.addEventListener("keydown",e=>{if(e.key==="/"&&!/^(INPUT|TEXTAREA|SELECT)$/.test((document.activeElement||{}).tagName)&&!e.ctrlKey&&!e.metaKey){const q=$("#q");if(q){e.preventDefault();q.focus()}}});
+if("serviceWorker" in navigator&&location.protocol==="https:")navigator.serviceWorker.register("sw.js").catch(()=>{});
+if(ghReady())bootCache().then(()=>loadFromGitHub(!!state.stale));
 </script>
 </body>
 </html>
