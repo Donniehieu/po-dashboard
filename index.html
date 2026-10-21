@@ -134,7 +134,9 @@ table.hist td{vertical-align:top}
   <h1>📋 Quản lý tiến trình công việc</h1>
   <span class="fname" id="fname"></span>
   <span id="saveState" class="sub"></span>
+  <span id="odooState" class="sub"></span>
   <label class="auto" title="Tự động lưu sau mỗi lần sửa (khi đã kết nối GitHub hoặc chọn file bằng Chrome/Edge)"><input type="checkbox" id="chkAuto" checked> Tự động lưu</label>
+  <label class="auto" title="Khi mở dashboard, tự yêu cầu GitHub lấy dữ liệu mới từ Odoo nếu lần đồng bộ gần nhất đã quá 10 phút"><input type="checkbox" id="chkSync" checked> Tự đồng bộ Odoo</label>
   <span class="grow"></span>
   <button class="btn sm" id="btnNotify" title="Nhắc việc trễ bằng thông báo của trình duyệt (khi đang mở trang)">🔔 Bật nhắc</button>
   <button class="btn sm" id="btnImport" hidden title="Gộp file Excel xuất từ Odoo vào dữ liệu nguồn">⬆ Nhập file Odoo</button>
@@ -147,6 +149,7 @@ table.hist td{vertical-align:top}
 </header>
 <nav class="tabs" id="tabs" hidden></nav>
 <div id="banner" hidden></div>
+<div id="odooBar" hidden></div>
 <main id="main">
   <div class="drop" id="drop">
     <h2>Chọn file Excel để xem dashboard</h2>
@@ -472,16 +475,19 @@ async function ghPutFile(bytes,msg){
     body:JSON.stringify({message:msg,content:bufToB64(bytes),sha:state.sha,branch:c.branch||"main"})});
   if(r.status===409||r.status===422){const e=new Error("conflict");e.conflict=true;throw e}
   if(!r.ok)throw new Error("GitHub trả lỗi "+r.status+" khi ghi file (mã truy cập cần quyền Contents: Read and write)");
-  state.sha=(await r.json()).content.sha;
+  const jj=await r.json();state.sha=jj.content.sha;if(jj.commit&&jj.commit.sha)ods.fileSha=jj.commit.sha;
 }
-async function loadFromGitHub(){
+async function loadFromGitHub(silent){
   try{
-    toast("Đang tải dữ liệu từ GitHub…");
-    const keep=state.active;const f=await ghFetchFile();
+    if(!silent)toast("Đang tải dữ liệu từ GitHub…");
+    const keep=state.active;
+    const fc0=await ghFileCommit().catch(()=>null); // lấy mốc commit trước khi tải file để không bỏ sót thay đổi
+    const f=await ghFetchFile();
     state.sha=f.sha;state.handle=null;
     await loadBuffer(f.buf,f.name,{src:"github"});
-    if(typeof keep==="number"&&state.sheets[keep]){state.active=keep;renderTabs();render()}
-    toast("Đã tải “"+f.name+"” từ GitHub");
+    ods.fileSha=fc0?fc0.sha:null;
+    if(keep!=="overview"&&(typeof keep!=="number"||state.sheets[keep])){state.active=keep;renderTabs();render()}
+    if(!silent)toast("Đã tải “"+f.name+"” từ GitHub");
   }catch(e){toast(e.message,true)}
 }
 
@@ -502,6 +508,7 @@ async function loadBuffer(buf,name,opts={}){
     $("#btnSync").hidden=!ghReady();
     renderTabs();render();updateChrome();notifyDaily();
     if(state.src==="github"&&ghReady())loadRemoteHistory();
+    odooStart();
   }catch(e){
     console.error(e);
     if(err){err.hidden=false;err.textContent="Không đọc được file: "+e.message}
@@ -544,13 +551,7 @@ $("#ghSave").onclick=async()=>{
   if(!confirmLoss())return;
   store.set(GH_KEY,c);$("#dlg").close();await loadFromGitHub();
 };
-$("#btnSync").onclick=async()=>{
-  const c=ghCfg();if(!ghReady()){toast("Chưa kết nối GitHub",true);return}
-  try{
-    const r=await fetch(ghUrl(c,"actions/workflows/sync-odoo.yml/dispatches"),{method:"POST",headers:{...ghHead(c),"Content-Type":"application/json"},body:JSON.stringify({ref:c.branch||"main"})});
-    toast(r.status===204?"Đã yêu cầu đồng bộ từ Odoo. Đợi 1–3 phút rồi bấm “Tải lại”.":"Không gửi được yêu cầu ("+r.status+"). Mã truy cập cần quyền Actions: Read and write, và repo phải có workflow sync-odoo.yml.",r.status!==204);
-  }catch(e){toast("Không gửi được yêu cầu: "+e.message,true)}
-};
+$("#btnSync").onclick=()=>requestSync(true);
 
 /* ---- Sửa dữ liệu, tự động lưu, lịch sử ---- */
 state.auto=store.get("qlcv:auto")!==false;state.via="dashboard";state.pendingDel=new Map();
@@ -699,6 +700,7 @@ async function saveAll(auto){
     if(target==="gh")toast("Đã lưu vào GitHub ✔");else if(target==="file")toast("Đã lưu vào file Excel ✔");
     const a=document.activeElement;if(!(a&&a.classList&&a.classList.contains("cell")))render();
     updateChrome();
+    if(ods.deferred&&!state.pending.size&&!state.pendingDel.size){const d=ods.deferred;ods.deferred=null;setTimeout(()=>reloadFromOdoo(d),600)}
   }catch(e){console.error(e);state.saveErr=e.message;setSaveState("⚠ Lưu lỗi","bad");toast(e.message,true);updateSavebar()}
   finally{saving=false;if(again||state.pending.size){again=false;scheduleAutoSave()}}
 }
@@ -1224,7 +1226,112 @@ function exportCsv(sh){
   const a=document.createElement("a");a.href=URL.createObjectURL(new Blob(["﻿"+lines.join("\r\n")],{type:"text/csv;charset=utf-8"}));
   a.download=sh.name+"_loc.csv";a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000);
 }
+/* ---- Theo dõi đồng bộ Odoo (GitHub Actions) ---- */
+const POLL_MS=Math.max(3000,+store.get("qlcv:poll")||60000);
+const ods={fileSha:null,notifiedFail:null,wait:null,timer:null,ticking:false,errs:0,deferred:null,autoDone:false,hiddenAt:0};
+state.autosync=store.get("qlcv:autosync")!==false;
+const hhmm=d=>pad2(d.getHours())+":"+pad2(d.getMinutes());
+async function ghRuns(){
+  const c=ghCfg();
+  const r=await fetch(ghUrl(c,`actions/workflows/sync-odoo.yml/runs?per_page=5&branch=${encodeURIComponent(c.branch||"main")}`),{headers:ghHead(c),cache:"no-store"});
+  if(r.status===404)throw new Error("Không thấy workflow sync-odoo.yml trong repo");
+  if(!r.ok)throw new Error("GitHub trả lỗi "+r.status+(r.status===403?" (mã truy cập cần quyền Actions)":""));
+  return (await r.json()).workflow_runs||[];
+}
+async function ghFileCommit(){
+  const c=ghCfg();
+  const r=await fetch(ghUrl(c,`commits?path=${encodeURIComponent(c.path)}&sha=${encodeURIComponent(c.branch||"main")}&per_page=1`),{headers:ghHead(c),cache:"no-store"});
+  if(!r.ok)throw new Error("GitHub trả lỗi "+r.status);
+  return (await r.json())[0]||null;
+}
+function setOdooChip(run){
+  const el=$("#odooState");
+  if(!run){el.textContent="";return}
+  if(run.status!=="completed"){el.textContent="Odoo: ⏳ đang đồng bộ…";el.className="sub warn";return}
+  const t=hhmm(new Date(run.updated_at));
+  if(run.conclusion==="success"){el.textContent="Odoo: ✔ đồng bộ lúc "+t;el.className="sub ok"}
+  else{el.textContent="Odoo: ⚠ lỗi lúc "+t;el.className="sub bad"}
+}
+function showOdooFail(run){
+  const bar=$("#odooBar");bar.hidden=false;bar.className="banner";bar.style.cursor="default";
+  bar.innerHTML=`<span>⚠ Không đồng bộ được dữ liệu từ Odoo (lúc ${hhmm(new Date(run.updated_at))}). <b>Cần làm thủ công:</b> xuất file đơn hàng từ Odoo rồi bấm “⬆ Nhập file Odoo”.</span><span class="grow"></span><a href="${esc(run.html_url)}" target="_blank" rel="noopener" class="btn sm">Xem chi tiết lỗi</a><button class="btn sm" id="odRetry">Thử lại</button>`;
+  $("#odRetry").onclick=()=>requestSync(true);
+}
+const hideOdooFail=()=>{$("#odooBar").hidden=true};
+async function requestSync(manual){
+  const c=ghCfg();
+  if(!ghReady()){toast("Chưa kết nối GitHub, hãy nhập file Odoo thủ công.",true);return false}
+  try{
+    const r=await fetch(ghUrl(c,"actions/workflows/sync-odoo.yml/dispatches"),{method:"POST",headers:{...ghHead(c),"Content-Type":"application/json"},body:JSON.stringify({ref:c.branch||"main"})});
+    if(r.status!==204){toast("Không gửi được yêu cầu đồng bộ ("+r.status+"). Mã truy cập cần quyền Actions: Read and write. Cần nhập file Odoo thủ công.",true);return false}
+    ods.wait={since:Date.now()-8000};setOdooChip({status:"in_progress"});
+    toast(manual?"Đã gửi yêu cầu đồng bộ từ Odoo, đang chờ kết quả…":"Đang đồng bộ dữ liệu mới từ Odoo…");
+    odooSchedule(5000);return true;
+  }catch(e){toast("Không gửi được yêu cầu đồng bộ: "+e.message+". Cần nhập file Odoo thủ công.",true);return false}
+}
+async function reloadFromOdoo(fc){
+  const m=(fc.commit&&fc.commit.message)||"",fromOdoo=/^Đồng bộ Odoo/.test(m),keep=state.active;
+  await loadFromGitHub(true);
+  if(keep!==state.active&&(typeof keep!=="number"||state.sheets[keep])){state.active=keep;renderTabs();render()}
+  const sum=m.replace(/^Đồng bộ Odoo\s+\S+\s+\S+:\s*/,"").split("\n")[0];
+  const when=fc.commit&&fc.commit.committer?hhmm(new Date(fc.commit.committer.date)):"";
+  toast(fromOdoo?`✔ Đã tải dữ liệu mới từ Odoo lúc ${when}${sum?": "+sum:""}`:"✔ Dữ liệu vừa được cập nhật ở nơi khác, dashboard đã tải lại.");
+}
+async function maybeAutoSync(run){
+  if(!state.autosync||ods.autoDone||ods.wait)return;
+  ods.autoDone=true; // mỗi lần mở trang chỉ tự yêu cầu một lần
+  if(run&&run.status!=="completed")return;
+  if(run&&run.conclusion==="success"&&Date.now()-new Date(run.updated_at).getTime()<10*60000)return; // vừa đồng bộ xong
+  await requestSync(false);
+}
+async function odooTick(){
+  if(ods.ticking||!ghReady()||state.src!=="github")return;
+  ods.ticking=true;
+  try{
+    const runs=await ghRuns(),run=runs[0]||null;
+    ods.errs=0;setOdooChip(run);
+    let reloaded=false;
+    const fc=await ghFileCommit();
+    if(fc){
+      if(!ods.fileSha)ods.fileSha=fc.sha;
+      else if(fc.sha!==ods.fileSha){
+        if(state.pending.size||state.pendingDel.size||saving){if(!ods.deferred)toast("Odoo vừa có dữ liệu mới. Dashboard sẽ tự tải ngay sau khi lưu xong thay đổi của bạn.");ods.deferred=fc}
+        else{ods.deferred=null;await reloadFromOdoo(fc);reloaded=true}
+      }
+    }
+    if(run&&run.status==="completed"){
+      if(run.conclusion==="success"){hideOdooFail();ods.notifiedFail=null}
+      else{showOdooFail(run);if(ods.notifiedFail!==run.id){ods.notifiedFail=run.id;toast("Không đồng bộ được từ Odoo. Cần làm thủ công: xuất file từ Odoo rồi bấm “Nhập file Odoo”.",true)}}
+    }
+    if(ods.wait){
+      const mine=runs.find(r=>new Date(r.created_at).getTime()>=ods.wait.since&&r.event==="workflow_dispatch");
+      if(mine&&mine.status==="completed"){ods.wait=null;if(mine.conclusion==="success"&&!reloaded)toast("✔ Đồng bộ Odoo thành công, dữ liệu đã khớp (không có thay đổi mới).")}
+      else if(Date.now()-ods.wait.since>6*60000){ods.wait=null;toast("Đồng bộ Odoo chờ quá lâu chưa có kết quả. Hãy mở thẻ Actions trên GitHub để xem, hoặc nhập file Odoo thủ công.",true)}
+    }
+    await maybeAutoSync(run);
+  }catch(e){
+    ods.errs++;console.warn(e);
+    const el=$("#odooState");el.textContent="Odoo: ? không kiểm tra được";el.className="sub bad";
+    if(ods.errs===3)toast("Không kiểm tra được trạng thái đồng bộ Odoo: "+e.message+". Nếu dữ liệu chưa mới, cần làm thủ công (Nhập file Odoo).",true);
+  }finally{ods.ticking=false}
+}
+function odooSchedule(ms){
+  clearTimeout(ods.timer);
+  ods.timer=setTimeout(async()=>{if(!document.hidden||ods.wait)await odooTick();odooSchedule(ods.wait?5000:POLL_MS)},ms);
+}
+function odooStart(){
+  if(state.src!=="github"||!ghReady()){$("#odooState").textContent="";hideOdooFail();clearTimeout(ods.timer);return}
+  odooSchedule(400);
+}
+document.addEventListener("visibilitychange",()=>{
+  if(document.hidden){ods.hiddenAt=Date.now();return}
+  if(ods.hiddenAt&&Date.now()-ods.hiddenAt>10*60000)ods.autoDone=false;
+  if(state.src==="github")odooSchedule(300);
+});
+
 $("#chkAuto").checked=state.auto;
+$("#chkSync").checked=state.autosync;
+$("#chkSync").onchange=e=>{state.autosync=e.target.checked;store.set("qlcv:autosync",state.autosync)};
 $("#chkAuto").onchange=e=>{state.auto=e.target.checked;store.set("qlcv:auto",state.auto);state.saveErr=null;updateChrome()};
 if(ghReady())loadFromGitHub();
 </script>
