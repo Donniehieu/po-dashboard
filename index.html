@@ -119,12 +119,22 @@ dialog input{width:100%;padding:8px 10px;border:1px solid var(--line);border-rad
 .attn li.click{cursor:pointer}.attn li.click:hover{background:var(--soft)}
 table.mini td,table.mini th{padding:6px 10px;position:static;cursor:default}
 table.mini tr.click{cursor:pointer}table.mini tr.click:hover td{background:var(--soft)}
+
+tbody tr:hover td{background:color-mix(in srgb,var(--brand) 13%,var(--card));transition:background .08s}
+tbody tr:hover td.ed{background:color-mix(in srgb,var(--warn) 30%,var(--card))}
+.rowdel{border:0;background:none;cursor:pointer;opacity:0;font-size:15px;padding:2px 6px;border-radius:6px}
+tr:hover .rowdel{opacity:.75}.rowdel:hover{opacity:1!important;background:color-mix(in srgb,var(--bad) 16%,transparent)}
+.sub.ok{color:var(--ok);font-weight:600}.sub.warn{color:var(--warn);font-weight:600}.sub.bad{color:var(--bad);font-weight:600}
+table.hist td{vertical-align:top}
+.auto{display:inline-flex;gap:6px;align-items:center;font-size:13px;color:var(--mute);cursor:pointer}
 </style>
 </head>
 <body>
 <header class="top">
   <h1>📋 Quản lý tiến trình công việc</h1>
   <span class="fname" id="fname"></span>
+  <span id="saveState" class="sub"></span>
+  <label class="auto" title="Tự động lưu sau mỗi lần sửa (khi đã kết nối GitHub hoặc chọn file bằng Chrome/Edge)"><input type="checkbox" id="chkAuto" checked> Tự động lưu</label>
   <span class="grow"></span>
   <button class="btn sm" id="btnNotify" title="Nhắc việc trễ bằng thông báo của trình duyệt (khi đang mở trang)">🔔 Bật nhắc</button>
   <button class="btn sm" id="btnImport" hidden title="Gộp file Excel xuất từ Odoo vào dữ liệu nguồn">⬆ Nhập file Odoo</button>
@@ -480,7 +490,8 @@ async function loadBuffer(buf,name,opts={}){
   const err=$("#err");
   try{
     const raw=await parseXlsx(buf);
-    state.buf=buf;state.fileName=name;state.src=opts.src||"local";state.pending.clear();
+    state.buf=buf;state.fileName=name;state.src=opts.src||"local";state.pending.clear();state.pendingDel.clear();state.saveErr=null;state.fileMtime=opts.mtime||null;
+    state.history=mergeHist(state.histQ,store.get(histKey())||[]);
     state.sheets=raw.map(analyze);
     state.sheets.forEach(s=>{s.baseLast=s.lastRow;setStatus(s)});
     state.active="overview";
@@ -490,6 +501,7 @@ async function loadBuffer(buf,name,opts={}){
     $("#btnImport").hidden=false;
     $("#btnSync").hidden=!ghReady();
     renderTabs();render();updateChrome();notifyDaily();
+    if(state.src==="github"&&ghReady())loadRemoteHistory();
   }catch(e){
     console.error(e);
     if(err){err.hidden=false;err.textContent="Không đọc được file: "+e.message}
@@ -502,7 +514,8 @@ async function pick(){
   if(window.showOpenFilePicker){
     try{
       const [h]=await showOpenFilePicker({types:[{description:"Excel",accept:{"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":[".xlsx",".xlsm"]}}]});
-      state.handle=h;const f=await h.getFile();await loadBuffer(await f.arrayBuffer(),f.name);return;
+      state.handle=h;try{await h.requestPermission({mode:"readwrite"})}catch(e){}
+      const f=await h.getFile();await loadBuffer(await f.arrayBuffer(),f.name,{mtime:f.lastModified});return;
     }catch(e){if(e&&e.name==="AbortError")return}
   }
   $("#file").click();
@@ -511,7 +524,7 @@ async function refresh(){
   if(!confirmLoss())return;
   if(state.src==="github"&&ghReady())return loadFromGitHub();
   if(!state.handle)return;
-  try{const keep=state.active;const f=await state.handle.getFile();await loadBuffer(await f.arrayBuffer(),f.name);
+  try{const keep=state.active;const f=await state.handle.getFile();await loadBuffer(await f.arrayBuffer(),f.name,{mtime:f.lastModified});
     if(typeof keep==="number"&&state.sheets[keep]){state.active=keep;renderTabs();render()}}catch(e){toast("Không làm mới được: "+e.message,true)}
 }
 $("#btnPick").onclick=pick;$("#btnPick2").onclick=pick;$("#btnRefresh").onclick=refresh;
@@ -539,27 +552,39 @@ $("#btnSync").onclick=async()=>{
   }catch(e){toast("Không gửi được yêu cầu: "+e.message,true)}
 };
 
-/* ---- Sửa dữ liệu & ghi Excel ---- */
+/* ---- Sửa dữ liệu, tự động lưu, lịch sử ---- */
+state.auto=store.get("qlcv:auto")!==false;state.via="dashboard";state.pendingDel=new Map();
+state.history=[];state.histQ=store.get("qlcv:histq")||[];state.saveErr=null;state.lastSave="";state.fileMtime=null;
+const pad2=n=>String(n).padStart(2,"0");
+const ser=v=>v instanceof Date?`${v.getFullYear()}-${pad2(v.getMonth()+1)}-${pad2(v.getDate())}T${pad2(v.getHours())}:${pad2(v.getMinutes())}:${pad2(v.getSeconds())}`:v;
+const deser=(v,col)=>col&&col.type==="date"&&typeof v==="string"?parseAnyDate(v):v;
+function showVal(v){
+  if(v==null||v==="")return `<i class="sub">(trống)</i>`;
+  if(typeof v==="number")return fmtN(v);
+  const m=String(v).match(/^(\d{4})-(\d\d)-(\d\d)(?:T(\d\d):(\d\d):(\d\d))?$/);
+  if(m)return `${m[3]}/${m[2]}/${m[1]}`+(m[4]&&(m[4]+m[5]+m[6])!=="000000"?` ${m[4]}:${m[5]}`:"");
+  return esc(v);
+}
 const sameVal=(a,b)=>(a==null&&b==null)||(a instanceof Date&&b instanceof Date?+a===+b:a===b);
 const pkey=(si,n,c)=>si+"|"+n+"|"+c;
-function setCell(si,r,ci,val){
+function setCell(si,r,ci,val,keyOv){
   const sh=state.sheets[si];const old=r.v[ci];
   if(sameVal(old,val))return false;
   const k=pkey(si,r.n,ci),ex=state.pending.get(k);
   const orig=ex?ex.old:old;
-  const key=ex?ex.key:(r.isNew||sh.title==null?null:String((ci===sh.title?old:r.v[sh.title])??""));
+  const key=ex?ex.key:(keyOv!==undefined?keyOv:(r.isNew||sh.title==null?null:String((ci===sh.title?old:r.v[sh.title])??"")));
   r.v[ci]=val;r._t=null;
   if(sameVal(orig,val)&&!r.isNew)state.pending.delete(k);
-  else state.pending.set(k,{si,n:r.n,col:ci,val,old:orig,path:sh.path,key,isNew:!!r.isNew});
+  else state.pending.set(k,{si,n:r.n,col:ci,val,old:orig,path:sh.path,key,isNew:!!r.isNew,via:state.via});
   return true;
 }
 function addRow(si,silent){
   const sh=state.sheets[si];
   const ix=sh.cols.find(c=>c.type==="index");
   const slot=sh.blank.length?sh.blank.shift():null; // dòng trống đã đánh sẵn STT thì dùng trước
-  let nn=slot?slot.n:Math.max(sh.hdrRow,...sh.rows.map(x=>x.n))+1; // dòng trống đầu tiên ngay sau dữ liệu
+  let nn=slot?slot.n:Math.max(sh.hdrRow,...sh.rows.map(x=>x.n))+1;
   if(!slot)while((sh.grid[nn-1]&&sh.grid[nn-1].some(x=>x!=null))||sh.rows.some(x=>x.n===nn))nn++;
-  const r={n:nn,v:Array(sh.maxC).fill(null),isNew:true,st:null,done:null};
+  const r={n:nn,v:Array(sh.maxC).fill(null),isNew:true,st:null,done:null,slot};
   if(slot&&ix)r.v[ix.idx]=slot.ix;
   sh.rows.push(r);
   if(ix&&!slot){const mx=Math.max(0,...sh.rows.map(x=>typeof x.v[ix.idx]==="number"?x.v[ix.idx]:0));setCell(si,r,ix.idx,mx+1)}
@@ -567,28 +592,75 @@ function addRow(si,silent){
     const tr=document.querySelector(`#tbl tr[data-row="${r.n}"]`);if(tr){tr.scrollIntoView({block:"center"});const td=tr.querySelector("td[data-c]");if(td)startEdit(sh,td)}}
   return r;
 }
+function dropIfEmpty(sh,si,r){ // hủy dòng mới nếu người dùng chưa nhập gì
+  if(!r.isNew)return;
+  if(sh.cols.some(c=>c.type!=="index"&&r.v[c.idx]!=null))return;
+  for(const k of [...state.pending.keys()])if(k.startsWith(si+"|"+r.n+"|"))state.pending.delete(k);
+  sh.rows=sh.rows.filter(x=>x!==r);
+  if(r.slot)sh.blank.unshift(r.slot);
+}
+function deleteRow(si,n){
+  const sh=state.sheets[si];const r=sh.rows.find(x=>x.n===n);if(!r)return;
+  const key=sh.title!=null?String(r.v[sh.title]??""):"";
+  if(!confirm(`Xóa dòng ${n}${key?` (${key})`:""} khỏi sheet “${sh.name}”?\n\nDòng sẽ bị xóa nội dung trong file Excel, có thể khôi phục trong tab Lịch sử. Nếu đơn vẫn còn trong Odoo thì lần đồng bộ sau sẽ thêm lại.`))return;
+  const snap={};
+  for(const c of sh.cols)if(c.type!=="index"&&r.v[c.idx]!=null)snap[c.name]=ser(r.v[c.idx]);
+  const wasNew=!!r.isNew;
+  state.via="dashboard";
+  for(const c of sh.cols)if(c.type!=="index"&&r.v[c.idx]!=null)setCell(si,r,c.idx,null,key);
+  if(wasNew){for(const k of [...state.pending.keys()])if(k.startsWith(si+"|"+n+"|"))state.pending.delete(k)}
+  else{(sh.removed||(sh.removed=[])).push(r);state.pendingDel.set(si+"|"+n,{si,n,key,sheet:sh.name,snap})}
+  sh.rows=sh.rows.filter(x=>x!==r);
+  setStatus(sh);render();updateChrome();
+}
+
+/* ---- Trạng thái lưu & tự động lưu ---- */
+function setSaveState(txt,cls){const s=$("#saveState");s.textContent=txt;s.className="sub "+(cls||"")}
+const canAutoSave=()=>(state.src==="github"&&ghReady())||!!state.handle;
+let saving=false,again=false,autoTimer=null;
+function scheduleAutoSave(){
+  clearTimeout(autoTimer);
+  if(!state.auto||state.saveErr||!(state.pending.size||state.pendingDel.size)||!canAutoSave())return;
+  autoTimer=setTimeout(()=>{
+    const a=document.activeElement;
+    if(a&&a.classList&&a.classList.contains("cell")){scheduleAutoSave();return} // đang gõ dở thì chờ
+    saveAll(true);
+  },1200);
+}
 function updateSavebar(){
-  const sb=$("#savebar"),n=state.pending.size;
-  if(!n){sb.hidden=true;return}
-  const c=ghCfg();const dest=(ghReady()&&state.src==="github")?`GitHub ${esc(c.owner)}/${esc(c.repo)}`:"tải file mới về máy";
+  const sb=$("#savebar"),n=state.pending.size+state.pendingDel.size;
+  const auto=state.auto&&canAutoSave();
+  if(!n){sb.hidden=true;if(!saving&&!state.saveErr)setSaveState(state.lastSave?"✔ Đã lưu lúc "+state.lastSave:"");return}
+  if(auto&&!state.saveErr){sb.hidden=true;if(!saving)setSaveState("● Có thay đổi, sắp tự động lưu…","warn");return}
+  const c=ghCfg();const gh=ghReady()&&state.src==="github";
+  const dest=gh?`GitHub ${esc(c.owner)}/${esc(c.repo)}`:(state.handle?"file Excel trên máy":"tải file mới về máy");
+  const note=state.saveErr?`<span style="color:#fecaca">⚠ ${esc(state.saveErr)}</span>`:(!canAutoSave()?`<span class="sub" style="color:inherit;opacity:.75">Chưa có nơi tự lưu: kết nối GitHub hoặc chọn file bằng Chrome/Edge</span>`:"");
   sb.hidden=false;
-  sb.innerHTML=`<span>✏ <b>${n}</b> ô đã sửa, chưa lưu → ${dest}</span><span class="grow"></span><button class="btn sm" id="sbUndo">Hoàn tác tất cả</button><button class="btn sm primary" id="sbSave">💾 Lưu vào Excel</button>`;
-  $("#sbUndo").onclick=undoAll;$("#sbSave").onclick=saveAll;
+  sb.innerHTML=`<span>✏ <b>${n}</b> thay đổi chưa lưu → ${dest}</span>${note}<span class="grow"></span><button class="btn sm" id="sbUndo">Hoàn tác tất cả</button><button class="btn sm primary" id="sbSave">💾 ${state.saveErr?"Thử lưu lại":"Lưu vào Excel"}</button>`;
+  $("#sbUndo").onclick=undoAll;$("#sbSave").onclick=()=>{state.saveErr=null;saveAll(false)};
 }
 function undoAll(){
-  for(const e of state.pending.values()){const sh=state.sheets[e.si];const r=sh.rows.find(x=>x.n===e.n);if(r){r.v[e.col]=e.old;r._t=null}}
-  for(const sh of state.sheets){sh.rows=sh.rows.filter(r=>!r.isNew);sh.lastRow=sh.baseLast;sh.blank=sh.blank0.slice();setStatus(sh)}
-  state.pending.clear();render();updateChrome();toast("Đã hoàn tác các thay đổi chưa lưu");
+  clearTimeout(autoTimer);
+  for(const e of state.pending.values()){const sh=state.sheets[e.si];const r=sh.rows.find(x=>x.n===e.n)||(sh.removed||[]).find(x=>x.n===e.n);if(r){r.v[e.col]=e.old;r._t=null}}
+  for(const sh of state.sheets){
+    sh.rows=sh.rows.filter(r=>!r.isNew);
+    if(sh.removed&&sh.removed.length){sh.rows.push(...sh.removed);sh.rows.sort((a,b)=>a.n-b.n);sh.removed=[]}
+    sh.lastRow=sh.baseLast;sh.blank=sh.blank0.slice();setStatus(sh);
+  }
+  state.pending.clear();state.pendingDel.clear();state.saveErr=null;render();updateChrome();toast("Đã hoàn tác các thay đổi chưa lưu");
 }
-let saving=false;
-async function saveAll(){
-  if(!state.pending.size||saving)return;saving=true;
+async function saveAll(auto){
+  if(saving){again=true;return}
+  if(!state.pending.size&&!state.pendingDel.size)return;
+  const target=(state.src==="github"&&ghReady())?"gh":(state.handle?"file":"download");
+  if(auto===true&&target==="download")return; // không tự tải file về liên tục
+  saving=true;setSaveState("Đang lưu…");
+  const snapE=new Map(state.pending),snapD=new Map(state.pendingDel);
   try{
-    const edits=[...state.pending.values()];
-    const viaGh=ghReady()&&state.src==="github";
+    const edits=[...snapE.values()];
     let bytes=await applyEdits(state.buf,edits);
-    const msg=`Dashboard: cập nhật ${edits.length} ô (${new Date().toLocaleString("vi-VN")})`;
-    if(viaGh){
+    const msg=`Dashboard: cập nhật ${snapE.size} ô${snapD.size?`, xóa ${snapD.size} dòng`:""} (${new Date().toLocaleString("vi-VN")})`;
+    if(target==="gh"){
       try{await ghPutFile(bytes,msg)}
       catch(e){
         if(!e.conflict)throw e;
@@ -600,19 +672,153 @@ async function saveAll(){
         }
         state.sha=f.sha;bytes=await applyEdits(f.buf,edits);await ghPutFile(bytes,msg);
       }
-      toast("Đã lưu vào GitHub ✔");
+    }else if(target==="file"){
+      const f=await state.handle.getFile();
+      if(state.fileMtime&&f.lastModified!==state.fileMtime)throw new Error("File Excel trên máy đã bị thay đổi từ bên ngoài. Bấm “Tải lại” để lấy bản mới trước khi lưu.");
+      try{const w=await state.handle.createWritable();await w.write(bytes);await w.close()}
+      catch(e){throw new Error("Không ghi được vào file Excel (đang mở trong Excel? hãy đóng file rồi thử lại, hoặc chưa cho phép ghi): "+e.message)}
+      state.fileMtime=(await state.handle.getFile()).lastModified;
     }else{
       const a=document.createElement("a");
       a.href=URL.createObjectURL(new Blob([bytes],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}));
       a.download=state.fileName.replace(/\.xlsx?m?$/i,"")+"_da-cap-nhat.xlsx";a.click();setTimeout(()=>URL.revokeObjectURL(a.href),3000);
-      toast("Đã tải file mới về máy. Hãy thay file Excel nguồn bằng file này (hoặc kết nối GitHub để lưu tự động).");
+      toast("Đã tải file mới về máy. Hãy thay file Excel nguồn bằng file này (hoặc kết nối GitHub để tự động lưu).");
     }
-    state.buf=bytes.buffer;state.pending.clear();
-    for(const sh of state.sheets){sh.baseLast=sh.lastRow;sh.blank0=sh.blank.slice();sh.rows.forEach(r=>{r.isNew=false})}
-    render();updateChrome();
-  }catch(e){console.error(e);toast(e.message,true)}
-  finally{saving=false}
+    recordHistory(makeHistory(edits,[...snapD.values()]));
+    state.buf=bytes.buffer;state.saveErr=null;
+    for(const [k,v] of snapE)if(state.pending.get(k)===v)state.pending.delete(k);
+    for(const k of snapD.keys())state.pendingDel.delete(k);
+    const left=new Set([...state.pending.values()].map(e=>e.si+"|"+e.n));
+    state.sheets.forEach((sh,si)=>{
+      sh.baseLast=sh.lastRow;sh.blank0=sh.blank.slice();
+      sh.removed=(sh.removed||[]).filter(r=>state.pendingDel.has(si+"|"+r.n));
+      sh.rows.forEach(r=>{if(r.isNew&&!left.has(si+"|"+r.n))r.isNew=false});
+    });
+    const d=new Date();state.lastSave=pad2(d.getHours())+":"+pad2(d.getMinutes())+":"+pad2(d.getSeconds());
+    setSaveState("✔ Đã lưu lúc "+state.lastSave,"ok");
+    if(target==="gh")toast("Đã lưu vào GitHub ✔");else if(target==="file")toast("Đã lưu vào file Excel ✔");
+    const a=document.activeElement;if(!(a&&a.classList&&a.classList.contains("cell")))render();
+    updateChrome();
+  }catch(e){console.error(e);state.saveErr=e.message;setSaveState("⚠ Lưu lỗi","bad");toast(e.message,true);updateSavebar()}
+  finally{saving=false;if(again||state.pending.size){again=false;scheduleAutoSave()}}
 }
+
+/* ---- Lịch sử thao tác ---- */
+const mergeHist=(...ls)=>{const m=new Map();for(const l of ls)for(const e of l)if(!m.has(e.id))m.set(e.id,e);return [...m.values()].sort((a,b)=>a.t<b.t?1:a.t>b.t?-1:0).slice(0,5000)};
+const histKey=()=>"qlcv:hist:"+state.fileName;
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+function makeHistory(edits,dels){
+  const t=new Date().toISOString(),out=[],grp=new Map();
+  const delKeys=new Set(dels.map(d=>d.si+"|"+d.n));
+  for(const e of edits){const k=e.si+"|"+e.n;if(delKeys.has(k))continue;if(!grp.has(k))grp.set(k,[]);grp.get(k).push(e)}
+  for(const [,list] of grp){
+    const sh=state.sheets[list[0].si],cn=i=>(sh.cols.find(x=>x.idx===i)||{name:"Cột "+i}).name,isIx=i=>(sh.cols.find(x=>x.idx===i)||{}).type==="index";
+    const via=list[0].via||"dashboard";
+    if(list[0].isNew){
+      const snap={};list.forEach(e=>{if(e.val!=null&&!isIx(e.col))snap[cn(e.col)]=ser(e.val)});
+      if(!Object.keys(snap).length)continue;
+      const kv=list.find(e=>e.col===sh.title);
+      out.push({id:uid(),t,act:"thêm",sheet:sh.name,n:list[0].n,key:kv&&kv.val!=null?String(kv.val):"",snap,via});
+    }else{
+      out.push({id:uid(),t,act:via==="nhập file Odoo"?"nhập":"sửa",sheet:sh.name,n:list[0].n,key:list[0].key||"",ch:list.map(e=>({col:cn(e.col),old:ser(e.old),new:ser(e.val)})),via});
+    }
+  }
+  for(const d of dels)out.push({id:uid(),t,act:"xóa",sheet:d.sheet,n:d.n,key:d.key,snap:d.snap,via:"dashboard"});
+  return out;
+}
+function recordHistory(list){
+  if(!list.length)return;
+  state.history=[...list,...state.history].slice(0,5000);
+  state.histQ.push(...list);
+  store.set(histKey(),state.history.slice(0,800));store.set("qlcv:histq",state.histQ);
+  if(state.active==="history")fillHistory();
+  if(state.src==="github"&&ghReady())pushHistory().catch(e=>console.warn("Chưa ghi được lịch sử lên GitHub:",e.message));
+}
+const histPath=()=>{const c=ghCfg();const i=c.path.lastIndexOf("/");return (i>=0?c.path.slice(0,i+1):"")+"history.json"};
+async function ghGetHistory(){
+  const c=ghCfg();const url=ghUrl(c,`contents/${histPath().split("/").map(encodeURIComponent).join("/")}?ref=${encodeURIComponent(c.branch||"main")}`);
+  const r=await fetch(url,{headers:ghHead(c),cache:"no-store"});
+  if(r.status===404)return {list:[],sha:null,url};
+  if(!r.ok)throw new Error("GitHub trả lỗi "+r.status+" khi đọc lịch sử");
+  const j=await r.json();
+  let list=[];try{list=JSON.parse(new TextDecoder().decode(new Uint8Array(b64ToBuf(j.content))))}catch(e){}
+  return {list:Array.isArray(list)?list:[],sha:j.sha,url};
+}
+let pushingHist=false;
+async function pushHistory(){
+  if(pushingHist||!state.histQ.length)return;pushingHist=true;
+  try{
+    const c=ghCfg();
+    for(let i=0;i<3;i++){
+      const h=await ghGetHistory();const ids=new Set(h.list.map(x=>x.id));
+      const merged=[...state.histQ.filter(x=>!ids.has(x.id)),...h.list].slice(0,5000);
+      const body={message:"Dashboard: ghi lịch sử thao tác",content:bufToB64(new TextEncoder().encode(JSON.stringify(merged))),branch:c.branch||"main"};
+      if(h.sha)body.sha=h.sha;
+      const r=await fetch(h.url.split("?")[0],{method:"PUT",headers:{...ghHead(c),"Content-Type":"application/json"},body:JSON.stringify(body)});
+      if(r.ok){state.histQ=[];store.set("qlcv:histq",[]);return}
+      if(r.status!==409&&r.status!==422)throw new Error("GitHub trả lỗi "+r.status+" khi ghi lịch sử");
+    }
+  }finally{pushingHist=false}
+}
+async function loadRemoteHistory(){
+  try{
+    const h=await ghGetHistory();const ids=new Set(h.list.map(x=>x.id));
+    state.history=mergeHist(state.histQ,h.list,state.history);
+    if(state.active==="history")fillHistory();
+    if(state.histQ.length)pushHistory().catch(()=>{});
+  }catch(e){console.warn(e.message)}
+}
+function restoreEntry(id){
+  const e=state.history.find(x=>x.id===id);if(!e)return;
+  const si=state.sheets.findIndex(s=>s.name===e.sheet);
+  if(si<0){toast("Không còn sheet “"+e.sheet+"” trong file này",true);return}
+  const sh=state.sheets[si];state.via="khôi phục";
+  try{
+    if(e.act==="xóa"){
+      if(!sh.rows.some(x=>x.n===e.n)){ // đặt lại đúng dòng cũ nếu còn trống
+        const ixc=sh.cols.find(c=>c.type==="index");
+        sh.blank=sh.blank.filter(b=>b.n!==e.n);sh.blank.unshift({n:e.n,ix:ixc&&sh.grid[e.n-1]?sh.grid[e.n-1][ixc.idx]:undefined});
+      }
+      const r=addRow(si,true);
+      for(const [cn,v] of Object.entries(e.snap||{})){const c=sh.cols.find(x=>x.name===cn);if(c)setCell(si,r,c.idx,deser(v,c))}
+      toast(`Đã khôi phục bản ghi ${e.key||""} (đặt ở dòng ${r.n})`);
+    }else{
+      const r=sh.rows.find(x=>sh.title!=null&&e.key&&String(x.v[sh.title]??"")===e.key)||sh.rows.find(x=>x.n===e.n);
+      if(!r){toast("Không tìm thấy bản ghi để khôi phục (có thể đã bị xóa)",true);return}
+      for(const c of e.ch||[]){const col=sh.cols.find(x=>x.name===c.col);if(col)setCell(si,r,col.idx,deser(c.old,col))}
+      toast("Đã khôi phục giá trị cũ"+(e.key?" của "+e.key:""));
+    }
+  }finally{state.via="dashboard"}
+  setStatus(sh);updateChrome();
+  if(state.active==="history")fillHistory();
+}
+const ACT_COLOR={"sửa":"#2563eb","thêm":"#16a34a","xóa":"#dc2626","nhập":"#7c3aed"};
+function renderHistory(){
+  const u=state.hui||(state.hui={act:"",q:"",shown:100});
+  $("#main").innerHTML=`<div class="toolbar"><input type="search" id="hq" placeholder="Tìm trong lịch sử (mã đơn, sheet, giá trị…)" value="${esc(u.q)}">
+    <span class="seg" id="hseg">${[["","Tất cả"],["sửa","Sửa"],["thêm","Thêm"],["xóa","Xóa"],["nhập","Nhập Odoo"]].map(([k,l])=>`<button data-a="${k}" class="${u.act===k?"on":""}">${l}</button>`).join("")}</span></div>
+    <div id="hlist"></div>
+    <div class="note">Lịch sử ghi lại mọi thao tác sửa, thêm, xóa và nhập file từ dashboard${state.src==="github"?" và lưu trong file <b>history.json</b> cạnh file Excel trên GitHub":" (lưu trong trình duyệt này; kết nối GitHub để lưu lâu dài và dùng chung nhiều máy)"}. Các lần đồng bộ tự động từ Odoo nằm trong lịch sử commit của repo.</div>`;
+  $("#hq").oninput=e=>{u.q=e.target.value.trim().toLowerCase();u.shown=100;fillHistory()};
+  $("#hseg").querySelectorAll("button").forEach(b=>b.onclick=()=>{u.act=b.dataset.a;u.shown=100;$("#hseg").querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===b));fillHistory()});
+  fillHistory();
+}
+function fillHistory(){
+  const box=$("#hlist");if(!box)return;const u=state.hui;
+  const list=state.history.filter(e=>(!u.act||e.act===u.act)&&(!u.q||JSON.stringify(e).toLowerCase().includes(u.q)));
+  if(!list.length){box.innerHTML=`<div class="card sub">Chưa có thao tác nào${u.act||u.q?" khớp bộ lọc":""}. Hãy sửa, thêm hoặc xóa một bản ghi, lịch sử sẽ hiện ở đây.</div>`;return}
+  const rows=list.slice(0,u.shown).map(e=>{
+    const d=new Date(e.t);const tm=`${pad2(d.getDate())}/${pad2(d.getMonth()+1)} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+    let det="";
+    if(e.ch){det=e.ch.slice(0,5).map(c=>`<b>${esc(c.col)}</b>: ${showVal(c.old)} → ${showVal(c.new)}`).join("<br>")+(e.ch.length>5?`<br><span class="sub">… và ${e.ch.length-5} cột nữa</span>`:"")}
+    else if(e.snap){const en=Object.entries(e.snap);det=en.slice(0,5).map(([k,v])=>`<b>${esc(k)}</b>: ${showVal(v)}`).join(" · ")+(en.length>5?` <span class="sub">… +${en.length-5} cột</span>`:"")}
+    const can=(e.act==="xóa"||e.ch)&&state.sheets.some(s=>s.name===e.sheet);
+    return `<tr><td class="num" style="text-align:left">${tm}</td><td><span class="chip" style="--c:${ACT_COLOR[e.act]||"#64748b"}">${esc(e.act)}</span>${e.via&&e.via!=="dashboard"?`<div class="sub">${esc(e.via)}</div>`:""}</td><td>${esc(e.sheet)}</td><td><b>${esc(e.key||"")}</b><div class="sub">dòng ${e.n}</div></td><td>${det}</td><td>${can?`<button class="btn sm" data-rs="${esc(e.id)}">↩ Khôi phục</button>`:""}</td></tr>`}).join("");
+  box.innerHTML=`<div class="tablewrap"><table class="hist"><thead><tr><th>Thời gian</th><th>Thao tác</th><th>Sheet</th><th>Bản ghi</th><th>Chi tiết</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`+(list.length>u.shown?`<div class="more"><button class="btn" id="hmore">Hiện thêm (${list.length-u.shown})</button></div>`:"");
+  box.querySelectorAll("[data-rs]").forEach(b=>b.onclick=()=>{if(confirm("Khôi phục thao tác này? Thay đổi sẽ được ghi thành một thao tác mới."))restoreEntry(b.dataset.rs)});
+  const m=$("#hmore");if(m)m.onclick=()=>{u.shown+=200;fillHistory()};
+}
+
 function startEdit(sh,td){
   const n=+td.dataset.r,ci=+td.dataset.c,si=state.sheets.indexOf(sh);
   const col=sh.cols.find(c=>c.idx===ci),r=sh.rows.find(x=>x.n===n);if(!col||!r)return;
@@ -633,8 +839,9 @@ function startEdit(sh,td){
       if(col.type==="date"){if(v===""){v=null}else if(cur instanceof Date&&ymd(cur)===v){v=cur}else{const [y,m,d]=v.split("-").map(Number);v=new Date(y,m-1,d)}}
       else if(col.type==="num"){v=v===""?null:parseFloat(v)}
       else{v=v.trim()===""?null:v.trim()}
-      setCell(si,r,ci,v);setStatus(sh);
+      state.via="dashboard";setCell(si,r,ci,v);setStatus(sh);
     }
+    dropIfEmpty(sh,si,r);
     renderDyn(sh);updateChrome();
   };
   inp.onkeydown=e=>{if(e.key==="Enter")finish(true);else if(e.key==="Escape")finish(false)};
@@ -668,8 +875,8 @@ async function importOdoo(file){
   const map=sh.cols.filter(c=>c.type!=="index"&&iNames.has(norm(c.name))&&!/^(note|ghi chú)$/i.test(c.name)).map(c=>({t:c,s:iNames.get(norm(c.name))}));
   const kmap=map.find(m=>m.t.idx===sh.title);
   const byKey=new Map(sh.rows.map(r=>[String(r.v[sh.title]??"").trim(),r]));
-  let upd=0,add=0;
-  for(const ir of imp.rows){
+  let upd=0,add=0;state.via="nhập file Odoo";
+  try{for(const ir of imp.rows){
     const key=String(ir.v[kmap.s.idx]??"").trim();if(!key)continue;
     let r=byKey.get(key),isNew=false;
     if(!r){r=addRow(si,true);byKey.set(key,r);isNew=true}
@@ -682,7 +889,7 @@ async function importOdoo(file){
       if(setCell(si,r,m.t.idx,v))ch=true;
     }
     if(isNew)add++;else if(ch)upd++;
-  }
+  }}finally{state.via="dashboard"}
   sh.ui.shown=Math.max(sh.ui.shown,100);setStatus(sh);
   state.active=si;renderTabs();render();updateChrome();
   toast(`Nhập từ “${imp.name}” vào sheet “${sh.name}”: ${upd} dòng cập nhật, ${add} dòng mới. Chưa ghi — bấm “Lưu vào Excel”.`);
@@ -724,7 +931,7 @@ $("#btnNotify").onclick=async()=>{
   toast(p==="granted"?"Đã bật nhắc việc. Thông báo chỉ hiện khi bạn đang mở trang này.":"Bạn chưa cho phép thông báo trong trình duyệt.",p!=="granted");
   if(p==="granted")notifyDaily(true);
 };
-function updateChrome(){updateSavebar();updateBanner();const t=document.querySelector('#tabs [data-i="priority"] .n');if(t)t.textContent=collectItems().length}
+function updateChrome(){updateSavebar();scheduleAutoSave();updateBanner();const t=document.querySelector('#tabs [data-i="priority"] .n');if(t)t.textContent=collectItems().length}
 
 function goSheet(si,patch){const sh=state.sheets[si];sh.ui.filters={};sh.ui.special=null;sh.ui.range=null;sh.ui.search="";sh.ui.shown=100;Object.assign(sh.ui,patch||{});state.active=si;renderTabs();render();scrollTo(0,0)}
 
@@ -780,11 +987,11 @@ function renderPriority(){
 function renderTabs(){
   const t=$("#tabs");t.hidden=false;
   const pc=collectItems().length;
-  t.innerHTML=`<button data-i="overview" class="${state.active==="overview"?"on":""}">Tổng quan</button><button data-i="priority" class="${state.active==="priority"?"on":""}">⚠ Ưu tiên xử lý<span class="n">${pc}</span></button>`+
+  t.innerHTML=`<button data-i="overview" class="${state.active==="overview"?"on":""}">Tổng quan</button><button data-i="priority" class="${state.active==="priority"?"on":""}">⚠ Ưu tiên xử lý<span class="n">${pc}</span></button><button data-i="history" class="${state.active==="history"?"on":""}">🕘 Lịch sử</button>`+
     state.sheets.map((s,i)=>`<button data-i="${i}" class="${state.active===i?"on":""}">${esc(s.name)}<span class="n">${s.rows.length}</span></button>`).join("");
-  t.querySelectorAll("button").forEach(b=>b.onclick=()=>{const v=b.dataset.i;state.active=(v==="overview"||v==="priority")?v:+v;renderTabs();render();scrollTo(0,0)});
+  t.querySelectorAll("button").forEach(b=>b.onclick=()=>{const v=b.dataset.i;state.active=(v==="overview"||v==="priority"||v==="history")?v:+v;renderTabs();render();scrollTo(0,0)});
 }
-function render(){state.active==="overview"?renderOverview():state.active==="priority"?renderPriority():renderSheet(state.sheets[state.active])}
+function render(){state.active==="overview"?renderOverview():state.active==="priority"?renderPriority():state.active==="history"?renderHistory():renderSheet(state.sheets[state.active])}
 
 function sheetStats(sh){
   const o={rows:sh.rows.length};
@@ -978,7 +1185,7 @@ function renderTable(sh,fr){
     const r=(typeof x==="number"&&typeof y==="number")||(x instanceof Date&&y instanceof Date)?(x-y):String(x).localeCompare(String(y),"vi");return r*dir})}
   const cols=sh.cols.filter(c=>c.type!=="index");const si=state.sheets.indexOf(sh);
   let h=`<h2 class="sec">Chi tiết (${fmtN(rows.length)} dòng) <small class="sub" style="font-weight:500">· bấm đúp vào ô để sửa</small></h2><div class="tablewrap"><table><thead><tr>${sh.checklist?"<th></th>":""}<th title="Số dòng trong file Excel">Dòng</th>`+
-    cols.map(c=>`<th data-s="${c.idx}">${esc(c.name)}${u.sort&&u.sort.i===c.idx?(u.sort.dir>0?" ▲":" ▼"):""}</th>`).join("")+`</tr></thead><tbody>`;
+    cols.map(c=>`<th data-s="${c.idx}">${esc(c.name)}${u.sort&&u.sort.i===c.idx?(u.sort.dir>0?" ▲":" ▼"):""}</th>`).join("")+`<th></th></tr></thead><tbody>`;
   for(const r of rows.slice(0,u.shown)){
     const dn=sh.checklist?ckDone(sh,r):(sh.progIdx!=null&&r.done);
     h+=`<tr data-row="${r.n}" class="${r.st==="overdue"?"od":r.st==="soon"?"sn":""} ${dn?"dn":""}">`;
@@ -993,7 +1200,7 @@ function renderTable(sh,fr){
       const cls=typeof v==="number"?"num":(c.type==="text"?"txt":"");
       const edited=state.pending.has(pkey(si,r.n,c.idx));
       h+=`<td class="${cls} ${edited?"ed":""}" data-r="${r.n}" data-c="${c.idx}" ${c.type==="text"&&v?`title="${esc(v)}"`:""}>${cell}</td>`}
-    h+=`</tr>`;
+    h+=`<td><button class="rowdel" data-del="${r.n}" title="Xóa dòng này">🗑</button></td></tr>`;
   }
   h+=`</tbody></table></div>`;
   if(rows.length>u.shown)h+=`<div class="more"><button class="btn" id="more">Hiện thêm (còn ${rows.length-u.shown} dòng)</button></div>`;
@@ -1001,9 +1208,10 @@ function renderTable(sh,fr){
   t.querySelectorAll("th[data-s]").forEach(th=>th.onclick=()=>{const i=+th.dataset.s;u.sort=u.sort&&u.sort.i===i?{i,dir:-u.sort.dir}:{i,dir:1};renderTable(sh,fr)});
   const mo=$("#more");if(mo)mo.onclick=()=>{u.shown+=200;renderTable(sh,fr)};
   t.querySelectorAll("td[data-c]").forEach(td=>td.ondblclick=()=>startEdit(sh,td));
+  t.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>deleteRow(si,+b.dataset.del));
   t.querySelectorAll("[data-ck]").forEach(cb=>cb.onchange=()=>{
     const n=+cb.dataset.ck,r=sh.rows.find(x=>x.n===n);
-    if(sh.doneColIdx!=null){setCell(si,r,sh.doneColIdx,cb.checked?"Đã xong "+fmtDS(TODAY):null)}
+    if(sh.doneColIdx!=null){state.via="dashboard";setCell(si,r,sh.doneColIdx,cb.checked?"Đã xong "+fmtDS(TODAY):null)}
     else{const m=sh._ck||(sh._ck=store.get(ckKey(sh))||{});m[n]=cb.checked;store.set(ckKey(sh),m)}
     renderDyn(sh);updateChrome();});
 }
@@ -1016,6 +1224,8 @@ function exportCsv(sh){
   const a=document.createElement("a");a.href=URL.createObjectURL(new Blob(["﻿"+lines.join("\r\n")],{type:"text/csv;charset=utf-8"}));
   a.download=sh.name+"_loc.csv";a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000);
 }
+$("#chkAuto").checked=state.auto;
+$("#chkAuto").onchange=e=>{state.auto=e.target.checked;store.set("qlcv:auto",state.auto);state.saveErr=null;updateChrome()};
 if(ghReady())loadFromGitHub();
 </script>
 </body>
