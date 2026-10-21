@@ -551,7 +551,7 @@ async function loadBuffer(buf,name,opts={}){
     $("#btnSync").hidden=!ghReady();
     renderTabs();render();updateChrome();notifyDaily();
     if(state.src==="github"&&ghReady())loadRemoteHistory();
-    odooStart();
+    odooStart();loadOdooIds();
   }catch(e){
     console.error(e);
     if(err){err.hidden=false;err.textContent="Không đọc được file: "+e.message}
@@ -1376,11 +1376,24 @@ document.addEventListener("visibilitychange",()=>{
 
 /* ---- Mở Odoo để tìm đơn hàng ---- */
 const ODOO_LIST=()=>store.get("qlcv:odoourl")||"https://erp.dekko.com.vn/odoo/action-1572";
+let odooIds=null;
+async function loadOdooIds(){
+  try{
+    if(!ghReady())return;
+    const c=ghCfg(),dir=c.path.includes("/")?c.path.slice(0,c.path.lastIndexOf("/")+1):"";
+    const r=await fetch(ghUrl(c,`contents/${(dir+"odoo-ids.json").split("/").map(encodeURIComponent).join("/")}?ref=${encodeURIComponent(c.branch||"main")}`),{headers:ghHead(c),cache:"no-store"});
+    if(!r.ok){return}
+    const j=await r.json();odooIds=JSON.parse(new TextDecoder().decode(new Uint8Array(b64ToBuf(j.content))));
+  }catch(e){console.warn("odoo-ids",e)}
+}
 async function openOdoo(code){
-  code=String(code||"").trim();let copied=false;
+  code=String(code||"").trim();
+  const base=ODOO_LIST().replace(/\/+$/,""),m=odooIds&&odooIds[code];
+  if(m){window.open(`${base}/${m.id}?cids=${m.cid}`,"odoo-erp");toast("Đang mở đơn "+code+" trên Odoo…");return}
+  let copied=false;
   try{await navigator.clipboard.writeText(code);copied=true}catch(e){}
-  window.open(ODOO_LIST(),"odoo-erp");
-  toast(copied?`Đã sao chép mã “${code}”. Trong Odoo, bấm vào ô tìm kiếm rồi dán (Ctrl+V / giữ ngón tay → Dán) và Enter. Nhớ chọn đúng công ty ở góc phải trên.`:`Mã đơn: ${code}. Hãy tự gõ mã này vào ô tìm kiếm trong Odoo.`);
+  window.open(base,"odoo-erp");
+  toast((copied?`Đã sao chép mã “${code}”. `:`Mã đơn: ${code}. `)+"Chưa có liên kết trực tiếp cho đơn này (cần một lần đồng bộ Odoo để lấy). Trong Odoo hãy dán mã vào ô tìm kiếm và chọn đúng công ty.");
 }
 document.addEventListener("click",e=>{const a=e.target.closest&&e.target.closest(".ol");if(!a)return;e.preventDefault();e.stopPropagation();openOdoo(a.dataset.code)},true);
 
