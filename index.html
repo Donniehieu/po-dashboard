@@ -170,6 +170,17 @@ table.hist td{vertical-align:top}
   dialog{padding:14px}
   .attn li{grid-template-columns:1fr auto}.attn li .tag{display:none}
 }
+
+/* ---- Cấu hình NCC ---- */
+#ndlg{max-width:940px}
+#ndlg .nwrap{max-height:50vh;overflow:auto;border:1px solid var(--line);border-radius:8px;margin-top:10px}
+#ndlg table{width:100%;border-collapse:collapse;font-size:13px;min-width:680px}
+#ndlg th{position:sticky;top:0;background:var(--card);text-align:left;padding:7px 8px;border-bottom:1px solid var(--line);z-index:1}
+#ndlg td{padding:3px 4px;border-bottom:1px solid var(--line)}
+#ndlg td input{padding:6px 8px}
+#ndlg textarea{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;font:inherit;background:var(--card);color:var(--ink)}
+#ndlg details{margin-top:10px}
+#ndlg summary{cursor:pointer;font-weight:600;font-size:13px}
 </style>
 </head>
 <body>
@@ -185,6 +196,7 @@ table.hist td{vertical-align:top}
   <button class="btn sm" id="btnImport" hidden title="Gộp file Excel xuất từ Odoo vào dữ liệu nguồn">⬆ Nhập file Odoo</button>
   <button class="btn sm" id="btnSync" hidden title="Yêu cầu GitHub chạy đồng bộ từ Odoo ngay">🔄 Đồng bộ Odoo</button>
   <button class="btn sm" id="btnRefresh" hidden>↻ Tải lại</button>
+  <button class="btn sm" id="btnNcc" title="Cấu hình số tài khoản, tên và ngân hàng thụ hưởng cho từng nhà cung cấp (dùng cho script tự điền trên Odoo)">🏦 NCC</button>
   <button class="btn sm" id="btnGh">⚙ GitHub</button>
   <button class="btn primary" id="btnPick">Chọn file Excel</button>
   <input type="file" id="fileImp" accept=".xlsx,.xlsm" hidden>
@@ -213,6 +225,24 @@ table.hist td{vertical-align:top}
   <label>Nhánh</label><input id="ghBranch" placeholder="main">
   <label>Mã truy cập (fine-grained token: Contents + Actions = Read &amp; write, chỉ cho repo dữ liệu)</label><input id="ghToken" type="password" placeholder="github_pat_…" autocomplete="off">
   <div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap"><button class="btn primary" id="ghSave">Lưu &amp; tải dữ liệu</button><button class="btn" id="ghForget">Xoá mã truy cập</button><button class="btn" id="ghClose">Đóng</button></div>
+</dialog>
+
+<dialog id="ndlg">
+  <h3>🏦 Tài khoản thụ hưởng theo nhà cung cấp</h3>
+  <p class="sub">Nhập một lần cho từng NCC. Dữ liệu lưu trong file <b>ncc-bank.json</b> cạnh file Excel trên repo GitHub riêng tư của bạn. Script trên Odoo sẽ đọc file này để tự điền vào phiếu thanh toán. <b>Tên NCC phải trùng với tên NCC trên Odoo</b> (không phân biệt hoa thường và dấu).</p>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+    <input id="nSearch" placeholder="Tìm NCC…" style="flex:1;min-width:160px">
+    <button class="btn sm" id="nAdd">＋ Thêm NCC</button>
+    <span class="sub" id="nState"></span>
+  </div>
+  <div class="nwrap"><table><thead><tr><th style="width:30%">Nhà cung cấp</th><th style="width:20%">Số tài khoản</th><th style="width:26%">Tên người thụ hưởng</th><th style="width:20%">Ngân hàng</th><th style="width:4%"></th></tr></thead><tbody id="nBody"></tbody></table></div>
+  <datalist id="nNames"></datalist>
+  <details><summary>Dán nhiều NCC từ Excel</summary>
+    <p class="sub">Copy các dòng từ Excel theo đúng thứ tự 4 cột: Nhà cung cấp, Số tài khoản, Tên người thụ hưởng, Ngân hàng. NCC đã có sẽ được cập nhật.</p>
+    <textarea id="nPaste" rows="4" placeholder="CÔNG TY ABC&#9;0123456789&#9;CONG TY ABC&#9;Vietcombank"></textarea>
+    <button class="btn sm" id="nPasteGo" style="margin-top:8px">Thêm các dòng đã dán</button>
+  </details>
+  <div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap"><button class="btn primary" id="nSave">Lưu lên GitHub</button><button class="btn" id="nClose">Đóng</button></div>
 </dialog>
 
 <script>
@@ -1480,6 +1510,91 @@ function renderMsgs(){
   $("#fab").onclick=()=>{msgs.open=!msgs.open;renderMsgs()};
   $("#msgx").onclick=()=>{msgs.open=false;renderMsgs()};
 })();
+
+/* ---- Cấu hình tài khoản thụ hưởng theo NCC (script trên Odoo đọc file này) ---- */
+const nccPath=()=>{const c=ghCfg(),i=c.path.lastIndexOf("/");return (i>=0?c.path.slice(0,i+1):"")+"ncc-bank.json"};
+const nccUrl=c=>ghUrl(c,`contents/${nccPath().split("/").map(encodeURIComponent).join("/")}`);
+const nccKey=s=>String(s||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/đ/gi,"d").toLowerCase().replace(/[^a-z0-9]+/g," ").trim();
+const ncc={items:[],sha:null,dirty:false,loaded:false};
+function nccSetState(t,cls){const e=$("#nState");e.textContent=t||"";e.className="sub "+(cls||"")}
+async function nccLoad(){
+  const c=ghCfg();
+  const r=await fetch(nccUrl(c)+`?ref=${encodeURIComponent(c.branch||"main")}`,{headers:ghHead(c),cache:"no-store"});
+  if(r.status===404){ncc.items=[];ncc.sha=null;ncc.loaded=true;return}
+  if(!r.ok)throw new Error(r.status===401?"Mã truy cập GitHub không đúng hoặc đã hết hạn":"GitHub trả lỗi "+r.status+" khi đọc danh sách NCC");
+  const j=await r.json();let d={};
+  try{d=JSON.parse(new TextDecoder().decode(new Uint8Array(b64ToBuf(j.content))))}catch(e){}
+  ncc.items=(Array.isArray(d.items)?d.items:[]).map(x=>({name:x.name||"",acc:x.acc||"",holder:x.holder||"",bank:x.bank||""}));
+  ncc.sha=j.sha;ncc.loaded=true;
+}
+async function nccSave(){
+  const c=ghCfg();
+  const seen=new Set(),items=[];
+  for(const x of ncc.items){
+    const name=x.name.trim();if(!name)continue;
+    const k=nccKey(name);if(seen.has(k))throw new Error("NCC “"+name+"” bị nhập trùng, hãy xoá bớt một dòng.");
+    seen.add(k);items.push({name,acc:x.acc.trim(),holder:x.holder.trim(),bank:x.bank.trim()});
+  }
+  const body={message:"Dashboard: cập nhật tài khoản thụ hưởng NCC",branch:c.branch||"main",
+    content:bufToB64(new TextEncoder().encode(JSON.stringify({version:1,updated:new Date().toISOString(),items},null,1)))};
+  if(ncc.sha)body.sha=ncc.sha;
+  const r=await fetch(nccUrl(c),{method:"PUT",headers:{...ghHead(c),"Content-Type":"application/json"},body:JSON.stringify(body)});
+  if(r.status===409||r.status===422)throw new Error("File NCC vừa thay đổi ở nơi khác. Hãy đóng cửa sổ này, mở lại rồi nhập lại phần vừa sửa.");
+  if(!r.ok)throw new Error("GitHub trả lỗi "+r.status+" khi ghi file NCC (mã truy cập cần quyền Contents: Read and write)");
+  const j=await r.json();ncc.sha=j.content.sha;ncc.dirty=false;
+  ncc.items=items;
+}
+function nccVendorNames(){
+  const set=new Set();
+  try{for(const sh of state.sheets||[])for(const col of sh.cols||[])if(/nhà cung cấp|\bncc\b|vendor|nhà cc/i.test(col.name||""))
+    for(const r of sh.rows||[]){const v=r.v&&r.v[col.idx];if(v!=null&&String(v).trim())set.add(String(v).trim())}}catch(e){}
+  return [...set].sort((a,b)=>a.localeCompare(b,"vi")).slice(0,2000);
+}
+function nccRender(){
+  const q=nccKey($("#nSearch").value);
+  const rows=[];
+  ncc.items.forEach((x,i)=>{if(q&&!nccKey(x.name).includes(q))return;
+    rows.push(`<tr data-i="${i}"><td><input data-k="name" list="nNames" value="${esc(x.name)}" placeholder="Tên NCC trên Odoo"></td><td><input data-k="acc" value="${esc(x.acc)}" inputmode="numeric" placeholder="Số tài khoản"></td><td><input data-k="holder" value="${esc(x.holder)}" placeholder="Tên người thụ hưởng"></td><td><input data-k="bank" value="${esc(x.bank)}" placeholder="VD: Vietcombank"></td><td><button class="btn sm" data-del="${i}" title="Xoá NCC này">✕</button></td></tr>`)});
+  $("#nBody").innerHTML=rows.join("")||`<tr><td colspan="5" class="sub" style="padding:14px">${ncc.items.length?"Không có NCC nào khớp.":"Chưa có NCC nào. Bấm “＋ Thêm NCC” hoặc dán từ Excel."}</td></tr>`;
+  $("#nNames").innerHTML=nccVendorNames().map(n=>`<option value="${esc(n)}">`).join("");
+  nccSetState(ncc.items.length+" NCC"+(ncc.dirty?" · chưa lưu":""),ncc.dirty?"warn":"");
+}
+$("#btnNcc").onclick=async()=>{
+  if(!ghReady()){toast("Hãy kết nối GitHub trước (nút ⚙ GitHub).",true);return}
+  $("#nSearch").value="";$("#ndlg").showModal();nccSetState("Đang tải…");
+  try{await nccLoad();ncc.dirty=false;nccRender()}
+  catch(e){nccSetState("");toast(e.message,true)}
+};
+$("#nSearch").oninput=nccRender;
+$("#nAdd").onclick=()=>{ncc.items.unshift({name:"",acc:"",holder:"",bank:""});ncc.dirty=true;$("#nSearch").value="";nccRender();const i=$("#nBody input");if(i)i.focus()};
+$("#nBody").addEventListener("input",e=>{
+  const tr=e.target.closest("tr[data-i]");if(!tr||!e.target.dataset.k)return;
+  ncc.items[+tr.dataset.i][e.target.dataset.k]=e.target.value;ncc.dirty=true;nccSetState(ncc.items.length+" NCC · chưa lưu","warn");
+});
+$("#nBody").addEventListener("click",e=>{
+  const b=e.target.closest("[data-del]");if(!b)return;
+  const x=ncc.items[+b.dataset.del];
+  if(x&&(x.name||x.acc)&&!confirm("Xoá NCC “"+(x.name||"(chưa đặt tên)")+"” khỏi danh sách?"))return;
+  ncc.items.splice(+b.dataset.del,1);ncc.dirty=true;nccRender();
+});
+$("#nPasteGo").onclick=()=>{
+  const lines=$("#nPaste").value.split(/\r?\n/).map(l=>l.split("\t")).filter(a=>a.length>=2&&a[0].trim());
+  if(!lines.length){toast("Không đọc được dòng nào. Hãy copy từ Excel (các cột cách nhau bằng Tab).",true);return}
+  let add=0,upd=0;
+  for(const a of lines){
+    const it={name:a[0].trim(),acc:(a[1]||"").trim(),holder:(a[2]||"").trim(),bank:(a[3]||"").trim()};
+    const ex=ncc.items.find(x=>nccKey(x.name)===nccKey(it.name));
+    if(ex){Object.assign(ex,it);upd++}else{ncc.items.push(it);add++}
+  }
+  ncc.dirty=true;$("#nPaste").value="";nccRender();toast(`Đã thêm ${add}, cập nhật ${upd} NCC. Nhớ bấm “Lưu lên GitHub”.`);
+};
+$("#nSave").onclick=async()=>{
+  const btn=$("#nSave");btn.disabled=true;nccSetState("Đang lưu…");
+  try{await nccSave();nccRender();toast("✔ Đã lưu "+ncc.items.length+" NCC lên GitHub")}
+  catch(e){nccSetState(ncc.items.length+" NCC · chưa lưu","warn");toast(e.message,true)}
+  finally{btn.disabled=false}
+};
+$("#nClose").onclick=()=>{if(ncc.dirty&&!confirm("Có thay đổi chưa lưu. Đóng và bỏ thay đổi?"))return;ncc.dirty=false;$("#ndlg").close()};
 
 $("#chkAuto").checked=state.auto;
 $("#chkSync").checked=state.autosync;
