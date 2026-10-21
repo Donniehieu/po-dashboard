@@ -233,6 +233,9 @@ table.hist td{vertical-align:top}
   <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
     <input id="nSearch" placeholder="Tìm NCC…" style="flex:1;min-width:160px">
     <button class="btn sm" id="nAdd">＋ Thêm NCC</button>
+    <button class="btn sm" id="nTpl" title="Tải file Excel mẫu (đã điền sẵn danh sách NCC hiện có và các NCC trong dữ liệu dashboard)">⬇ Tải file mẫu</button>
+    <button class="btn sm" id="nUp" title="Chọn file Excel đã điền để đọc vào danh sách bên dưới">⬆ Tải file Excel lên</button>
+    <input type="file" id="nFile" accept=".xlsx,.xlsm" hidden>
     <span class="sub" id="nState"></span>
   </div>
   <div class="nwrap"><table><thead><tr><th style="width:30%">Nhà cung cấp</th><th style="width:20%">Số tài khoản</th><th style="width:26%">Tên người thụ hưởng</th><th style="width:20%">Ngân hàng</th><th style="width:4%"></th></tr></thead><tbody id="nBody"></tbody></table></div>
@@ -1588,6 +1591,95 @@ $("#nPasteGo").onclick=()=>{
   }
   ncc.dirty=true;$("#nPaste").value="";nccRender();toast(`Đã thêm ${add}, cập nhật ${upd} NCC. Nhớ bấm “Lưu lên GitHub”.`);
 };
+/* ---- File Excel mẫu: xuất ra và đọc lại ---- */
+const NCC_HEAD=["Nhà cung cấp (tên trên Odoo)","Số tài khoản","Tên người thụ hưởng","Ngân hàng"];
+function nccZip(files){ // tạo file zip (không nén) từ [[tên, Uint8Array], …]
+  const enc=new TextEncoder(),parts=[],cds=[];let pos=0;
+  for(const [name,data] of files){
+    const nb=enc.encode(name),crc=crc32(data);
+    const lh=new Uint8Array(30+nb.length),l=new DataView(lh.buffer);
+    l.setUint32(0,0x04034b50,true);l.setUint16(4,20,true);l.setUint16(6,0x0800,true);l.setUint16(8,0,true);
+    l.setUint16(10,0,true);l.setUint16(12,0x21,true);l.setUint32(14,crc,true);l.setUint32(18,data.length,true);l.setUint32(22,data.length,true);
+    l.setUint16(26,nb.length,true);l.setUint16(28,0,true);lh.set(nb,30);
+    const cd=new Uint8Array(46+nb.length),c=new DataView(cd.buffer);
+    c.setUint32(0,0x02014b50,true);c.setUint16(4,20,true);c.setUint16(6,20,true);c.setUint16(8,0x0800,true);c.setUint16(10,0,true);
+    c.setUint16(12,0,true);c.setUint16(14,0x21,true);c.setUint32(16,crc,true);c.setUint32(20,data.length,true);c.setUint32(24,data.length,true);
+    c.setUint16(28,nb.length,true);c.setUint32(42,pos,true);cd.set(nb,46);
+    parts.push(lh,data);pos+=lh.length+data.length;cds.push(cd);
+  }
+  const start=pos;let size=0;for(const cd of cds){parts.push(cd);size+=cd.length}
+  const eo=new Uint8Array(22),d=new DataView(eo.buffer);
+  d.setUint32(0,0x06054b50,true);d.setUint16(8,cds.length,true);d.setUint16(10,cds.length,true);d.setUint32(12,size,true);d.setUint32(16,start,true);
+  parts.push(eo);
+  let tot=0;for(const x of parts)tot+=x.length;
+  const out=new Uint8Array(tot);let o=0;for(const x of parts){out.set(x,o);o+=x.length}
+  return out;
+}
+function nccTemplateBytes(rows){ // rows: [[tên, stk, chủ TK, ngân hàng], …]
+  const enc=new TextEncoder(),NS='xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"';
+  const cell=(r,c,v,st)=>{const ref=colLetter(c)+r;return (v===""||v==null)?`<c r="${ref}" s="${st}"/>`:`<c r="${ref}" s="${st}" t="inlineStr"><is><t xml:space="preserve">${esc(v)}</t></is></c>`};
+  const all=[NCC_HEAD,...rows];
+  const sd=all.map((a,i)=>`<row r="${i+1}">${[0,1,2,3].map(c=>cell(i+1,c,a[c],i===0?1:2)).join("")}</row>`).join("");
+  const sheet1=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet ${NS}><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><cols><col min="1" max="1" width="44" style="2" customWidth="1"/><col min="2" max="2" width="24" style="2" customWidth="1"/><col min="3" max="3" width="34" style="2" customWidth="1"/><col min="4" max="4" width="26" style="2" customWidth="1"/></cols><sheetData>${sd}</sheetData></worksheet>`;
+  const help=["HƯỚNG DẪN ĐIỀN FILE","1. Điền ở sheet “NCC”: mỗi dòng là một nhà cung cấp, 4 cột theo đúng thứ tự có sẵn. Không đổi tên hoặc xoá dòng tiêu đề.","2. Cột “Nhà cung cấp” phải trùng tên NCC trên Odoo (không phân biệt hoa thường và dấu).","3. Cột “Số tài khoản”: các ô đã đặt sẵn định dạng văn bản để không mất số 0 ở đầu. Hãy gõ hoặc dán đúng số tài khoản.","4. Dòng nào chưa có số tài khoản sẽ được bỏ qua khi tải lên.","5. Điền xong, lưu file rồi vào dashboard bấm 🏦 NCC → “Tải file Excel lên”, kiểm tra lại danh sách và bấm “Lưu lên GitHub”."];
+  const sheet2=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet ${NS}><cols><col min="1" max="1" width="120" customWidth="1"/></cols><sheetData>${help.map((t,i)=>`<row r="${i+1}">${cell(i+1,0,t,i===0?1:0)}</row>`).join("")}</sheetData></worksheet>`;
+  const styles=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet ${NS}><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Calibri"/></font></fonts><fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF2563EB"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="3"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"/><xf numFmtId="49" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`;
+  const wb=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook ${NS} xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="NCC" sheetId="1" r:id="rId1"/><sheet name="Hướng dẫn" sheetId="2" r:id="rId2"/></sheets></workbook>`;
+  const wbRels=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet2.xml"/><Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`;
+  const rels=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`;
+  const ct=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/worksheets/sheet2.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>`;
+  return nccZip([["[Content_Types].xml",enc.encode(ct)],["_rels/.rels",enc.encode(rels)],["xl/workbook.xml",enc.encode(wb)],["xl/_rels/workbook.xml.rels",enc.encode(wbRels)],["xl/styles.xml",enc.encode(styles)],["xl/worksheets/sheet1.xml",enc.encode(sheet1)],["xl/worksheets/sheet2.xml",enc.encode(sheet2)]]);
+}
+// Đọc bảng từ lưới ô của một sheet → danh sách NCC
+function nccFromGrid(g){
+  const colOf=h=>{const k=nccKey(h);
+    if(/nguoi thu huong|chu tai khoan|chu tk|holder/.test(k))return "holder";
+    if(/so tai khoan|so tk|\bstk\b|account/.test(k))return "acc";
+    if(/ngan hang|bank/.test(k))return "bank";
+    if(/nha cung cap|\bncc\b|vendor/.test(k))return "name";
+    return null};
+  let hr=-1,map={};
+  for(let i=0;i<Math.min(g.length,10);i++){
+    const m={};(g[i]||[]).forEach((v,c)=>{const t=typeof v==="string"?colOf(v):null;if(t&&m[t]==null)m[t]=c});
+    if(m.name!=null&&m.acc!=null){hr=i;map=m;break}
+  }
+  if(hr<0){hr=0;map={name:0,acc:1,holder:2,bank:3}} // không thấy tiêu đề: coi như đúng thứ tự mẫu
+  const txt=v=>v==null?"":(typeof v==="number"?(Number.isInteger(v)?v.toLocaleString("fullwide",{useGrouping:false}):String(v)):(v instanceof Date?"":String(v).trim()));
+  const items=[];let noAcc=0,numeric=0;
+  for(let i=hr+1;i<g.length;i++){
+    const r=g[i]||[];const name=txt(r[map.name]);if(!name)continue;
+    const raw=map.acc!=null?r[map.acc]:null;if(typeof raw==="number")numeric++;
+    const acc=txt(raw).replace(/\s+/g,"");
+    if(!acc){noAcc++;continue}
+    items.push({name,acc,holder:map.holder!=null?txt(r[map.holder]):"",bank:map.bank!=null?txt(r[map.bank]):""});
+  }
+  return {items,noAcc,numeric};
+}
+$("#nTpl").onclick=()=>{
+  const rows=ncc.items.filter(x=>x.name.trim()).map(x=>[x.name,x.acc,x.holder,x.bank]);
+  const have=new Set(rows.map(r=>nccKey(r[0])));
+  for(const n of nccVendorNames())if(!have.has(nccKey(n))){rows.push([n,"","",""]);have.add(nccKey(n))}
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(new Blob([nccTemplateBytes(rows)],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}));
+  a.download="Mau-tai-khoan-thu-huong-NCC.xlsx";a.click();setTimeout(()=>URL.revokeObjectURL(a.href),3000);
+  toast("Đã tạo file mẫu"+(rows.length?` với ${rows.length} NCC điền sẵn tên`:"")+". Điền số tài khoản, tên người thụ hưởng, ngân hàng rồi tải lên lại.");
+};
+$("#nUp").onclick=()=>$("#nFile").click();
+$("#nFile").onchange=async e=>{const f=e.target.files[0];e.target.value="";if(f)try{await nccImport(f)}catch(err){console.error(err);toast("Không đọc được file: "+err.message,true)}};
+async function nccImport(file){
+  const sheets=await parseXlsx(await file.arrayBuffer());
+  if(!sheets.length){toast("File không có sheet nào để đọc.",true);return}
+  const pick=sheets.find(x=>nccKey(x.name)==="ncc")||sheets[0];
+  const res=nccFromGrid(pick.grid);
+  if(!res.items.length){toast(`Không có dòng nào có đủ tên NCC và số tài khoản${res.noAcc?` (${res.noAcc} dòng chưa có số tài khoản)`:""}.`,true);return}
+  let add=0,upd=0;
+  for(const it of res.items){
+    const ex=ncc.items.find(x=>nccKey(x.name)===nccKey(it.name));
+    if(ex){ex.acc=it.acc;if(it.holder)ex.holder=it.holder;if(it.bank)ex.bank=it.bank;upd++}else{ncc.items.push(it);add++}
+  }
+  ncc.dirty=true;$("#nSearch").value="";nccRender();
+  toast(`Đã đọc ${res.items.length} NCC: thêm ${add}, cập nhật ${upd}`+(res.noAcc?`, bỏ qua ${res.noAcc} dòng chưa có số tài khoản`:"")+(res.numeric?`. Lưu ý: ${res.numeric} số tài khoản trong file đang ở dạng số nên có thể mất số 0 ở đầu, hãy kiểm tra`:"")+". Kiểm tra lại rồi bấm “Lưu lên GitHub”.");
+}
 $("#nSave").onclick=async()=>{
   const btn=$("#nSave");btn.disabled=true;nccSetState("Đang lưu…");
   try{await nccSave();nccRender();toast("✔ Đã lưu "+ncc.items.length+" NCC lên GitHub")}
