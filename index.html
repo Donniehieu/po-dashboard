@@ -185,7 +185,7 @@ table.hist td{vertical-align:top}
 .fp .ft{display:flex;gap:8px;justify-content:flex-end}
 .fp h4{margin:0;font-size:13px;display:flex;justify-content:space-between;align-items:center}
 td.flag,th.flag{text-align:center;width:1%}
-.stp{display:inline-flex;gap:2px;margin-left:6px;vertical-align:middle;white-space:nowrap}
+.stp{display:inline-flex;gap:2px;margin-right:8px;vertical-align:middle;white-space:nowrap}
 .stp button{border:1px solid var(--line);background:var(--card);border-radius:6px;padding:0 6px;font-size:12px;line-height:20px}
 .stp button.nx{background:var(--brand);border-color:var(--brand);color:#fff}
 .stp button:disabled{opacity:.35;cursor:default}
@@ -209,6 +209,7 @@ td.wfnote{white-space:nowrap}
   table.cardtbl td.flag{display:flex;align-items:center}
 }
 a.sl{color:inherit;text-decoration:none;border-bottom:1px dotted var(--mute)}a.sl:hover{color:var(--brand);border-bottom-color:var(--brand)}
+body.panning,body.panning *{cursor:grabbing!important;user-select:none!important}
 .tblbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:0 0 8px}
 .tblbar .btn[disabled]{opacity:.5;cursor:not-allowed}
 th .rz{position:absolute;top:0;right:-3px;width:9px;height:100%;cursor:col-resize;touch-action:none;z-index:3}
@@ -471,11 +472,19 @@ function wfDerive(sh,r){
 }
 const dueOf=(sh,r)=>{const c=sh.cmtIdx!=null?r.v[sh.cmtIdx]:null;return c instanceof Date?c:(sh.dueIdx!=null?r.v[sh.dueIdx]:null)};
 /* Phiếu nhập kho “Đã nhận hết” -> tối thiểu “Cần lập hóa đơn”; “Đã nhận một phần” -> tối thiểu “Chờ nhận hàng” (chỉ nâng các bước đứng trước, không hạ bước đã đi xa hơn) */
-const WF_FLOOR=[["đã nhận hết","Cần lập hóa đơn"],["đã nhận một phần","Chờ nhận hàng"]];
+const WF_FLOOR=[
+  {rc:"đã nhận hết",min:"Cần lập hóa đơn"},
+  {rc:"đã nhận một phần",min:"Chờ nhận hàng"},
+  {rc:"chưa nhận",st:["đơn mua hàng","đã phê duyệt"],min:"Chờ gửi NCC"} // đơn đã xác nhận nhưng hàng chưa về -> tối thiểu “Chờ gửi NCC”
+];
+function wfFloorOf(sh,r){
+  const rc=sh.rcIdx!=null?wfn(r.v[sh.rcIdx]):"",st=sh.stIdx!=null?wfn(r.v[sh.stIdx]):"";
+  const f=WF_FLOOR.find(x=>x.rc===rc&&(!x.st||x.st.includes(st)));return f?f.min:null;
+}
 function wfFloor(sh,r,wf){
-  const rc=sh.rcIdx!=null?wfn(r.v[sh.rcIdx]):"";const f=WF_FLOOR.find(x=>x[0]===rc);if(!f)return wf;
+  const m=wfFloorOf(sh,r);if(!m)return wf;
   const seq=seqOf(sh,r),i=seq.indexOf(wf);
-  return i>=0&&i<seq.indexOf(f[1])?f[1]:wf;
+  return i>=0&&i<seq.indexOf(m)?m:wf;
 }
 function wfOf(sh,r){const n=r.v[sh.noteIdx];const base=n!=null&&String(n).trim()!==""?wfCanon(n):wfDerive(sh,r);const w=wfFloor(sh,r,base);r.raised=w!==base;return w}
 const seqOf=(sh,r)=>sh.payIdx!=null&&isPay(r.v[sh.payIdx])?WF_PRE:WF_DEBT;
@@ -1009,7 +1018,7 @@ function startEdit(sh,td){
       else{state.via="dashboard";setCell(si,r,ci,v);setStatus(sh)}
     }
     dropIfEmpty(sh,si,r);
-    renderDyn(sh);updateChrome();
+    renderDyn(sh,true);updateChrome();
   };
   inp.onkeydown=e=>{if(e.key==="Enter")finish(true);else if(e.key==="Escape")finish(false)};
   inp.onblur=e=>{const nx=e.relatedTarget;if(nx&&nx.classList&&nx.classList.contains('micbtn'))return;finish(true)};
@@ -1074,6 +1083,31 @@ async function importOdoo(file,forceSi){
   toast(`Nhập từ “${imp.name}” vào sheet “${sh.name}”: ${upd} dòng cập nhật, ${add} dòng mới. Chưa ghi — bấm “Lưu vào Excel”.`);
 }
 
+
+/* ---- PC: giữ chuột trái trên bảng rồi kéo trái/phải để bảng trôi theo (thay cho thanh cuộn ngang) ---- */
+(()=>{
+  let d=null;
+  document.addEventListener("mousedown",e=>{
+    if(e.button!==0)return;
+    const w=e.target.closest&&e.target.closest(".tablewrap,.scroll-x");
+    if(!w||w.scrollWidth<=w.clientWidth+2||w.classList.contains("cards")&&matchMedia("(max-width:700px)").matches)return;
+    if(e.target.closest("input,button,select,textarea,label,th,.rz,.fchip,[contenteditable]"))return;
+    d={w,x:e.clientX,l:w.scrollLeft,on:false};
+  });
+  document.addEventListener("mousemove",e=>{
+    if(!d)return;
+    if(!(e.buttons&1)){d=null;document.body.classList.remove("panning");return}
+    const dx=e.clientX-d.x;
+    if(!d.on){if(Math.abs(dx)<6)return;d.on=true;document.body.classList.add("panning");try{getSelection().removeAllRanges()}catch(_){}}
+    d.w.scrollLeft=d.l-dx;e.preventDefault();
+  });
+  const end=()=>{
+    if(!d)return;const was=d.on;d=null;document.body.classList.remove("panning");
+    if(was){const sup=ev=>{ev.stopPropagation();ev.preventDefault()};window.addEventListener("click",sup,true);setTimeout(()=>window.removeEventListener("click",sup,true),60)} // không kích hoạt bấm/sửa ô sau khi kéo
+  };
+  document.addEventListener("dragstart",e=>{if(d)e.preventDefault()}); // liên kết trong ô không bị kéo thả kiểu trình duyệt
+  document.addEventListener("mouseup",end);window.addEventListener("blur",end);
+})();
 
 /* ---- Độ rộng cột kéo thả được (mọi bảng; nhớ theo file + tab) ---- */
 const rzPrefix=()=>"qlcv:cw:"+state.fileName+"|"+state.active+"|";
@@ -1441,9 +1475,10 @@ function timeline(sh,fr){
   return `<div class="card"><h3>Tiến độ theo ${byWeek?"tuần":"ngày"} <small>cột “${esc(sh.cols.find(c=>c.idx===di).name)}” · <span style="color:var(--ok)">■</span> đã xong <span style="color:var(--warn)">■</span> chưa xong · bấm cột để lọc</small></h3><div class="scroll-x">${svg}</div></div>`;
 }
 
-function renderDyn(sh){
+function renderDyn(sh,keep){
   const u=sh.ui;const fr=rowsFor(sh);
   const dyn=$("#dyn");
+  const ow=keep?dyn.querySelector(".tablewrap"):null,ks=keep?{l:ow?ow.scrollLeft:0,t:ow?ow.scrollTop:0,x:scrollX,y:scrollY}:null; // giữ nguyên vị trí cuộn khi chỉ đổi dữ liệu (bấm ▶/◀, tick…)
   // chip bộ lọc
   const chips=[];
   for(const k in u.filters){const c=sh.cols.find(c=>c.idx===+k);chips.push(`<span class="fchip">${esc(c.name)}: ${esc(u.filters[k]||"(Trống)")} <b data-rm="${k}">×</b></span>`)}
@@ -1490,6 +1525,7 @@ function renderDyn(sh){
   dyn.querySelectorAll("[data-rmf]").forEach(b=>b.onclick=()=>{delete u.cf[b.dataset.rmf];u.shown=100;renderDyn(sh)});
   const cl=dyn.querySelector("[data-clear]");if(cl)cl.onclick=()=>{u.filters={};u.cf={};u.special=null;u.range=null;renderDyn(sh)};
   renderTable(sh,fr);
+  if(ks){const nw=dyn.querySelector(".tablewrap");if(nw){nw.scrollLeft=ks.l;nw.scrollTop=ks.t}scrollTo(ks.x,ks.y)}
 }
 
 function renderTable(sh,fr){
@@ -1521,7 +1557,7 @@ function renderTable(sh,fr){
         const edited=state.pending.has(pkey(si,r.n,c.idx));
         const sd=stuckDays(sh,r),stk=!r.done&&sd!=null&&sd>=STUCK()?`<span class="stk" title="Đã ở bước này ${sd} ngày (từ ${fmtD(r.v[sh.chgIdx])})">⏱ ${sd} ngày</span>`:"";
         const sg=sugDone(sh,r)?`<button class="sug" data-sug="${r.n}" title="Odoo báo đã nhận hết hàng và đã xuất hóa đơn. Bấm để đặt Hoàn thành">💡 Hoàn thành?</button>`:"";
-        h+=`<td class="wfnote ${edited?"ed":""}" data-l="Trạng thái (Note)" data-r="${r.n}" data-c="${c.idx}"><span class="chip" style="--c:${colorFor(r.wf)}" ${raw?"":`title="${r.raised?"Tự nâng theo trạng thái phiếu nhập kho của Odoo ("+esc(r.v[sh.rcIdx])+")":"Tự gán theo trạng thái Odoo vì cột Note đang trống"}"`}>${esc(r.wf)}${raw?"":" *"}</span>${stk}<span class="stp"><button data-stp="${r.n}|-1" title="Lùi một bước" ${i>0||(i<0)?"":"disabled"}>◀</button><button class="nx" data-stp="${r.n}|1" title="${nx?"Chuyển sang: "+esc(nx):(i<0?"Trạng thái tự nhập: bấm để về bước đầu":"Đã ở bước cuối")}" ${nx||i<0?"":"disabled"}>▶</button></span>${sg}</td>`;continue}
+        h+=`<td class="wfnote ${edited?"ed":""}" data-l="Trạng thái (Note)" data-r="${r.n}" data-c="${c.idx}"><span class="stp"><button data-stp="${r.n}|-1" title="Lùi một bước" ${i>0||(i<0)?"":"disabled"}>◀</button><button class="nx" data-stp="${r.n}|1" title="${nx?"Chuyển sang: "+esc(nx):(i<0?"Trạng thái tự nhập: bấm để về bước đầu":"Đã ở bước cuối")}" ${nx||i<0?"":"disabled"}>▶</button></span><span class="chip" style="--c:${colorFor(r.wf)}" ${raw?"":`title="${r.raised?"Tự nâng theo trạng thái Odoo ("+esc(r.v[sh.rcIdx])+(sh.stIdx!=null&&r.v[sh.stIdx]?" / "+esc(r.v[sh.stIdx]):"")+")":"Tự gán theo trạng thái Odoo vì cột Note đang trống"}"`}>${esc(r.wf)}${raw?"":" *"}</span>${stk}${sg}</td>`;continue}
       if(v==null)cell="";
       else if(v instanceof Date)cell=fmtD(v);
       else if(typeof v==="number"){cell=fmtN(v)}
@@ -1548,11 +1584,11 @@ function renderTable(sh,fr){
   t.querySelectorAll("[data-pay],[data-sel],[data-selall],[data-sug]").forEach(cb=>cb.onclick=e=>e.stopPropagation());
   t.querySelectorAll("[data-sel]").forEach(cb=>cb.onchange=()=>{cb.checked?selSet.add(+cb.dataset.sel):selSet.delete(+cb.dataset.sel);renderTable(sh,fr)});
   const sa=t.querySelector("[data-selall]");if(sa){const vis=rows.slice(0,u.shown);sa.checked=vis.length>0&&vis.every(r=>selSet.has(r.n));sa.onchange=()=>{vis.forEach(r=>sa.checked?selSet.add(r.n):selSet.delete(r.n));renderTable(sh,fr)}}
-  t.querySelectorAll("[data-sug]").forEach(b=>b.onclick=()=>{const r=sh.rows.find(x=>x.n===+b.dataset.sug);if(r&&setWf(si,r,WF_DONE)){setStatus(sh);renderDyn(sh);updateChrome();toast(r.v[sh.title]+": đã đặt Hoàn thành")}});
+  t.querySelectorAll("[data-sug]").forEach(b=>b.onclick=()=>{const r=sh.rows.find(x=>x.n===+b.dataset.sug);if(r&&setWf(si,r,WF_DONE)){setStatus(sh);renderDyn(sh,true);updateChrome();toast(r.v[sh.title]+": đã đặt Hoàn thành")}});
   const sga=t.querySelector("[data-sugall]");if(sga)sga.onclick=()=>{let k=0;for(const r of sh.rows)if(sugDone(sh,r)&&setWf(si,r,WF_DONE))k++;setStatus(sh);renderDyn(sh);updateChrome();toast(`Đã đặt Hoàn thành cho ${k} PO.`)};
   t.querySelectorAll("[data-bk]").forEach(b=>b.onclick=()=>{const k=b.dataset.bk;if(k==="clear"){u.sel=new Set();renderTable(sh,fr)}else if(k==="step1")bulkApply(si,"step",1);else if(k==="step-1")bulkApply(si,"step",-1);else bulkApply(si,k)});
   const bks=t.querySelector("#bkSet");if(bks)bks.onchange=()=>{if(bks.value)bulkApply(si,"set",bks.value)};
-  t.querySelectorAll("[data-pay]").forEach(cb=>cb.onchange=()=>{const r=sh.rows.find(x=>x.n===+cb.dataset.pay);state.via="dashboard";setCell(si,r,sh.payIdx,cb.checked?"Có":null);setStatus(sh);renderDyn(sh);updateChrome()});
+  t.querySelectorAll("[data-pay]").forEach(cb=>cb.onchange=()=>{const r=sh.rows.find(x=>x.n===+cb.dataset.pay);state.via="dashboard";setCell(si,r,sh.payIdx,cb.checked?"Có":null);setStatus(sh);renderDyn(sh,true);updateChrome()});
   t.querySelectorAll("[data-stp]").forEach(b=>{b.onclick=e=>{e.stopPropagation();const [n,d]=b.dataset.stp.split("|");stepStatus(si,+n,+d)};b.ondblclick=e=>e.stopPropagation()});
   t.querySelectorAll("th[data-s]").forEach(th=>th.onclick=()=>{const i=+th.dataset.s;u.sort=u.sort&&u.sort.i===i?{i,dir:-u.sort.dir}:{i,dir:1};renderTable(sh,fr)});
   const mo=$("#more");
@@ -1781,6 +1817,8 @@ function sugDone(sh,r){ // Odoo báo đã nhận hết VÀ đã xuất hóa đơ
 }
 function setWf(si,r,status){
   const sh=state.sheets[si];state.via="dashboard";
+  const fl=wfFloor(sh,r,status);
+  if(fl!==status){toast(`${r.v[sh.title]}: không thể về “${status}” vì Odoo báo ${r.v[sh.rcIdx]}${sh.stIdx!=null&&r.v[sh.stIdx]?" / "+r.v[sh.stIdx]:""} → tối thiểu phải là “${fl}”.`,true);return false}
   const ch=setCell(si,r,sh.noteIdx,status);
   if(ch&&sh.chgIdx!=null)setCell(si,r,sh.chgIdx,new Date(TODAY)); // ghi ngày đổi trạng thái
   return ch;
@@ -1798,7 +1836,7 @@ function stepStatus(si,n,dir){
   const sh=state.sheets[si],r=sh.rows.find(x=>x.n===n);if(!r)return;
   const nv=nextWf(sh,r,dir),cur=r.wf;
   if(!nv){toast(dir>0?"PO này đã ở bước cuối của quy trình.":"PO này đang ở bước đầu của quy trình.");return}
-  if(!setWf(si,r,nv))return;setStatus(sh);renderDyn(sh);updateChrome();
+  if(!setWf(si,r,nv))return;setStatus(sh);renderDyn(sh,true);updateChrome();
   toast(`${r.v[sh.title]}: ${cur} → ${nv}`);
 }
 /* hàng loạt */
@@ -1810,7 +1848,7 @@ function bulkApply(si,kind,arg){
     else if(kind==="step"){const nv=nextWf(sh,r,arg);if(nv&&setWf(si,r,nv))ok++;else skip++}
     else if(kind==="set"){if(setWf(si,r,arg))ok++;else skip++}
   }
-  u.sel=new Set();setStatus(sh);renderDyn(sh);updateChrome();
+  u.sel=new Set();setStatus(sh);renderDyn(sh,true);updateChrome();
   toast(`Đã cập nhật ${ok} PO${skip?`, bỏ qua ${skip} (đã ở trạng thái đó / hết bước)`:""}.`);
 }
 function bulkBar(sh){
