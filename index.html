@@ -470,7 +470,14 @@ function wfDerive(sh,r){
   return "Chờ báo giá";
 }
 const dueOf=(sh,r)=>{const c=sh.cmtIdx!=null?r.v[sh.cmtIdx]:null;return c instanceof Date?c:(sh.dueIdx!=null?r.v[sh.dueIdx]:null)};
-function wfOf(sh,r){const n=r.v[sh.noteIdx];return n!=null&&String(n).trim()!==""?wfCanon(n):wfDerive(sh,r)}
+/* Phiếu nhập kho “Đã nhận hết” -> tối thiểu “Cần lập hóa đơn”; “Đã nhận một phần” -> tối thiểu “Chờ nhận hàng” (chỉ nâng các bước đứng trước, không hạ bước đã đi xa hơn) */
+const WF_FLOOR=[["đã nhận hết","Cần lập hóa đơn"],["đã nhận một phần","Chờ nhận hàng"]];
+function wfFloor(sh,r,wf){
+  const rc=sh.rcIdx!=null?wfn(r.v[sh.rcIdx]):"";const f=WF_FLOOR.find(x=>x[0]===rc);if(!f)return wf;
+  const seq=seqOf(sh,r),i=seq.indexOf(wf);
+  return i>=0&&i<seq.indexOf(f[1])?f[1]:wf;
+}
+function wfOf(sh,r){const n=r.v[sh.noteIdx];const base=n!=null&&String(n).trim()!==""?wfCanon(n):wfDerive(sh,r);const w=wfFloor(sh,r,base);r.raised=w!==base;return w}
 const seqOf=(sh,r)=>sh.payIdx!=null&&isPay(r.v[sh.payIdx])?WF_PRE:WF_DEBT;
 const cellVal=(sh,r,i)=>sh.wf&&i===sh.noteIdx?r.wf:r.v[i];
 function analyze(raw){
@@ -1509,12 +1516,12 @@ function renderTable(sh,fr){
     for(const c of cols){const v=r.v[c.idx];let cell="";
       if(c.type==="flag"){h+=`<td class="flag" data-l="TT trước"><input type="checkbox" data-pay="${r.n}" ${isPay(v)?"checked":""} aria-label="Thanh toán trước" title="Tick = thanh toán trước"></td>`;continue}
       if(sh.wf&&c.idx===sh.noteIdx){
-        const raw=v!=null&&String(v).trim()!=="";const seq=seqOf(sh,r),i=seq.indexOf(r.wf);
+        const raw=v!=null&&String(v).trim()!==""&&!r.raised;const seq=seqOf(sh,r),i=seq.indexOf(r.wf);
         const nx=i>=0?seq[i+1]:null;
         const edited=state.pending.has(pkey(si,r.n,c.idx));
         const sd=stuckDays(sh,r),stk=!r.done&&sd!=null&&sd>=STUCK()?`<span class="stk" title="Đã ở bước này ${sd} ngày (từ ${fmtD(r.v[sh.chgIdx])})">⏱ ${sd} ngày</span>`:"";
         const sg=sugDone(sh,r)?`<button class="sug" data-sug="${r.n}" title="Odoo báo đã nhận hết hàng và đã xuất hóa đơn. Bấm để đặt Hoàn thành">💡 Hoàn thành?</button>`:"";
-        h+=`<td class="wfnote ${edited?"ed":""}" data-l="Trạng thái (Note)" data-r="${r.n}" data-c="${c.idx}"><span class="chip" style="--c:${colorFor(r.wf)}" ${raw?"":'title="Tự gán theo trạng thái Odoo vì cột Note đang trống"'}>${esc(r.wf)}${raw?"":" *"}</span>${stk}<span class="stp"><button data-stp="${r.n}|-1" title="Lùi một bước" ${i>0||(i<0)?"":"disabled"}>◀</button><button class="nx" data-stp="${r.n}|1" title="${nx?"Chuyển sang: "+esc(nx):(i<0?"Trạng thái tự nhập: bấm để về bước đầu":"Đã ở bước cuối")}" ${nx||i<0?"":"disabled"}>▶</button></span>${sg}</td>`;continue}
+        h+=`<td class="wfnote ${edited?"ed":""}" data-l="Trạng thái (Note)" data-r="${r.n}" data-c="${c.idx}"><span class="chip" style="--c:${colorFor(r.wf)}" ${raw?"":`title="${r.raised?"Tự nâng theo trạng thái phiếu nhập kho của Odoo ("+esc(r.v[sh.rcIdx])+")":"Tự gán theo trạng thái Odoo vì cột Note đang trống"}"`}>${esc(r.wf)}${raw?"":" *"}</span>${stk}<span class="stp"><button data-stp="${r.n}|-1" title="Lùi một bước" ${i>0||(i<0)?"":"disabled"}>◀</button><button class="nx" data-stp="${r.n}|1" title="${nx?"Chuyển sang: "+esc(nx):(i<0?"Trạng thái tự nhập: bấm để về bước đầu":"Đã ở bước cuối")}" ${nx||i<0?"":"disabled"}>▶</button></span>${sg}</td>`;continue}
       if(v==null)cell="";
       else if(v instanceof Date)cell=fmtD(v);
       else if(typeof v==="number"){cell=fmtN(v)}
