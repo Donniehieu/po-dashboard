@@ -208,6 +208,16 @@ td.wfnote{white-space:nowrap}
   table.cardtbl td.flag::before{display:inline;margin-right:6px}
   table.cardtbl td.flag{display:flex;align-items:center}
 }
+.tblbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:0 0 8px}
+.tblbar .btn[disabled]{opacity:.5;cursor:not-allowed}
+th .rz{position:absolute;top:0;right:-3px;width:9px;height:100%;cursor:col-resize;touch-action:none;z-index:3}
+th .rz::after{content:"";position:absolute;left:4px;top:25%;height:50%;width:2px;border-radius:2px;background:var(--line)}
+th .rz:hover::after,th .rz.on::after{background:var(--brand)}
+table.fx{table-layout:fixed;width:auto}
+table.fx td,table.fx th{overflow:hidden;text-overflow:ellipsis}
+table.fx td.txt{max-width:none}
+body.rzing,body.rzing *{cursor:col-resize!important;user-select:none!important}
+@media (max-width:700px){table.cardtbl{table-layout:auto!important;width:100%!important}table.cardtbl colgroup,th .rz{display:none}}
 </style>
 </head>
 <body>
@@ -637,6 +647,7 @@ async function loadBuffer(buf,name,opts={}){
     $("#btnImport").hidden=false;
     $("#btnSync").hidden=!ghReady();
     renderTabs();render();updateChrome();notifyDaily();
+    if(nccAddMissing()){renderTabs();render();updateChrome()}
     if(state.src==="github"&&ghReady())loadRemoteHistory();
     odooStart();loadOdooIds();
   }catch(e){
@@ -708,6 +719,7 @@ function setCell(si,r,ci,val,keyOv){
   r.v[ci]=val;r._t=null;
   if(sameVal(orig,val)&&!r.isNew)state.pending.delete(k);
   else state.pending.set(k,{si,n:r.n,col:ci,val,old:orig,path:sh.path,key,isNew:!!r.isNew,via:state.via,txt:!!(sh.cols.find(c=>c.idx===ci)||{}).txtDate});
+  if(!nccBusy&&norm(sh.name)==="ds ncc")setTimeout(()=>nccOnEdit(si,r,ci),0); // DS NCC đổi sang “Đơn hàng” -> tick PO của NCC đó
   return true;
 }
 function addRow(si,silent){
@@ -735,6 +747,17 @@ function deleteRow(si,n){
   const sh=state.sheets[si];const r=sh.rows.find(x=>x.n===n);if(!r)return;
   const key=sh.title!=null?String(r.v[sh.title]??""):"";
   if(!confirm(`Xóa dòng ${n}${key?` (${key})`:""} khỏi sheet “${sh.name}”?\n\nDòng sẽ bị xóa nội dung trong file Excel, có thể khôi phục trong tab Lịch sử. Nếu đơn vẫn còn trong Odoo thì lần đồng bộ sau sẽ thêm lại.`))return;
+  delRowCore(si,n);setStatus(sh);render();updateChrome();
+}
+function deleteRows(si,nums){
+  const sh=state.sheets[si];if(!nums.length)return toast("Hãy tick chọn các dòng cần xóa ở cột đầu bảng",true);
+  if(!confirm(`Xóa ${nums.length} dòng đã chọn khỏi sheet “${sh.name}”?\n\nNội dung các dòng sẽ bị xóa trong file Excel, có thể khôi phục trong tab Lịch sử. Đơn nào còn trên Odoo thì lần đồng bộ sau sẽ thêm lại.`))return;
+  for(const n of nums)delRowCore(si,n);
+  sh.ui.sel=new Set();setStatus(sh);render();updateChrome();toast(`Đã xóa ${nums.length} dòng. Chưa ghi — bấm “Lưu vào Excel” (hoặc chờ tự lưu).`);
+}
+function delRowCore(si,n){
+  const sh=state.sheets[si];const r=sh.rows.find(x=>x.n===n);if(!r)return;
+  const key=sh.title!=null?String(r.v[sh.title]??""):"";
   const snap={};
   for(const c of sh.cols)if(c.type!=="index"&&r.v[c.idx]!=null)snap[c.name]=ser(r.v[c.idx]);
   const wasNew=!!r.isNew;
@@ -743,7 +766,6 @@ function deleteRow(si,n){
   if(wasNew){for(const k of [...state.pending.keys()])if(k.startsWith(si+"|"+n+"|"))state.pending.delete(k)}
   else{(sh.removed||(sh.removed=[])).push(r);state.pendingDel.set(si+"|"+n,{si,n,key,sheet:sh.name,snap})}
   sh.rows=sh.rows.filter(x=>x!==r);
-  setStatus(sh);render();updateChrome();
 }
 
 /* ---- Trạng thái lưu & tự động lưu ---- */
@@ -994,22 +1016,34 @@ function parseAnyDate(v){
   if(m)return new Date(+m[1],+m[2]-1,+m[3],+(m[4]||0),+(m[5]||0),+(m[6]||0));
   return v;
 }
-$("#btnImport").onclick=()=>$("#fileImp").click();
-$("#fileImp").onchange=async e=>{const f=e.target.files[0];e.target.value="";if(f)try{await importOdoo(f)}catch(err){console.error(err);toast("Không nhập được: "+err.message,true)}};
-async function importOdoo(file){
+$("#btnImport").onclick=()=>{state.impTarget=null;$("#fileImp").click()};
+$("#fileImp").onchange=async e=>{const f=e.target.files[0];e.target.value="";const tg=state.impTarget;state.impTarget=null;if(f)try{await importOdoo(f,tg)}catch(err){console.error(err);toast("Không nhập được: "+err.message,true)}};
+async function importOdoo(file,forceSi){
   if(!state.sheets.length){toast("Hãy mở file Excel nguồn trước",true);return}
-  const imp=(await parseXlsx(await file.arrayBuffer())).map(analyze).find(s=>!s.empty);
+  const forced=forceSi!=null&&state.sheets[forceSi];
+  const all=(await parseXlsx(await file.arrayBuffer())).map(analyze).filter(s=>!s.empty);
+  const imp=forced?(all.find(s=>norm(s.name)===norm(forced.name))||all[0]):all[0];
   if(!imp){toast("File không có dữ liệu",true);return}
   const iNames=new Map(imp.cols.filter(c=>c.type!=="index").map(c=>[norm(c.name),c]));
   let best=null,bs=0;
-  state.sheets.forEach((sh,i)=>{if(sh.empty)return;const k=sh.cols.filter(c=>iNames.has(norm(c.name))).length;if(k>bs){bs=k;best={sh,i}}});
-  if(!best||bs<3){toast("Không có sheet nào có các cột giống file Odoo (cần trùng ít nhất 3 tên cột).",true);return}
+  if(forced){best={sh:forced,i:forceSi};bs=forced.cols.filter(c=>iNames.has(norm(c.name))).length;if(!bs){toast("File không có cột nào trùng tên với cột của bảng “"+forced.name+"”.",true);return}}
+  else{
+    state.sheets.forEach((sh,i)=>{if(sh.empty)return;const k=sh.cols.filter(c=>iNames.has(norm(c.name))).length;if(k>bs){bs=k;best={sh,i}}});
+    if(!best||bs<3){toast("Không có sheet nào có các cột giống file Odoo (cần trùng ít nhất 3 tên cột).",true);return}
+  }
   const {sh,i:si}=best;
   const keyCol=sh.cols.find(c=>c.idx===sh.title);
-  if(!keyCol||!iNames.has(norm(keyCol.name))){toast("File Odoo thiếu cột khóa “"+(keyCol?keyCol.name:"?")+"”",true);return}
-  // cột Note/Ghi chú do người dùng nhập nên không bị ghi đè
-  const map=sh.cols.filter(c=>c.type!=="index"&&iNames.has(norm(c.name))&&!/^(note|ghi chú)$/i.test(c.name)).map(c=>({t:c,s:iNames.get(norm(c.name))}));
+  if(!forced&&(!keyCol||!iNames.has(norm(keyCol.name)))){toast("File Odoo thiếu cột khóa “"+(keyCol?keyCol.name:"?")+"”",true);return}
+  // sheet PO: cột Note/Ghi chú do người dùng nhập nên không bị ghi đè (các bảng khác nhập đủ mọi cột)
+  const map=sh.cols.filter(c=>c.type!=="index"&&iNames.has(norm(c.name))&&!(sh.wf&&/^(note|ghi chú)$/i.test(c.name))).map(c=>({t:c,s:iNames.get(norm(c.name))}));
   const kmap=map.find(m=>m.t.idx===sh.title);
+  if(!kmap){ // bảng không có cột mã/tên để đối chiếu -> thêm tất cả dòng làm dòng mới
+    if(!confirm(`File có ${imp.rows.length} dòng nhưng không có cột khóa để đối chiếu. Thêm toàn bộ ${imp.rows.length} dòng vào cuối bảng “${sh.name}”?`))return;
+    state.via="nhập Excel";let add0=0;
+    try{for(const ir of imp.rows){if(!map.some(m=>ir.v[m.s.idx]!=null))continue;const r=addRow(si,true);add0++;
+      for(const m of map){let v=ir.v[m.s.idx];if(m.t.type==="date")v=parseAnyDate(v);if(m.t.type==="num"&&typeof v==="string"){const x=Number(v.replace(/\./g,"").replace(",","."));if(!isNaN(x))v=x}if(v!=null)setCell(si,r,m.t.idx,v)}}}finally{state.via="dashboard"}
+    sh.ui.shown=Math.max(sh.ui.shown,sh.rows.length);setStatus(sh);state.active=si;renderTabs();render();updateChrome();
+    toast(`Đã thêm ${add0} dòng vào “${sh.name}”. Chưa ghi — bấm “Lưu vào Excel”.`);return}
   const byKey=new Map(sh.rows.map(r=>[String(r.v[sh.title]??"").trim(),r]));
   let upd=0,add=0;state.via="nhập file Odoo";
   try{for(const ir of imp.rows){
@@ -1029,6 +1063,110 @@ async function importOdoo(file){
   sh.ui.shown=Math.max(sh.ui.shown,100);setStatus(sh);
   state.active=si;renderTabs();render();updateChrome();
   toast(`Nhập từ “${imp.name}” vào sheet “${sh.name}”: ${upd} dòng cập nhật, ${add} dòng mới. Chưa ghi — bấm “Lưu vào Excel”.`);
+}
+
+
+/* ---- Độ rộng cột kéo thả được (mọi bảng; nhớ theo file + tab) ---- */
+const rzPrefix=()=>"qlcv:cw:"+state.fileName+"|"+state.active+"|";
+function rzClear(){try{for(const k of Object.keys(localStorage))if(k.startsWith(rzPrefix()))localStorage.removeItem(k)}catch(e){}}
+function enableResize(tb,id){
+  if(!tb.tHead||tb.dataset.rz||tb.classList.contains("cardtbl")&&matchMedia("(max-width:700px)").matches)return;
+  const ths=[...tb.tHead.rows[0].cells];if(ths.length<2)return;
+  tb.dataset.rz="1";
+  const keys=ths.map((th,i)=>th.dataset.s!=null?"s"+th.dataset.s:i+":"+th.textContent.replace(/[▾▲▼]/g,"").trim());
+  const sk=rzPrefix()+id,cg=document.createElement("colgroup"),cols=ths.map(()=>cg.appendChild(document.createElement("col")));
+  tb.insertBefore(cg,tb.firstChild);
+  const saved=store.get(sk);
+  const fit=w=>{tb.style.width=w.reduce((a,b)=>a+b,0)+"px"};
+  if(saved&&keys.every(k=>saved[k]>0)){tb.classList.add("fx");cols.forEach((c,i)=>c.style.width=saved[keys[i]]+"px");fit(keys.map(k=>saved[k]))}
+  ths.forEach((th,i)=>{
+    const h=document.createElement("span");h.className="rz";h.title="Kéo để chỉnh độ rộng cột (bấm đúp: tự vừa nội dung)";th.appendChild(h);
+    h.onclick=e=>e.stopPropagation();
+    h.ondblclick=e=>{e.stopPropagation();const w=ths.map(t=>t.getBoundingClientRect().width);tb.classList.remove("fx");tb.style.width="";cols.forEach(c=>c.style.width="");const st=store.get(sk)||{};delete st[keys[i]];
+      // vừa nội dung: đo lại độ rộng tự nhiên rồi áp dụng
+      const nat=ths.map(t=>t.getBoundingClientRect().width);const all={};keys.forEach((k,j)=>all[k]=Math.round(j===i?nat[i]:(saved&&saved[k])||w[j]));
+      tb.classList.add("fx");cols.forEach((c,j)=>c.style.width=all[keys[j]]+"px");fit(keys.map(k=>all[k]));store.set(sk,all)};
+    h.onpointerdown=e=>{
+      e.preventDefault();e.stopPropagation();h.setPointerCapture(e.pointerId);
+      const w=ths.map(t=>Math.round(t.getBoundingClientRect().width));
+      tb.classList.add("fx");cols.forEach((c,j)=>c.style.width=w[j]+"px");fit(w);
+      const x0=e.clientX,w0=w[i];h.classList.add("on");document.body.classList.add("rzing");
+      h.onpointermove=m=>{w[i]=Math.max(40,Math.round(w0+m.clientX-x0));cols[i].style.width=w[i]+"px";fit(w)};
+      h.onpointerup=h.onpointercancel=()=>{h.onpointermove=h.onpointerup=h.onpointercancel=null;h.classList.remove("on");document.body.classList.remove("rzing");
+        const o={};keys.forEach((k,j)=>o[k]=w[j]);store.set(sk,o)};
+    };
+  });
+}
+let rzT=null;
+function rzScan(){document.querySelectorAll("#main table").forEach((tb,i)=>enableResize(tb,tb.closest("#tbl")?"d":String(i)))}
+new MutationObserver(()=>{clearTimeout(rzT);rzT=setTimeout(rzScan,40)}).observe($("#main"),{childList:true,subtree:true});
+
+/* ---- Đồng bộ NCC: PO -> DS NCC (thêm NCC mới) và DS NCC "Đơn hàng" -> tick "Thanh toán trước" ---- */
+const NCC=(()=>{
+  const fold=s=>String(s==null?"":s).toLowerCase().replace(/đ/g,"d").normalize("NFD").replace(/[̀-ͯ]/g,"");
+  const ABBR={sx:"san xuat",tm:"thuong mai",dv:"dich vu",xnk:"xuat nhap khau",kt:"ky thuat",cn:"cong nghe",cp:"co phan",tnhh:"",mtv:"",co:"",ltd:"",jsc:"",cty:"",dttm:"dau tu thuong mai",tmdv:"thuong mai dich vu",ct:""};
+  const PHRASES=["ho kinh doanh","cong ty","trach nhiem huu han","mot thanh vien","co phan","chi nhanh","van phong dai dien","xuong","cn"];
+  const STOP=new Set(["va","cua","tai",""]);
+  const GENERIC=new Set("thiet bi ky thuat thuong mai dich vu san xuat cong nghe nghiep dau tu viet nam ha noi sai gon hcm hai phong duong giai phap he thong may moc co khi dien nuoc xay dung van tai tin hoc tong hop quoc te phat trien xuat nhap khau in truyen thong nhua thep".split(" "));
+  function core(s){let t=fold(s).replace(/\([^)]*\)/g," ").replace(/[^\w\s&]/g," ").replace(/&/g," va ");t=" "+t.split(/\s+/).filter(Boolean).join(" ")+" ";
+    for(const p of PHRASES)t=t.split(" "+p+" ").join(" ");const out=new Set();
+    for(const w of t.split(/\s+/))for(const x of (ABBR[w]!==undefined?ABBR[w]:w).split(" "))if(!STOP.has(x))out.add(x);return out}
+  const subset=(a,b)=>{for(const x of a)if(!b.has(x))return false;return true};
+  const inter=(a,b)=>{let n=0;for(const x of a)if(b.has(x))n++;return n};
+  const minus=(a,g)=>new Set([...a].filter(x=>!g.has(x)));
+  const same=(a,b)=>a.size===b.size&&subset(a,b);
+  function cands(name){const raw=String(name),s=raw.replace(/^\s*x[a-z0-9]{0,10}\s*[-–]\s*/i,"");
+    const segs=s.split(/\s+[-–]\s*|\s*[-–]\s+/).filter(x=>x.trim());const out=[];
+    for(let k=1;k<=Math.max(1,segs.length);k++)out.push(core((segs.length?segs:[s]).slice(0,k).join(" ")));
+    (raw.match(/\(([^)]*)\)/g)||[]).forEach(m=>out.push(core(m.slice(1,-1))));out.push(core(s));return out.filter(c=>c.size)}
+  // items: [{name,...}] -> {hits:[item], how}
+  function find(name,items,cache){const p=core(name);if(!p.size)return{hits:[],how:null};
+    const idx=items.map(it=>({it,cs:(cache&&cache.get(it))||cands(it.name)}));
+    let hits=idx.filter(x=>x.cs.some(c=>same(c,p))).map(x=>x.it);if(hits.length)return{hits,how:"exact"};
+    hits=idx.filter(x=>x.cs.some(c=>{const [a,b]=p.size<=c.size?[p,c]:[c,p];const da=minus(a,GENERIC);
+      return da.size&&subset(da,minus(b,GENERIC))&&inter(a,b)>=2&&inter(a,b)/a.size>=0.8})).map(x=>x.it);
+    return{hits,how:hits.length?"fuzzy":null}}
+  return{find,fold,cands};
+})();
+let nccBusy=false;
+function nccSheets(){
+  const dsSi=state.sheets.findIndex(s=>!s.empty&&norm(s.name)==="ds ncc");
+  const poSi=state.sheets.findIndex(s=>s.wf&&s.payIdx!=null);
+  if(dsSi<0||poSi<0)return null;
+  const ds=state.sheets[dsSi],po=state.sheets[poSi];
+  const nc=ds.cols.find(c=>norm(c.name)==="tên ncc"),tc=ds.cols.find(c=>norm(c.name)==="note");
+  const sc=po.cols.find(c=>norm(c.name)==="nhà cung cấp");
+  if(!nc||!tc||!sc)return null;
+  return{dsSi,poSi,ds,po,nc,tc,sc};
+}
+const nccIsOrder=v=>NCC.fold(v).trim()==="don hang";
+function nccAddMissing(){ // NCC có ở tab PO mà chưa có ở DS NCC -> thêm dòng mới (Note để trống)
+  const S=nccSheets();if(!S||state.stale)return 0;
+  const items=S.ds.rows.filter(r=>r.v[S.nc.idx]!=null&&String(r.v[S.nc.idx]).trim()).map(r=>({name:String(r.v[S.nc.idx]).trim()}));
+  const seen=new Set(),add=[];
+  for(const r of S.po.rows){const n=r.v[S.sc.idx];if(n==null||!String(n).trim())continue;const nm=String(n).trim(),k=NCC.fold(nm);if(seen.has(k))continue;seen.add(k);
+    const f=NCC.find(nm,items);if(!f.hits.length){add.push(nm);items.push({name:nm})}}
+  if(!add.length)return 0;
+  nccBusy=true;state.via="đồng bộ NCC";
+  try{for(const nm of add){const r=addRow(S.dsSi,true);setCell(S.dsSi,r,S.nc.idx,nm)}}finally{nccBusy=false;state.via="dashboard"}
+  S.ds.ui.shown=Math.max(S.ds.ui.shown,S.ds.rows.length);setStatus(S.ds);
+  toast(`Đã thêm ${add.length} NCC mới vào tab DS NCC (cột Note để trống - hãy chọn Đơn hàng/Công nợ).`);
+  return add.length;
+}
+function nccOnEdit(si,r,ci){ // sửa DS NCC: Note = Đơn hàng -> tick Thanh toán trước cho mọi PO của NCC đó
+  const S=nccSheets();if(!S||si!==S.dsSi||(ci!==S.tc.idx&&ci!==S.nc.idx))return;
+  const name=r.v[S.nc.idx];if(name==null||!nccIsOrder(r.v[S.tc.idx]))return;
+  const items=S.ds.rows.filter(x=>x.v[S.nc.idx]!=null&&String(x.v[S.nc.idx]).trim()).map(x=>({name:String(x.v[S.nc.idx]).trim(),row:x}));
+  const cache=new Map(items.map(it=>[it,NCC.cands(it.name)]));
+  const me=items.find(it=>it.row===r);if(!me)return;
+  let n=0;nccBusy=true;state.via="đồng bộ NCC";
+  try{for(const po of S.po.rows){
+      const sup=po.v[S.sc.idx];if(sup==null||po.done)continue;
+      if(po.v[S.po.payIdx]!=null&&String(po.v[S.po.payIdx]).trim()!=="")continue;
+      const f=NCC.find(String(sup),items,cache);
+      if(!f.hits.includes(me)||new Set(f.hits.map(h=>NCC.fold(h.row.v[S.tc.idx]).trim())).size>1)continue;
+      if(setCell(S.poSi,po,S.po.payIdx,"Có"))n++}}finally{nccBusy=false;state.via="dashboard"}
+  if(n){setStatus(S.po);render();updateChrome();toast(`${String(name).trim()}: đã tích “Thanh toán trước” cho ${n} PO.`)}
 }
 
 /* ---- Nhắc việc & ưu tiên ---- */
@@ -1232,9 +1370,6 @@ function renderSheet(sh){
       <select id="selView" title="Chế độ xem đã lưu"><option value="">Chế độ xem…</option>${viewsOf(sh).map((v,i)=>`<option value="${i}">${esc(v.name)}</option>`).join("")}</select>
       <button class="btn sm" id="btnSaveView" title="Lưu bộ lọc/tìm kiếm hiện tại thành chế độ xem">💾 Lưu xem</button>
       <button class="btn sm" id="btnDelView" title="Xóa chế độ xem đang chọn">🗑</button>
-      <button class="btn" id="btnAdd">＋ Thêm dòng</button>
-      <button class="btn" id="btnXlsx">⬇ Xuất Excel (đang lọc)</button>
-      <button class="btn" id="btnCsv">⬇ Xuất CSV (đang lọc)</button>
     </div>
     <div id="dyn"></div>
     <div class="src">Nguồn: sheet “${esc(sh.name)}”, tiêu đề ở dòng ${sh.hdrRow}, ${sh.rows.length} dòng dữ liệu.</div>`;
@@ -1242,12 +1377,9 @@ function renderSheet(sh){
   const sp=$("#selProg");if(sp)sp.onchange=e=>{sh.progIdx=e.target.value===""?null:+e.target.value;u.special=null;setStatus(sh);renderDyn(sh);updateChrome()};
   const sd=$("#selDue");if(sd)sd.onchange=e=>{sh.dueIdx=e.target.value===""?null:+e.target.value;u.special=null;u.range=null;setStatus(sh);renderDyn(sh);updateChrome()};
   const seg=$("#seg");if(seg)seg.querySelectorAll("button").forEach(b=>b.onclick=()=>{u.metric=b.dataset.m;seg.querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===b));renderDyn(sh)});
-  $("#btnCsv").onclick=()=>exportCsv(sh);
-  $("#btnXlsx").onclick=()=>exportXlsx(sh);
   $("#selView").onchange=e=>{const v=viewsOf(sh)[+e.target.value];if(v){applyView(sh,v);renderSheet(sh)}};
   $("#btnSaveView").onclick=()=>{const name=(prompt("Tên chế độ xem (vd. Chờ báo giá NCC X):")||"").trim();if(!name)return;const l=viewsOf(sh).filter(v=>v.name!==name);l.push({name,...snapView(u)});store.set(viewsKey(sh),l);renderSheet(sh);toast("Đã lưu chế độ xem “"+name+"”")};
   $("#btnDelView").onclick=()=>{const i=$("#selView").value;if(i==="")return toast("Hãy chọn một chế độ xem để xóa",true);const l=viewsOf(sh);const [d]=l.splice(+i,1);store.set(viewsKey(sh),l);renderSheet(sh);toast("Đã xóa chế độ xem “"+d.name+"”")};
-  $("#btnAdd").onclick=()=>addRow(state.sheets.indexOf(sh));
   renderDyn(sh);
 }
 
@@ -1362,13 +1494,15 @@ function renderTable(sh,fr){
   const selSet=u.sel||(u.sel=new Set());
   const sugN=sh.wf?sh.rows.filter(r=>sugDone(sh,r)).length:0;
   const sugBar=sugN?`<div class="bulk" style="border-color:var(--ok);background:color-mix(in srgb,var(--ok) 10%,var(--card))">💡 <b>${sugN} PO</b> Odoo báo đã nhận hết hàng và đã xuất hóa đơn, chưa đặt Hoàn thành.<span class="grow"></span><button class="btn sm" data-sugall>Đặt Hoàn thành tất cả</button></div>`:"";
-  let h=hint+sugBar+bulkBar(sh)+`<h2 class="sec">Chi tiết (${fmtN(rows.length)} dòng) <small class="sub" style="font-weight:500">· ${matchMedia("(pointer:coarse)").matches?"chạm":"bấm đúp"} vào ô để sửa · bấm ▾ ở tiêu đề để lọc</small></h2><div class="tablewrap ${sh.wf?"cards":""}"><table class="${sh.wf?"cardtbl":""}"><thead><tr>${sh.checklist?"<th></th>":""}${sh.wf?'<th class="flag"><input type="checkbox" data-selall title="Chọn tất cả dòng đang hiện"></th>':""}<th title="Số dòng trong file Excel">Dòng</th>`+
+  let h=hint+sugBar+bulkBar(sh)+`<h2 class="sec">Chi tiết (${fmtN(rows.length)} dòng) <small class="sub" style="font-weight:500">· ${matchMedia("(pointer:coarse)").matches?"chạm":"bấm đúp"} vào ô để sửa · bấm ▾ ở tiêu đề để lọc · kéo mép phải tiêu đề để chỉnh độ rộng cột</small></h2>
+    <div class="tblbar"><button class="btn" data-t="add">＋ Thêm dòng</button><button class="btn" data-t="deln" ${selSet.size?"":"disabled"}>🗑 Xóa dòng đã chọn${selSet.size?" ("+selSet.size+")":""}</button><button class="btn" data-t="imp" title="Nhập dữ liệu từ file Excel vào bảng này (khớp theo tên cột; có cột mã/tên thì cập nhật dòng trùng, dòng chưa có thì thêm mới)">⬆ Nhập Excel</button><button class="btn" data-t="xlsx">⬇ Xuất Excel (đang lọc)</button><button class="btn" data-t="csv">⬇ Xuất CSV</button><span class="grow"></span><button class="btn sm" data-t="rzreset" title="Trả độ rộng các cột về mặc định">↔ Đặt lại độ rộng cột</button></div>
+    <div class="tablewrap ${sh.wf?"cards":""}"><table class="${sh.wf?"cardtbl":""}"><thead><tr>${sh.checklist?"<th></th>":""}<th class="flag"><input type="checkbox" data-selall title="Chọn tất cả dòng đang hiện"></th><th title="Số dòng trong file Excel">Dòng</th>`+
     cols.map(c=>{const on=u.cf[c.idx]?" on":"";const lab=c.type==="flag"?"TT trước":c.name;return `<th data-s="${c.idx}" class="${c.type==="flag"?"flag":""}" title="${c.type==="flag"?"Tick = PO thanh toán trước (luồng có Chờ làm TT / Đã gửi UNC)":""}">${esc(lab)}${u.sort&&u.sort.i===c.idx?(u.sort.dir>0?" ▲":" ▼"):""}<button class="fb${on}" data-f="${c.idx}" title="Lọc cột này">▾</button></th>`}).join("")+`<th></th></tr></thead><tbody>`;
   for(const r of rows.slice(0,u.shown)){
     const dn=sh.checklist?ckDone(sh,r):(sh.progIdx!=null&&r.done);
     h+=`<tr data-row="${r.n}" class="${r.st==="overdue"?"od":r.st==="soon"?"sn":""} ${dn?"dn":""}">`;
     if(sh.checklist)h+=`<td><input type="checkbox" data-ck="${r.n}" ${dn?"checked":""} aria-label="Hoàn thành"></td>`;
-    if(sh.wf)h+=`<td class="flag sel"><input type="checkbox" data-sel="${r.n}" ${selSet.has(r.n)?"checked":""} aria-label="Chọn dòng"></td>`;
+    h+=`<td class="flag sel"><input type="checkbox" data-sel="${r.n}" ${selSet.has(r.n)?"checked":""} aria-label="Chọn dòng"></td>`;
     h+=`<td class="rn">${r.n}</td>`;
     for(const c of cols){const v=r.v[c.idx];let cell="";
       if(c.type==="flag"){h+=`<td class="flag" data-l="TT trước"><input type="checkbox" data-pay="${r.n}" ${isPay(v)?"checked":""} aria-label="Thanh toán trước" title="Tick = thanh toán trước"></td>`;continue}
@@ -1393,6 +1527,13 @@ function renderTable(sh,fr){
   h+=`</tbody></table></div>`;
   if(rows.length>u.shown)h+=`<div class="more"><button class="btn" id="more">Hiện thêm (còn ${rows.length-u.shown} dòng)</button></div>`;
   const t=$("#tbl");t.innerHTML=h;
+  t.querySelectorAll("[data-t]").forEach(b=>b.onclick=()=>{const k=b.dataset.t;
+    if(k==="add")addRow(si);
+    else if(k==="deln")deleteRows(si,[...selSet]);
+    else if(k==="imp"){state.impTarget=si;$("#fileImp").click()}
+    else if(k==="xlsx")exportXlsx(sh);
+    else if(k==="csv")exportCsv(sh);
+    else if(k==="rzreset"){rzClear();renderDyn(sh);toast("Đã đặt lại độ rộng cột")}});
   t.querySelectorAll("[data-f]").forEach(b=>b.onclick=e=>{e.stopPropagation();openFilter(sh,+b.dataset.f,b,()=>renderDyn(sh))});
   t.querySelectorAll("[data-pay],[data-sel],[data-selall],[data-sug]").forEach(cb=>cb.onclick=e=>e.stopPropagation());
   t.querySelectorAll("[data-sel]").forEach(cb=>cb.onchange=()=>{cb.checked?selSet.add(+cb.dataset.sel):selSet.delete(+cb.dataset.sel);renderTable(sh,fr)});
