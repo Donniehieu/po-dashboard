@@ -224,6 +224,30 @@ table.fx td,table.fx th{overflow:hidden;text-overflow:ellipsis}
 table.fx td.txt{max-width:none}
 body.rzing,body.rzing *{cursor:col-resize!important;user-select:none!important}
 @media (max-width:700px){table.cardtbl{table-layout:auto!important;width:100%!important}table.cardtbl colgroup,th .rz{display:none}}
+/* ---- Pomodoro ---- */
+#btnPomo{font-variant-numeric:tabular-nums}
+#btnPomo.run-focus{border-color:var(--bad);color:var(--bad)}
+#btnPomo.run-break{border-color:var(--ok);color:var(--ok)}
+.pomo{position:fixed;top:58px;right:16px;z-index:55;width:300px;max-width:calc(100vw - 32px);background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:0 10px 36px rgba(0,0,0,.22);padding:16px}
+.pomo[hidden]{display:none}
+.pomo h3{margin:0 0 2px;font-size:14px;display:flex;justify-content:space-between;align-items:center}
+.pomo .x{border:0;background:none;font-size:18px;color:var(--mute);cursor:pointer}
+.pomo .ph{font-size:13px;color:var(--mute)}
+.pomo .tm{font-size:52px;font-weight:700;text-align:center;letter-spacing:1px;font-variant-numeric:tabular-nums;margin:6px 0 4px}
+.pomo.focus .tm{color:var(--bad)}.pomo.break .tm{color:var(--ok)}
+.pomo .bar{height:6px;border-radius:99px;background:var(--soft);overflow:hidden;margin-bottom:12px}
+.pomo .bar i{display:block;height:100%;width:0;background:var(--bad);transition:width .5s linear}
+.pomo.break .bar i{background:var(--ok)}
+.pomo .row{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+.pomo .say{margin:12px 0 0;padding:10px 12px;border-radius:10px;background:var(--soft);font-size:13px;line-height:1.5;min-height:20px}
+.pomo .set{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:12px;font-size:12px;color:var(--mute)}
+.pomo .set input[type=number]{width:52px;padding:3px 6px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink)}
+.pomo .cnt{font-size:12px;color:var(--mute);text-align:center;margin-top:8px}
+.pomo-pop{position:fixed;inset:0;z-index:70;background:rgba(15,23,42,.55);display:flex;align-items:center;justify-content:center;padding:20px}
+.pomo-pop[hidden]{display:none}
+.pomo-pop .box{background:var(--card);color:var(--ink);border-radius:16px;max-width:380px;width:100%;padding:24px;text-align:center;box-shadow:0 14px 48px rgba(0,0,0,.35)}
+.pomo-pop .big{font-size:42px;margin-bottom:6px}
+.pomo-pop p{margin:8px 0 16px;font-size:15px;line-height:1.55}
 </style>
 </head>
 <body>
@@ -2128,6 +2152,120 @@ applyTheme();$("#btnTheme").onclick=cycleTheme;
 document.addEventListener("keydown",e=>{if(e.key==="/"&&!/^(INPUT|TEXTAREA|SELECT)$/.test((document.activeElement||{}).tagName)&&!e.ctrlKey&&!e.metaKey){const q=$("#q");if(q){e.preventDefault();q.focus()}}});
 if("serviceWorker" in navigator&&location.protocol==="https:")navigator.serviceWorker.register("sw.js").catch(()=>{});
 if(ghReady())bootCache().then(()=>loadFromGitHub(!!state.stale));
+/* ---- Pomodoro: 25 phút tập trung / 5 phút nghỉ, nhắc nhẹ nhàng ---- */
+(function(){
+  const KEY="qlcv:pomo", pad=n=>String(n).padStart(2,"0");
+  const MSG={
+    focusStart:["Bắt đầu nào bạn ơi! 25 phút tập trung thôi, mình ở đây cổ vũ bạn nhé 💪","Vào việc nhẹ nhàng thôi nha. Tắt bớt thông báo khác, mình cùng làm 25 phút nào!","Một phiên mới bắt đầu rồi. Chỉ cần làm xong một việc nhỏ thôi, từng chút một nhé 🍅"],
+    breakStart:["Giỏi lắm, bạn vừa tập trung xong một phiên rồi đó! 🎉 Nghỉ 5 phút nhé: uống một ly nước cho đỡ khát, rồi đứng dậy vươn vai thật thoải mái nha 💧🙆","Nghỉ ngơi thôi bạn ơi ☕ Rót cốc nước uống đi, rồi đứng lên vươn vai, xoay cổ nhẹ nhàng cho đỡ mỏi nhé.","Hết phiên rồi, bạn làm tốt lắm! Uống ngụm nước nào, đứng dậy vươn vai, nhìn ra xa một chút cho mắt nghỉ nữa nha 🌿"],
+    breakMid:["Bạn uống nước chưa nè? 💧 Còn chút xíu nữa thôi, vươn vai thêm lần nữa cho đã nhé.","Đứng dậy đi lại một chút nha, lưng và cổ sẽ cảm ơn bạn lắm đó 🙆","Hít thở thật sâu vài nhịp nào, thả lỏng vai ra… dễ chịu hơn rồi đúng không? 🌿"],
+    breakEnd:["Nghỉ đủ rồi, mình quay lại làm tiếp nhé! Bạn khỏe hơn rồi đó, cố lên 💪","Hết giờ nghỉ rồi bạn ơi. Sẵn sàng cho phiên tiếp theo chưa? Mình cùng làm nào 🍅"],
+    lap:["Đã xong 4 phiên liền rồi, bạn siêu thật đó! 🎉 Nghỉ thêm một chút lâu hơn nếu bạn thấy cần nhé."]
+  };
+  const pick=a=>a[Math.floor(Math.random()*a.length)];
+  const today=()=>new Date().toISOString().slice(0,10);
+  let S={phase:"focus",running:false,endAt:0,left:25*60,focusMin:25,breakMin:5,auto:true,sound:true,done:0,day:today(),midSent:false};
+  try{Object.assign(S,JSON.parse(localStorage.getItem(KEY)||"{}"))}catch(e){}
+  if(S.day!==today()){S.day=today();S.done=0}
+  const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}};
+  const total=()=>(S.phase==="focus"?S.focusMin:S.breakMin)*60;
+  const secsLeft=()=>S.running?Math.max(0,Math.round((S.endAt-Date.now())/1000)):S.left;
+
+  // ---- giao diện ----
+  const btn=document.createElement("button");btn.className="btn sm";btn.id="btnPomo";btn.title="Đồng hồ Pomodoro: tập trung 25 phút, nghỉ 5 phút";
+  const ref=$("#btnNotify");ref.parentNode.insertBefore(btn,ref);
+  const box=document.createElement("div");box.className="pomo focus";box.hidden=true;box.id="pomo";
+  box.innerHTML=`<h3><span>🍅 Pomodoro</span><button class="x" data-a="close" aria-label="Đóng">×</button></h3>
+  <div class="ph" id="pPh"></div><div class="tm" id="pTm">25:00</div><div class="bar"><i id="pBar"></i></div>
+  <div class="row"><button class="btn primary" data-a="play" id="pPlay">▶ Bắt đầu</button><button class="btn" data-a="swap" id="pSwap">☕ Nghỉ ngay</button><button class="btn" data-a="reset" title="Về đầu phiên tập trung">↺</button></div>
+  <div class="say" id="pSay">Bấm ▶ để bắt đầu phiên tập trung nhé!</div>
+  <div class="set"><label>Làm <input type="number" min="1" max="120" id="pF"> phút</label><label>Nghỉ <input type="number" min="1" max="60" id="pB"> phút</label><label><input type="checkbox" id="pAuto"> Tự chuyển pha</label><label><input type="checkbox" id="pSnd"> Âm báo</label></div>
+  <div class="cnt" id="pCnt"></div>`;
+  document.body.appendChild(box);
+  const pop=document.createElement("div");pop.className="pomo-pop";pop.hidden=true;
+  pop.innerHTML=`<div class="box"><div class="big" id="ppI"></div><p id="ppT"></p><button class="btn primary" id="ppOk">Ok, mình biết rồi</button></div>`;
+  document.body.appendChild(pop);
+  const g=id=>document.getElementById(id);
+  g("pF").value=S.focusMin;g("pB").value=S.breakMin;g("pAuto").checked=S.auto;g("pSnd").checked=S.sound;
+
+  function beep(){
+    if(!S.sound)return;
+    try{const c=new (window.AudioContext||window.webkitAudioContext)();[0,.25,.5].forEach((d,i)=>{const o=c.createOscillator(),v=c.createGain();o.frequency.value=[660,784,988][i];o.connect(v);v.connect(c.destination);v.gain.setValueAtTime(.0001,c.currentTime+d);v.gain.exponentialRampToValueAtTime(.18,c.currentTime+d+.03);v.gain.exponentialRampToValueAtTime(.0001,c.currentTime+d+.22);o.start(c.currentTime+d);o.stop(c.currentTime+d+.25)});setTimeout(()=>c.close(),1200)}catch(e){}
+  }
+  function say(title,text,icon,popup){
+    g("pSay").textContent=text;
+    beep();
+    try{if("Notification" in window&&Notification.permission==="granted"&&document.hidden)new Notification(title,{body:text,tag:"pomo"})}catch(e){}
+    if(popup&&!document.hidden){g("ppI").textContent=icon;g("ppT").textContent=text;pop.hidden=false}
+    else if(typeof toast==="function")toast(text);
+  }
+  g("ppOk").onclick=()=>{pop.hidden=true};
+
+  function setPhase(ph,run){
+    S.phase=ph;S.left=total();S.running=!!run;S.endAt=run?Date.now()+S.left*1000:0;S.midSent=false;save();draw();
+  }
+  function finish(){
+    const was=S.phase;
+    if(was==="focus"){
+      S.done++;
+      setPhase("break",S.auto);
+      const lap=S.done%4===0;
+      say("Nghỉ một chút nhé 🌿",lap?pick(MSG.lap)+" "+pick(MSG.breakStart):pick(MSG.breakStart),"☕",true);
+    }else{
+      setPhase("focus",S.auto);
+      say("Quay lại làm việc nào 🍅",pick(MSG.breakEnd),"🍅",true);
+    }
+  }
+  function tick(){
+    if(!S.running){draw();return}
+    const s=secsLeft();
+    if(S.phase==="break"&&!S.midSent&&s<=Math.floor(total()/2)&&s>10){S.midSent=true;save();say("Nhắc nhẹ bạn nè 💧",pick(MSG.breakMid),"💧",false)}
+    if(s<=0){finish();return}
+    draw();
+  }
+  function draw(){
+    const s=secsLeft(),m=pad(Math.floor(s/60))+":"+pad(s%60);
+    g("pTm").textContent=m;
+    g("pBar").style.width=(100-s/total()*100)+"%";
+    box.className="pomo "+S.phase;
+    g("pPh").textContent=(S.phase==="focus"?"Đang tập trung":"Đang nghỉ ngơi")+(S.running?"":" · đã dừng");
+    g("pPlay").textContent=S.running?"⏸ Tạm dừng":(s<total()?"▶ Tiếp tục":"▶ Bắt đầu");
+    g("pSwap").textContent=S.phase==="focus"?"☕ Nghỉ ngay":"🍅 Làm tiếp";
+    g("pCnt").textContent=S.done?`Hôm nay bạn đã hoàn thành ${S.done} phiên 🍅`:"Hôm nay chưa có phiên nào, bắt đầu thôi nào!";
+    btn.textContent="🍅 "+(S.running||s<total()?m:"Pomodoro");
+    btn.className="btn sm"+(S.running?" run-"+S.phase:"");
+    document.title=(S.running?(S.phase==="focus"?"🍅 ":"☕ ")+m+" · ":"")+(draw._t||(draw._t=document.title.replace(/^[🍅☕] \d\d:\d\d · /,"")));
+  }
+  async function askPerm(){try{if("Notification" in window&&Notification.permission==="default")await Notification.requestPermission()}catch(e){}}
+
+  box.addEventListener("click",e=>{
+    const a=e.target.closest("[data-a]");if(!a)return;
+    const k=a.dataset.a;
+    if(k==="close")box.hidden=true;
+    else if(k==="play"){
+      if(S.running){S.left=secsLeft();S.running=false;S.endAt=0;save();draw();g("pSay").textContent="Tạm dừng một chút cũng không sao, sẵn sàng thì bấm tiếp nhé 🙂"}
+      else{askPerm();const fresh=S.left>=total();S.running=true;S.endAt=Date.now()+S.left*1000;save();draw();g("pSay").textContent=S.phase==="focus"?(fresh?pick(MSG.focusStart):"Tiếp tục nào, bạn làm được mà! 💪"):pick(MSG.breakMid)}
+    }else if(k==="swap"){
+      askPerm();
+      if(S.phase==="focus"){setPhase("break",true);g("pSay").textContent=pick(MSG.breakStart)}
+      else{setPhase("focus",true);g("pSay").textContent=pick(MSG.breakEnd)}
+    }else if(k==="reset"){setPhase("focus",false);g("pSay").textContent="Đã về đầu rồi, bấm ▶ khi bạn sẵn sàng nhé."}
+  });
+  const num=(id,key,min,max)=>g(id).addEventListener("change",()=>{
+    const v=Math.min(max,Math.max(min,parseInt(g(id).value)||S[key]));g(id).value=v;S[key]=v;
+    if(!S.running&&((key==="focusMin"&&S.phase==="focus")||(key==="breakMin"&&S.phase==="break")))S.left=v*60;
+    save();draw();
+  });
+  num("pF","focusMin",1,120);num("pB","breakMin",1,60);
+  g("pAuto").onchange=e=>{S.auto=e.target.checked;save()};
+  g("pSnd").onchange=e=>{S.sound=e.target.checked;save()};
+  btn.onclick=()=>{box.hidden=!box.hidden};
+  document.addEventListener("keydown",e=>{if(e.key==="Escape"){box.hidden=true;pop.hidden=true}});
+  document.addEventListener("visibilitychange",tick);
+  if(S.running&&secsLeft()<=0){S.running=false;S.left=total()} // đóng trang quá lâu thì dừng, không báo bù
+  draw();setInterval(tick,500);
+  window.__pomo={get:()=>S,tick,finish};
+})();
 </script>
 </body>
 </html>
