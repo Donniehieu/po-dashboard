@@ -208,6 +208,7 @@ td.wfnote{white-space:nowrap}
   table.cardtbl td.flag::before{display:inline;margin-right:6px}
   table.cardtbl td.flag{display:flex;align-items:center}
 }
+a.sl{color:inherit;text-decoration:none;border-bottom:1px dotted var(--mute)}a.sl:hover{color:var(--brand);border-bottom-color:var(--brand)}
 .tblbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:0 0 8px}
 .tblbar .btn[disabled]{opacity:.5;cursor:not-allowed}
 th .rz{position:absolute;top:0;right:-3px;width:9px;height:100%;cursor:col-resize;touch-action:none;z-index:3}
@@ -465,7 +466,7 @@ const isPay=v=>v!=null&&/^(x|có|co|1|true|yes|y|✓|✔)$/i.test(String(v).trim
 function wfDerive(sh,r){
   const st=sh.stIdx!=null?wfn(r.v[sh.stIdx]):"",rc=sh.rcIdx!=null?wfn(r.v[sh.rcIdx]):"";
   if(st==="dự thảo"&&rc==="")return "Chờ báo giá";
-  if(st==="đã phê duyệt"&&rc==="chưa nhận")return "Chờ gửi NCC";
+  if((st==="đã phê duyệt"||st==="đơn mua hàng")&&rc==="chưa nhận")return "Chờ gửi NCC"; // “Đơn mua hàng” = nhãn Odoo của đơn đã xác nhận
   return "Chờ báo giá";
 }
 const dueOf=(sh,r)=>{const c=sh.cmtIdx!=null?r.v[sh.cmtIdx]:null;return c instanceof Date?c:(sh.dueIdx!=null?r.v[sh.dueIdx]:null)};
@@ -632,13 +633,14 @@ async function loadFromGitHub(silent){
 }
 
 /* ---- Nạp file ---- */
+const HIDE_SHEETS=new Set(["thông báo duyệt giá","nhà cung cấp dây đai"]);
 async function loadBuffer(buf,name,opts={}){
   const err=$("#err");
   try{
     const raw=await parseXlsx(buf);
     state.buf=buf;state.fileName=name;state.src=opts.src||"local";state.pending.clear();state.pendingDel.clear();state.saveErr=null;state.fileMtime=opts.mtime||null;
     state.history=mergeHist(state.histQ,store.get(histKey())||[]);
-    state.sheets=raw.map(analyze);
+    state.sheets=raw.map(analyze).filter(sh=>!HIDE_SHEETS.has(String(sh.name).toLowerCase().replace(/\s+/g," ").trim())); // sheet ẩn khỏi dashboard (vẫn còn nguyên trong file Excel)
     state.sheets.forEach(s=>{s.baseLast=s.lastRow;setStatus(s)});
     state.active="overview";
     $("#fname").textContent=name+(state.src==="github"?"  ·  GitHub":"");
@@ -1519,6 +1521,7 @@ function renderTable(sh,fr){
       else if(c.type==="cat")cell=`<span class="chip" style="--c:${colorFor(v)}">${esc(v)}</span>`;
       else cell=esc(v);
       if(v!=null&&c.idx===sh.title&&/mã đơn|số po|^po$/i.test(c.name))cell=`<a class="ol" href="#" data-code="${esc(v)}" title="Mở Odoo để tìm đơn này">${cell}</a>`;
+      if(v!=null&&sh.wf&&/^nhà cung cấp$/i.test(c.name))cell=`<a class="sl" href="#" data-sup="${c.idx}" data-v="${esc(v)}" title="Bấm để lọc các PO của nhà cung cấp này">${cell}</a>`;
       const cls=typeof v==="number"?"num":(c.type==="text"?"txt":"");
       const edited=state.pending.has(pkey(si,r.n,c.idx));
       h+=`<td class="${cls} ${edited?"ed":""} ${c.idx===sh.title||c.idx===sh.sub?"wide":""}" data-l="${esc(c.name)}" data-r="${r.n}" data-c="${c.idx}" ${c.type==="text"&&v?`title="${esc(v)}"`:""}>${cell}</td>`}
@@ -1549,8 +1552,9 @@ function renderTable(sh,fr){
   if(mo){mo.onclick=()=>{u.shown+=200;renderTable(sh,fr)};
     if("IntersectionObserver" in window){const io=new IntersectionObserver(es=>{if(es[0].isIntersecting){io.disconnect();u.shown+=200;renderTable(sh,fr)}},{rootMargin:"300px"});io.observe(mo)}} // cuộn tới cuối tự tải thêm
   const touch=matchMedia("(pointer:coarse)").matches;
-  t.querySelectorAll("td[data-c]").forEach(td=>{td.ondblclick=()=>startEdit(sh,td);if(touch)td.onclick=e=>{if(!td.querySelector("input")&&!e.target.closest("button,.ol"))startEdit(sh,td)}});
+  t.querySelectorAll("td[data-c]").forEach(td=>{td.ondblclick=()=>startEdit(sh,td);if(touch)td.onclick=e=>{if(!td.querySelector("input")&&!e.target.closest("button,.ol,.sl"))startEdit(sh,td)}});
   t.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>deleteRow(si,+b.dataset.del));
+  t.querySelectorAll("a.sl").forEach(a=>{a.onclick=e=>{e.preventDefault();e.stopPropagation();u.filters[+a.dataset.sup]=a.dataset.v;u.shown=100;renderDyn(sh);const tb=$("#tbl");if(tb)tb.scrollIntoView({block:"start"});toast("Đang lọc các PO của: "+a.dataset.v)};a.ondblclick=e=>e.stopPropagation()});
   t.querySelectorAll("[data-ck]").forEach(cb=>cb.onchange=()=>{
     const n=+cb.dataset.ck,r=sh.rows.find(x=>x.n===n);
     if(sh.doneColIdx!=null){state.via="dashboard";setCell(si,r,sh.doneColIdx,cb.checked?"Đã xong "+fmtDS(TODAY):null)}
