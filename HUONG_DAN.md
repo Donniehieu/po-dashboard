@@ -105,3 +105,71 @@ Giới hạn: không phải tức thời (trễ tối đa ~15 phút); ngoài gi�
 - **Nhập bằng giọng nói:** khi sửa một ô văn bản, bấm nút 🎤 cạnh ô rồi nói tiếng Việt. Cần Chrome/Edge/Safari và cho phép micro; Firefox không hỗ trợ.
 - **Tin nhắn nhắc việc:** nút chuông 🔔 nổi góc phải dưới, số đỏ là số đơn trễ hẹn. Mỗi đơn là một tin, có nút Tìm trên Odoo, 🎤 Ghi chú (đọc xong được thêm vào cột Note kèm ngày, kiểm tra lại chữ rồi mới lưu), Xem dòng, và ✕ (ẩn đến hết hôm nay).
 - **Mở Odoo:** bấm mã đơn (chữ xanh gạch chân) ở bảng, tab Ưu tiên hoặc tin nhắn. Dashboard mở Odoo và sao chép sẵn mã đơn; bạn chỉ cần dán vào ô tìm kiếm và chọn đúng công ty. Odoo không cho điền sẵn ô tìm kiếm qua đường dẫn nên không làm tự động hơn được.
+
+**Cập nhật: mở đúng PO.** Lần đồng bộ Odoo chạy xong sẽ tạo file `data/odoo-ids.json` (mã PO → id bản ghi trên Odoo). Khi đó bấm mã PO sẽ mở thẳng form của PO đó. PO chưa có trong file này sẽ mở danh sách Odoo và sao chép mã để dán tìm kiếm.
+
+**Cập nhật: đồng bộ cả việc xóa.** Đơn đã xóa hoặc hủy trên Odoo sẽ bị xóa khỏi Excel ở lần đồng bộ sau. An toàn: (1) bản sao các dòng bị xóa (kể cả cột Note) lưu ở `data/deleted-log.json`; (2) nếu Odoo trả về 0 đơn, hoặc số dòng sắp xóa vượt 20% (tối thiểu 5), script không xóa mà báo cảnh báo trong log; (3) tắt tính năng bằng `"delete_missing": false` trong `scripts/config.json`. Lưu ý: dòng bạn tự thêm tay vào sheet PO mà không có trên Odoo cũng sẽ bị xóa.
+
+---
+
+## Quy trình trạng thái PO (cột Note), bộ lọc, ưu tiên mới
+
+- **Cột “TT trước”** (đầu bảng PO) là ô **chỉ xem, không tick tay được**: do code tự đặt theo Phân loại của NCC ở tab DS NCC. Có tick = PO thanh toán trước (11 bước, có Chờ làm TT / Đã gửi UNC); không tick = thanh toán công nợ (9 bước). Muốn đổi, hãy sửa Phân loại của NCC ở tab DS NCC.
+- **Nút ◀ ▶ cạnh Note**: lùi/tiến một bước theo luồng, ghi thẳng vào cột Note. Vẫn có thể bấm đúp để gõ trạng thái khác; trạng thái tự nhập nằm ngoài luồng (bấm ▶ sẽ về bước đầu).
+- **Note trống**: lấy theo Odoo khi đồng bộ (Dự thảo + chưa có phiếu nhập → Chờ báo giá; Đã phê duyệt + Chưa nhận → Chờ gửi NCC; còn lại → Chờ báo giá). Note đã có thì luôn giữ nguyên.
+- **Bộ lọc**: bấm ▾ ở tiêu đề cột; có thể chọn “chứa/không chứa/bằng/…”, 2 điều kiện nối VÀ/HOẶC và danh sách giá trị; nhiều cột lọc cùng lúc.
+- **Cần chạy 🔄 Đồng bộ Odoo một lần** sau khi thay file để script thêm 3 cột mới vào Excel: “Trạng thái quy trình”, “Thanh toán trước”, “Ghi chú”.
+- **Micro bị chặn:** làm theo thông báo hiện ra (thường: mở bằng Chrome/Safari thay vì Zalo/Messenger; cho phép micro ở biểu tượng ổ khóa).
+- Danh sách việc cần xác nhận và đề xuất: xem `TODO.md`.
+
+---
+
+## Đợt 2: tính năng mới
+
+**Cập nhật file:**
+- Repo po-dashboard: thay `index.html`; thêm `manifest.webmanifest`, `sw.js`, `icon-192.png`, `icon-512.png` (để cài lên điện thoại); thư mục `tests/` là tùy chọn.
+- Repo po-data: thay `scripts/sync_odoo.py`, `scripts/config.json`, `.github/workflows/sync-odoo.yml`.
+- Bấm "🔄 Đồng bộ Odoo" một lần để script thêm hai cột mới: “Ngày đổi trạng thái”, “Ngày cam kết giao”.
+
+**Cài lên điện thoại:** mở trang GitHub Pages bằng Chrome (Android) hoặc Safari (iPhone) → menu → “Thêm vào màn hình chính / Cài đặt ứng dụng”.
+
+**Mở nhanh:** lần đầu tải từ GitHub, các lần sau hiện ngay bản đã lưu rồi cập nhật nền (thanh trên cùng ghi “Bản lưu trong máy, đang cập nhật…”). Trong vài giây đó chưa sửa được để tránh ghi đè.
+
+Toàn bộ trạng thái làm được / chưa làm được: xem `TODO.md`.
+
+**Gợi ý Hoàn thành:** PO mà Odoo báo “Đã nhận hết” và “Đã xuất hóa đơn” sẽ hiện nút 💡; có nút “Đặt Hoàn thành tất cả” phía trên bảng.
+
+---
+
+## Tùy chọn: Odoo báo thay đổi tức thời (Cloudflare Worker miễn phí)
+
+Luồng: Odoo (Automation) → Cloudflare Worker (miễn phí) → GitHub `repository_dispatch` → workflow đồng bộ chạy ngay. Nếu bất kỳ khâu nào hỏng hoặc Worker hết hạn mức, đồng bộ theo lịch 15 phút/lần trên GitHub vẫn chạy như hiện tại, không cần chuyển gì.
+
+**Bước 0 – kiểm tra quyền Odoo của bạn:** đăng nhập Odoo, bấm F12 → tab Console, dán:
+`fetch('/web/session/get_session_info',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',method:'call',params:{}})}).then(r=>r.json()).then(j=>console.log('is_admin:',j.result.is_admin,'is_system:',j.result.is_system))`
+Nếu `is_system: true` thì bạn đủ quyền tạo Automation. Nếu `false`, hãy nhờ quản trị viên Odoo làm bước 3.
+
+**Bước 1 – Cloudflare:** Workers & Pages → Create → Hello World → dán nội dung `relay/cloudflare-worker.js` → Deploy. Settings → Variables and Secrets: thêm `GITHUB_TOKEN`, `SHARED_SECRET`, `REPO` (xem chú thích đầu file).
+**Bước 2 – repo po-data** đã có sẵn trigger `odoo-change` trong `sync-odoo.yml`.
+**Bước 3 – Odoo:** bật chế độ nhà phát triển → Settings → Technical → Automation Rules → tạo quy tắc trên model Purchase Order, kích hoạt “On Create and Edit” (nên thêm điều kiện chỉ PO của bạn), hành động “Send Webhook Notification”, URL: `https://<tên-worker>.workers.dev/?k=<SHARED_SECRET>`. Tên menu và hành động tùy phiên bản Odoo, mình chưa kiểm chứng được trên Odoo của bạn.
+
+---
+
+## Đồng bộ mỗi 15 phút (không cần quyền quản trị Odoo)
+
+`sync-odoo.yml` chạy 15 phút/lần, 8h–18h, thứ Hai–thứ Sáu. Cần thêm file `requirements.txt` (nội dung: `openpyxl`) ở thư mục gốc repo po-data để bật cache thư viện. Hạn mức Actions của repo riêng tư gói Free là 2.000 phút/tháng (hãy xem lại ở GitHub → Settings → Billing and plans): mỗi lần chạy nên dưới 1 phút (xem cột thời gian trong tab Actions); nếu hay quá 1 phút thì đổi `*/15` thành `*/30`.
+
+### Tự động đồng bộ danh sách NCC (tab "DS NCC")
+Mỗi lần đồng bộ Odoo (15 phút/lần hoặc bấm nút đồng bộ), hệ thống tự làm thêm:
+1. **NCC mới ở tab PO → tự thêm vào tab DS NCC** (Tên NCC = đúng tên trên Odoo, STT kế tiếp). Cột **Phân loại của DS NCC để trống** vì không thể biết NCC đó là "Đơn hàng" hay "Công nợ" - bạn chọn tay một lần.
+2. **Phân loại = "Đơn hàng" → tick "Thanh toán trước" cho mọi PO của NCC đó; Phân loại = "Công nợ" → bỏ tick mọi PO của NCC đó** (kể cả PO đã tick tay). Áp dụng ở mọi lần đồng bộ và ngay khi bạn mở file/sửa DS NCC/nhập file Odoo trong dashboard; không tick tay được (sửa tay trong Excel cũng bị đưa về đúng ở lần đồng bộ kế tiếp). PO "Hoàn thành" không bị đổi; NCC có Phân loại trống thì giữ nguyên.
+3. So khớp tên bỏ qua dấu/hoa thường/loại hình công ty, bỏ mã đầu dòng (XHN-, XHCM-, X-...) và ghi chú hàng hóa sau " - ". Cặp khớp gần đúng và NCC khớp nhầm nhiều dòng được in trong log Actions ("~ khớp gần đúng", "! ... không tự tích") để bạn kiểm tra.
+
+### Thanh chức năng trên đầu mỗi bảng & chỉnh độ rộng cột
+- Ngay trên đầu bảng của mỗi tab sheet có: ＋ Thêm dòng · 🗑 Xóa dòng đã chọn · ⬆ Nhập Excel · ⬇ Xuất Excel · ⬇ Xuất CSV · ↔ Đặt lại độ rộng cột. Muốn xóa nhiều dòng: tick ô ở cột đầu của các dòng rồi bấm "Xóa dòng đã chọn".
+- Kéo mép phải tiêu đề cột để đổi độ rộng (bấm đúp = tự vừa nội dung). Độ rộng được nhớ theo từng tab trên trình duyệt này.
+- Sửa Phân loại của một NCC trong tab DS NCC thành "Đơn hàng" → tất cả PO của NCC đó tự được tick "TT trước" ngay; thành "Công nợ" → tự bỏ tick. Cột "Ngày điều chỉnh" tự điền ngày hôm nay khi Phân loại hoặc Ghi chú bị sửa.
+
+### Ẩn cột, cột mới ở DS NCC
+- Nút **👁 Chọn cột hiển thị** trên đầu mỗi bảng để ẩn/hiện cột (chỉ đổi cách xem). Cột đang ẩn hiện thành thanh "Cột đang ẩn: ＋ tên cột" phía trên bảng - bấm ＋ để hiện lại từng cột hoặc "Hiện tất cả". Tab PO không còn cột "Ngày cam kết giao".
+- Tab DS NCC có cột: STT · Tên NCC · **Phân loại** (Đơn hàng/Công nợ) · **Ngày điều chỉnh** (tự điền khi sửa Phân loại hoặc Ghi chú) · **Ghi chú** · Trạng thái · Phát sinh công nợ. Đổi tên/thêm cột trong Excel do script đồng bộ làm ở lần chạy kế tiếp (sau khi bạn upload script mới).
