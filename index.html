@@ -1620,14 +1620,14 @@ function renderTable(sh,fr){
   let h=hint+sugBar+bulkBar(sh)+`<h2 class="sec">Chi tiết (${fmtN(rows.length)} dòng) <small class="sub" style="font-weight:500">· ${matchMedia("(pointer:coarse)").matches?"chạm":"bấm đúp"} vào ô để sửa · bấm ▾ ở tiêu đề để lọc · kéo mép phải tiêu đề để chỉnh độ rộng cột</small></h2>
     <div class="tblbar"><button class="btn" data-t="add">＋ Thêm dòng</button><button class="btn" data-t="deln" ${selSet.size?"":"disabled"}>🗑 Xóa dòng đã chọn${selSet.size?" ("+selSet.size+")":""}</button><button class="btn" data-t="imp" title="Nhập dữ liệu từ file Excel vào bảng này (khớp theo tên cột; có cột mã/tên thì cập nhật dòng trùng, dòng chưa có thì thêm mới)">⬆ Nhập Excel</button><button class="btn" data-t="xlsx">⬇ Xuất Excel (đang lọc)</button><button class="btn" data-t="csv">⬇ Xuất CSV</button><span class="grow"></span><button class="btn sm" data-t="cols" title="Chọn cột muốn hiện/ẩn trong bảng này (không xóa dữ liệu)">👁 Chọn cột hiển thị${hid.size?" (đang ẩn "+hid.size+")":""}</button><button class="btn sm" data-t="rzreset" title="Trả độ rộng các cột về mặc định">↔ Đặt lại độ rộng cột</button></div>
     ${hid.size?`<div class="hidbar">Cột đang ẩn: ${sh.cols.filter(c=>hid.has(c.idx)).map(c=>`<button class="btn sm" data-showcol="${c.idx}" title="Hiện lại cột này">＋ ${esc(c.type==="flag"?"TT trước":c.name)}</button>`).join("")}<button class="btn sm" data-showcol="all">Hiện tất cả</button></div>`:""}
-    <div class="tablewrap ${sh.wf?"cards":""}"><table class="${sh.wf?"cardtbl":""}"><thead><tr>${sh.checklist?"<th></th>":""}<th class="flag"><input type="checkbox" data-selall title="Chọn tất cả dòng đang hiện"></th><th title="Số dòng trong file Excel">Dòng</th>`+
+    <div class="tablewrap ${sh.wf?"cards":""}"><table class="${sh.wf?"cardtbl":""}"><thead><tr>${sh.checklist?"<th></th>":""}<th class="flag"><input type="checkbox" data-selall title="Chọn tất cả dòng đang hiện"></th><th title="Số thứ tự các dòng đang hiển thị (tự đánh lại 1, 2, 3… theo bộ lọc/tìm kiếm/sắp xếp hiện tại)">STT</th>`+
     cols.map(c=>{const on=u.cf[c.idx]?" on":"";const lab=c.type==="flag"?"TT trước":c.name;return `<th data-s="${c.idx}" class="${c.type==="flag"?"flag":""}" title="${c.type==="flag"?"Tick = PO thanh toán trước (luồng có Chờ làm TT / Đã gửi UNC)":""}">${esc(lab)}${u.sort&&u.sort.i===c.idx?(u.sort.dir>0?" ▲":" ▼"):""}<button class="fb${on}" data-f="${c.idx}" title="Lọc cột này">▾</button></th>`}).join("")+`<th></th></tr></thead><tbody>`;
-  for(const r of rows.slice(0,u.shown)){
+  for(const [ri,r] of rows.slice(0,u.shown).entries()){
     const dn=sh.checklist?ckDone(sh,r):(sh.progIdx!=null&&r.done);
     h+=`<tr data-row="${r.n}" class="${r.st==="overdue"?"od":r.st==="soon"?"sn":""} ${dn?"dn":""}">`;
     if(sh.checklist)h+=`<td><input type="checkbox" data-ck="${r.n}" ${dn?"checked":""} aria-label="Hoàn thành"></td>`;
     h+=`<td class="flag sel"><input type="checkbox" data-sel="${r.n}" ${selSet.has(r.n)?"checked":""} aria-label="Chọn dòng"></td>`;
-    h+=`<td class="rn">${r.n}</td>`;
+    h+=`<td class="rn">${ri+1}</td>`;
     for(const c of cols){const v=r.v[c.idx];let cell="";
       if(c.type==="flag"){h+=`<td class="flag" data-l="TT trước"><input type="checkbox" data-pay="${r.n}" ${isPay(v)?"checked":""} disabled aria-label="Thanh toán trước (tự động)" title="Tự động theo Phân loại của NCC ở tab DS NCC (Đơn hàng = tick, Công nợ = bỏ tick). Không tick tay được."></td>`;continue}
       if(sh.wf&&c.idx===sh.noteIdx){
@@ -1688,8 +1688,8 @@ function renderTable(sh,fr){
 function exportCsv(sh){
   const fr=rowsFor(sh);const cols=sh.cols.filter(c=>c.type!=="index");
   const q=v=>{v=v==null?"":(v instanceof Date?fmtD(v):String(v));return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v};
-  const lines=[["Dòng",...cols.map(c=>c.name)].map(q).join(",")];
-  for(const r of fr)lines.push([r.n,...cols.map(c=>cellVal(sh,r,c.idx))].map(q).join(","));
+  const lines=[["STT",...cols.map(c=>c.name)].map(q).join(",")];
+  fr.forEach((r,i)=>lines.push([i+1,...cols.map(c=>cellVal(sh,r,c.idx))].map(q).join(",")));
   const a=document.createElement("a");a.href=URL.createObjectURL(new Blob(["﻿"+lines.join("\r\n")],{type:"text/csv;charset=utf-8"}));
   a.download=sh.name+"_loc.csv";a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000);
 }
