@@ -191,3 +191,48 @@ Dashboard có 3 nơi lưu; mỗi lần chỉ làm việc trên một nơi:
    - File nằm trong Google Drive của bạn dạng .xlsx (mở được bằng Google Sheets, Drive giữ các phiên bản cũ). Nó **không phải** Google Sheet đồng bộ theo từng ô.
    - Ghi đè an toàn: nếu nơi khác vừa sửa file trên cloud, dashboard báo và yêu cầu Tải lại thay vì ghi đè.
    - Không có đồng bộ Odoo trên cloud riêng (việc đó chỉ chạy với PO-data trên GitHub). Lịch sử thao tác chỉ lưu trong trình duyệt.
+
+
+## Phiếu thanh toán NCC (tab "Phiếu thanh toán")
+
+Theo dõi các phiếu thanh toán nhà cung cấp (trang Odoo `…/odoo/vendor-payments`, số `PAY…`) đã thanh toán chưa, và nhắc kế toán khi quá hạn.
+
+### Dữ liệu từ đâu ra
+- Script đồng bộ Odoo (15 phút/lần, cùng workflow với PO) đọc phiếu của **chính bạn lập** (`create_uid`) ở 2 công ty trong `scripts/config.json` và ghi vào sheet **"Phiếu thanh toán"** của `data/PO-data.xlsx`. Sheet tự được tạo; tab chỉ hiện trong dashboard khi sheet đã có trong file.
+- Muốn lấy cả phiếu của đồng nghiệp: bỏ điều kiện `["create_uid", "=", "{uid}"]` trong `pay_sync.domain` (sẽ khoảng 1.300 phiếu).
+- Lỗi ở bước PAY không làm hỏng đồng bộ PO. Log Actions có dòng `PAY: n phiếu (… mới, … quá hạn cần nhắc KT, …)`.
+- Chạy thử không ghi: Actions → "Đồng bộ đơn mua từ Odoo" → Run workflow → "Chạy thử" (probe).
+
+### Các trạng thái
+| Nhãn | Ý nghĩa |
+|---|---|
+| Chưa thanh toán | Odoo ở Nháp hoặc Đã duyệt (số vẫn là `PAY…`) |
+| Đã thanh toán | Odoo ở `paid`, số đã đổi thành `…/BNK…` (`DQ/` = Dung Quất, `PH/` = Phúc Hà) |
+| Đã hủy | Phiếu bị hủy, giữ dòng để đối chiếu, không nhắc |
+| ⚠ Kiểm tra | Số đã là BNK nhưng Odoo chưa báo đã thanh toán: bạn xem lại phiếu, không nhắc |
+| ⚠ Không còn trên Odoo | Phiếu chưa thanh toán biến mất khỏi Odoo, giữ dòng, không nhắc |
+
+Khóa của mỗi dòng là **ID Odoo** (2 cột kỹ thuật "ID Odoo", "Mã công ty" bị ẩn trong dashboard, đừng xóa trong Excel). Cột **Số PAY** giữ số ban đầu, **Số chứng từ hiện tại** đổi sang BNK khi đã thanh toán.
+
+### Quá hạn và nhắc kế toán
+- Hạn thanh toán = ngày lập PAY (lập T7/CN thì hạn là thứ Hai kế tiếp). Qua **≥ 1 ngày làm việc (T2–T6)** mà chưa thanh toán là quá hạn. Ví dụ: lập T2 → nhắc từ T3; lập T6 → nhắc từ T2. Ngưỡng đổi ở `pay_sync.overdue_days`.
+- Phiếu quá hạn được script điền sẵn vào cột **"Nhắc KT thanh toán"**, đồng thời hiện trong hộp 🔔, banner đầu trang và tab Ưu tiên. Khi phiếu thành BNK, nội dung nhắc đổi thành `Đã TT: <số BNK>`.
+- Cách nhắc kế toán: trong hộp 🔔 bấm **📋 Sao chép nhắc KT**, mở phiếu bằng **🔍 Mở phiếu trên Odoo**, dán vào ô *Gửi tin* của Chatter (chọn Ghi chú/Gửi tin nội bộ, **bỏ chế độ email**) và @tag kế toán. Muốn tự chèn tên kế toán vào đầu nội dung, điền `pay_sync.accountant_tag` trong `config.json`. Tự đăng tin vào Chatter chưa làm (cần quyền ghi `mail.message`).
+
+### Cách dùng trong dashboard
+- **Bấm đúp một dòng → mở phiếu trên Odoo.** Riêng cột *Ghi chú* bấm đúp vẫn là sửa; ghi chú của bạn được giữ nguyên qua các lần đồng bộ, cũng như mọi cột lạ bạn tự thêm.
+- Dùng bộ lọc ▾, ẩn cột, xuất Excel như các tab khác.
+- Ở tab **PO**, cạnh trạng thái Note có huy hiệu: `PAY… · chờ TT` (vàng), `PAY… · quá hạn N ngày` (đỏ), `…/BNK… ✔` (xanh), hủy/không còn trên Odoo (xám).
+
+### Gắn PAY với PO
+Cột **PO liên quan** lấy từ mã PO trong diễn giải (memo) của phiếu, và từ số PAY bạn ghi trong Note/Ghi chú của PO. Một PAY gộp nhiều PO thì liệt kê đủ. Memo kiểu "TT hóa đơn 1564" không có mã PO nên hãy ghi số PAY vào Ghi chú của PO để gắn được.
+
+### Tự chuyển bước PO
+Khi PAY thành BNK, PO **trả trước** (cột TT trước được tick) đang ở bước trước "Đã gửi UNC" tự chuyển sang **"Đã gửi UNC"** và ghi vào Ngày đổi trạng thái. Mỗi PAY chỉ xử lý một lần (nhớ trong `data/pay-state.json`), nên nếu bạn lùi PO lại thì nó không bị đẩy lên nữa. PO đã đi xa hơn hoặc không trả trước thì không đổi. Danh sách PO được chuyển in trong log Actions.
+
+### Kiểm thử
+`python tests/test_pay_sync.py` trong repo `po-data` (17 test dữ liệu giả; cần `openpyxl`, Windows thêm `pip install tzdata`).
+
+### Giới hạn
+- Chưa thử trên Odoo/GitHub thật lâu dài: nên chạy "Chạy thử" rồi theo dõi 2–3 ngày đầu, chú ý các phiếu ⚠ Kiểm tra.
+- Chưa tự gửi nhắc ra Zalo/email và chưa tự đăng Chatter.
