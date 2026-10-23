@@ -500,6 +500,7 @@ function colorFor(v){
 const WF_DEBT=["Chờ báo giá","Chờ gửi duyệt PO","Chờ duyệt PO","Chờ gửi NCC","Đã gửi NCC","Chờ nhận hàng","Cần lập hóa đơn","Chờ KT xác nhận công nợ","Hoàn thành"];
 const WF_PRE=["Chờ báo giá","Chờ gửi duyệt PO","Chờ duyệt PO","Chờ gửi NCC","Đã gửi NCC","Chờ làm TT","Đã gửi UNC","Chờ nhận hàng","Cần lập hóa đơn","Chờ KT xác nhận công nợ","Hoàn thành"];
 const WF_ALL=WF_PRE,WF_DONE="Hoàn thành";
+const IS_DS=n=>/^(ds ncc|công nợ ncc)$/i.test(String(n||"").normalize("NFC").replace(/\s+/g," ").trim()); // tab danh sách NCC: tên mới “Công nợ NCC”, vẫn nhận tên cũ “DS NCC”
 const wfn=x=>String(x??"").normalize("NFC").toLowerCase().replace(/\s+/g," ").trim();
 const WF_SYN={"chờ bao giá":"Chờ báo giá","chờ duyệt":"Chờ duyệt PO","chờ gửi duyệt":"Chờ gửi duyệt PO","đã hoàn thành":"Hoàn thành","chờ kt xác nhận":"Chờ KT xác nhận công nợ"};
 const wfCanon=x=>{const k=wfn(x);return WF_SYN[k]||WF_ALL.find(a=>wfn(a)===k)||String(x).trim()};
@@ -550,7 +551,7 @@ function analyze(raw){
   let cols=[];
   const hasKey=hdr.some(h=>/^mã đơn hàng$/i.test(String(h||"").trim()));
   const FORCE_RE=/^(thanh toán trước|ghi chú|trạng thái quy trình|note|ngày đổi trạng thái)$/i;
-  const isDs=/^ds ncc$/i.test(String(raw.name||"").trim());
+  const isDs=IS_DS(raw.name);
   const isPaySheet=/^phiếu thanh toán$/i.test(String(raw.name||"").trim());
   const hIdx=re=>hdr.findIndex(h=>re.test(String(h||"").trim()));
   const payId=isPaySheet?hIdx(/^id odoo$/i):-1,payCid=isPaySheet?hIdx(/^mã công ty$/i):-1;
@@ -924,7 +925,7 @@ function setCell(si,r,ci,val,keyOv){
   r.v[ci]=val;r._t=null;
   if(sameVal(orig,val)&&!r.isNew)state.pending.delete(k);
   else state.pending.set(k,{si,n:r.n,col:ci,val,old:orig,path:sh.path,key,isNew:!!r.isNew,via:state.via,txt:!!(sh.cols.find(c=>c.idx===ci)||{}).txtDate});
-  if(!nccBusy&&norm(sh.name)==="ds ncc")setTimeout(()=>nccOnEdit(si,r,ci),0); // DS NCC đổi sang “Đơn hàng” -> tick PO của NCC đó
+  if(!nccBusy&&IS_DS(sh.name))setTimeout(()=>nccOnEdit(si,r,ci),0); // Công nợ NCC đổi sang “Đơn hàng” -> tick PO của NCC đó
   return true;
 }
 function addRow(si,silent){
@@ -1059,7 +1060,10 @@ async function saveAll(auto){
     const d=new Date();state.lastSave=pad2(d.getHours())+":"+pad2(d.getMinutes())+":"+pad2(d.getSeconds());
     setSaveState("✔ Đã lưu lúc "+state.lastSave,"ok");
     if(target==="gh")toast("Đã lưu vào GitHub ✔");else if(target==="cloud")toast("Đã lưu vào cloud riêng ✔");else if(target==="file")toast("Đã lưu vào file Excel ✔");
-    const a=document.activeElement;if(!(a&&a.classList&&a.classList.contains("cell")))render();
+    const a=document.activeElement;
+    if(typeof state.active==="number"&&state.sheets[state.active]){ // đang xem một bảng: chỉ bỏ nền “ô vừa sửa” của các ô đã lưu, giữ nguyên vị trí cuộn
+      document.querySelectorAll("td.ed[data-r][data-c]").forEach(td=>{if(!state.pending.has(pkey(state.active,+td.dataset.r,+td.dataset.c)))td.classList.remove("ed")});
+    }else if(!(a&&a.classList&&a.classList.contains("cell")))render();
     updateChrome();
     if(ods.deferred&&!state.pending.size&&!state.pendingDel.size){const d=ods.deferred;ods.deferred=null;setTimeout(()=>reloadFromOdoo(d),600)}
   }catch(e){console.error(e);state.saveErr=e.message;setSaveState("⚠ Lưu lỗi","bad");toast(e.message,true);updateSavebar()}
@@ -1255,10 +1259,12 @@ async function importOdoo(file,forceSi){
     sh.ui.shown=Math.max(sh.ui.shown,sh.rows.length);setStatus(sh);state.active=si;renderTabs();render();updateChrome();
     toast(`Đã thêm ${add0} dòng vào “${sh.name}”. Chưa ghi — bấm “Lưu vào Excel”.`);return}
   const byKey=new Map(sh.rows.map(r=>[String(r.v[sh.title]??"").trim(),r]));
+  const dsItems=IS_DS(sh.name)?sh.rows.filter(r=>r.v[sh.title]!=null&&String(r.v[sh.title]).trim()).map(r=>({name:String(r.v[sh.title]).trim(),row:r})):[],dsCache=new Map(dsItems.map(it=>[it,NCC.cands(it.name)]));
   let upd=0,add=0;state.via="nhập file Odoo";
   try{for(const ir of imp.rows){
     const key=String(ir.v[kmap.s.idx]??"").trim();if(!key)continue;
     let r=byKey.get(key),isNew=false;
+    if(!r&&IS_DS(sh.name)){const f=NCC.find(key,dsItems,dsCache);if(f.hits.length===1){r=f.hits[0].row;byKey.set(key,r)}} // khác cách viết tên nhưng cùng NCC -> cập nhật dòng đó
     if(!r){r=addRow(si,true);byKey.set(key,r);isNew=true}
     let ch=false;
     for(const m of map){
@@ -1356,7 +1362,7 @@ let rzT=null;
 function rzScan(){document.querySelectorAll("#main table").forEach((tb,i)=>enableResize(tb,tb.closest("#tbl")?"d":String(i)))}
 new MutationObserver(()=>{clearTimeout(rzT);rzT=setTimeout(rzScan,40)}).observe($("#main"),{childList:true,subtree:true});
 
-/* ---- Đồng bộ NCC: PO -> DS NCC (thêm NCC mới) và DS NCC "Đơn hàng" -> tick "Thanh toán trước" ---- */
+/* ---- Đồng bộ NCC: PO -> Công nợ NCC (thêm NCC mới) và Công nợ NCC "Đơn hàng" -> tick "Thanh toán trước" ---- */
 const NCC=(()=>{
   const fold=s=>String(s==null?"":s).toLowerCase().replace(/đ/g,"d").normalize("NFD").replace(/[̀-ͯ]/g,"");
   const ABBR={sx:"san xuat",tm:"thuong mai",dv:"dich vu",xnk:"xuat nhap khau",kt:"ky thuat",cn:"cong nghe",cp:"co phan",tnhh:"",mtv:"",co:"",ltd:"",jsc:"",cty:"",dttm:"dau tu thuong mai",tmdv:"thuong mai dich vu",ct:""};
@@ -1385,7 +1391,7 @@ const NCC=(()=>{
 })();
 let nccBusy=false;
 function nccSheets(){
-  const dsSi=state.sheets.findIndex(s=>!s.empty&&norm(s.name)==="ds ncc");
+  const dsSi=state.sheets.findIndex(s=>!s.empty&&IS_DS(s.name));
   const poSi=state.sheets.findIndex(s=>s.wf&&s.payIdx!=null);
   if(dsSi<0||poSi<0)return null;
   const ds=state.sheets[dsSi],po=state.sheets[poSi];
@@ -1396,7 +1402,7 @@ function nccSheets(){
   return{dsSi,poSi,ds,po,nc,tc,gc,dc,sc};
 }
 const nccIsOrder=v=>NCC.fold(v).trim()==="don hang";
-function nccAddMissing(){ // NCC có ở tab PO mà chưa có ở DS NCC -> thêm dòng mới (Note để trống)
+function nccAddMissing(){ // NCC có ở tab PO mà chưa có ở Công nợ NCC -> thêm dòng mới (Note để trống)
   const S=nccSheets();if(!S||state.stale)return 0;
   const items=S.ds.rows.filter(r=>r.v[S.nc.idx]!=null&&String(r.v[S.nc.idx]).trim()).map(r=>({name:String(r.v[S.nc.idx]).trim()}));
   const seen=new Set(),add=[];
@@ -1406,7 +1412,7 @@ function nccAddMissing(){ // NCC có ở tab PO mà chưa có ở DS NCC -> thê
   nccBusy=true;state.via="đồng bộ NCC";
   try{for(const nm of add){const r=addRow(S.dsSi,true);setCell(S.dsSi,r,S.nc.idx,nm)}}finally{nccBusy=false;state.via="dashboard"}
   S.ds.ui.shown=Math.max(S.ds.ui.shown,S.ds.rows.length);setStatus(S.ds);
-  toast(`Đã thêm ${add.length} NCC mới vào tab DS NCC (cột Phân loại để trống - hãy chọn Đơn hàng/Công nợ).`);
+  toast(`Đã thêm ${add.length} NCC mới vào tab Công nợ NCC (cột Phân loại để trống - hãy chọn Đơn hàng/Công nợ).`);
   return add.length;
 }
 function nccEnforceAll(silent){ // “TT trước” chỉ do code quyết định: Đơn hàng = tick, Công nợ = bỏ tick (PO chưa Hoàn thành); Phân loại trống/không khớp thì giữ nguyên
@@ -1713,10 +1719,12 @@ function timeline(sh,fr){
   return `<div class="card"><h3>Tiến độ theo ${byWeek?"tuần":"ngày"} <small>cột “${esc(sh.cols.find(c=>c.idx===di).name)}” · <span style="color:var(--ok)">■</span> đã xong <span style="color:var(--warn)">■</span> chưa xong · bấm cột để lọc</small></h3><div class="scroll-x">${svg}</div></div>`;
 }
 
-function renderDyn(sh,keep){
+function renderDyn(sh,keep,anchor){
   const u=sh.ui;const fr=rowsFor(sh);
   const dyn=$("#dyn");
-  const ow=keep?dyn.querySelector(".tablewrap"):null,ks=keep?{l:ow?ow.scrollLeft:0,t:ow?ow.scrollTop:0,x:scrollX,y:scrollY}:null; // giữ nguyên vị trí cuộn khi chỉ đổi dữ liệu (bấm ▶/◀, tick…)
+  const ow=keep?dyn.querySelector(".tablewrap"):null,ks=keep?{l:ow?ow.scrollLeft:0,t:ow?ow.scrollTop:0,x:scrollX,y:scrollY}:null;
+  const ar=keep&&anchor!=null?dyn.querySelector(`tr[data-row="${anchor}"]`):null,at=ar?ar.getBoundingClientRect().top:null; // hàng vừa bấm phải đứng yên dưới con trỏ chuột
+  if(keep)dyn.style.minHeight=dyn.offsetHeight+"px"; // không để trang co lại (làm cuộn bị kẹp về trên) trong lúc dựng lại // giữ nguyên vị trí cuộn khi chỉ đổi dữ liệu (bấm ▶/◀, tick…)
   // chip bộ lọc
   const chips=[];
   for(const k in u.filters){const c=sh.cols.find(c=>c.idx===+k);chips.push(`<span class="fchip">${esc(c.name)}: ${esc(u.filters[k]||"(Trống)")} <b data-rm="${k}">×</b></span>`)}
@@ -1763,7 +1771,11 @@ function renderDyn(sh,keep){
   dyn.querySelectorAll("[data-rmf]").forEach(b=>b.onclick=()=>{delete u.cf[b.dataset.rmf];u.shown=100;renderDyn(sh)});
   const cl=dyn.querySelector("[data-clear]");if(cl)cl.onclick=()=>{u.filters={};u.cf={};u.special=null;u.range=null;renderDyn(sh)};
   renderTable(sh,fr);
-  if(ks){const nw=dyn.querySelector(".tablewrap");if(nw){nw.scrollLeft=ks.l;nw.scrollTop=ks.t}scrollTo(ks.x,ks.y)}
+  if(ks){const nw=dyn.querySelector(".tablewrap");if(nw){nw.scrollLeft=ks.l;nw.scrollTop=ks.t}scrollTo(ks.x,ks.y)
+    if(at!=null){const na=dyn.querySelector(`tr[data-row="${anchor}"]`);if(na){let d=na.getBoundingClientRect().top-at;
+      if(Math.abs(d)>1&&nw&&nw.scrollHeight>nw.clientHeight){const b=nw.scrollTop;nw.scrollTop+=d;d-=nw.scrollTop-b}
+      if(Math.abs(d)>1)scrollBy(0,d)}}
+    requestAnimationFrame(()=>{dyn.style.minHeight=""});setTimeout(()=>{dyn.style.minHeight=""},250)}
 }
 
 function renderTable(sh,fr){
@@ -1790,7 +1802,7 @@ function renderTable(sh,fr){
     h+=`<td class="flag sel"><input type="checkbox" data-sel="${r.n}" ${selSet.has(r.n)?"checked":""} aria-label="Chọn dòng"></td>`;
     h+=`<td class="rn">${ri+1}</td>`;
     for(const c of cols){const v=r.v[c.idx];let cell="";
-      if(c.type==="flag"){h+=`<td class="flag" data-l="TT trước"><input type="checkbox" data-pay="${r.n}" ${isPay(v)?"checked":""} disabled aria-label="Thanh toán trước (tự động)" title="Tự động theo Phân loại của NCC ở tab DS NCC (Đơn hàng = tick, Công nợ = bỏ tick). Không tick tay được."></td>`;continue}
+      if(c.type==="flag"){h+=`<td class="flag" data-l="TT trước"><input type="checkbox" data-pay="${r.n}" ${isPay(v)?"checked":""} disabled aria-label="Thanh toán trước (tự động)" title="Tự động theo Phân loại của NCC ở tab Công nợ NCC (Đơn hàng = tick, Công nợ = bỏ tick). Không tick tay được."></td>`;continue}
       if(sh.wf&&c.idx===sh.noteIdx){
         const raw=v!=null&&String(v).trim()!==""&&!r.raised;const seq=seqOf(sh,r),i=seq.indexOf(r.wf);
         const nx=i>=0?seq[i+1]:null;
@@ -2080,7 +2092,7 @@ function stepStatus(si,n,dir){
   const sh=state.sheets[si],r=sh.rows.find(x=>x.n===n);if(!r)return;
   const nv=nextWf(sh,r,dir),cur=r.wf;
   if(!nv){toast(dir>0?"PO này đã ở bước cuối của quy trình.":"PO này đang ở bước đầu của quy trình.");return}
-  if(!setWf(si,r,nv))return;setStatus(sh);renderDyn(sh,true);updateChrome();
+  if(!setWf(si,r,nv))return;setStatus(sh);renderDyn(sh,true,n);updateChrome();
   toast(`${r.v[sh.title]}: ${cur} → ${nv}`);
 }
 /* hàng loạt */
@@ -2125,11 +2137,15 @@ function makeZipStored(files){
 const xe=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])).replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g,"");
 function exportXlsx(sh){
   const fr=rowsFor(sh);const cols=sh.cols.filter(c=>c.type!=="index");
-  const rowsX=[`<row r="1">`+cols.map((c,j)=>`<c r="${colLetter(j)}1" t="inlineStr" s="2"><is><t>${xe(c.name)}</t></is></c>`).join("")+`</row>`];
-  fr.forEach((r,i)=>{
+  downloadXlsx(sh.name,cols.map(c=>c.name),fr.map(r=>cols.map(c=>cellVal(sh,r,c.idx))),sh.name.replace(/[^\w\- ]+/g,"_")+"_loc.xlsx");
+}
+/* ghi bảng (tiêu đề + ma trận giá trị) ra file .xlsx có định dạng ngày, dòng đầu cố định và bộ lọc tự động */
+function downloadXlsx(sheetName,headers,matrix,fname){
+  const rowsX=[`<row r="1">`+headers.map((h,j)=>`<c r="${colLetter(j)}1" t="inlineStr" s="2"><is><t>${xe(h)}</t></is></c>`).join("")+`</row>`];
+  matrix.forEach((r,i)=>{
     const n=i+2;
-    rowsX.push(`<row r="${n}">`+cols.map((c,j)=>{
-      const v=cellVal(sh,r,c.idx),ref=colLetter(j)+n;
+    rowsX.push(`<row r="${n}">`+headers.map((h,j)=>{
+      const v=r[j],ref=colLetter(j)+n;
       if(v==null||v==="")return "";
       if(v instanceof Date)return `<c r="${ref}" s="1"><v>${dateToSerial(v)}</v></c>`;
       if(typeof v==="number")return `<c r="${ref}"><v>${v}</v></c>`;
@@ -2137,25 +2153,25 @@ function exportXlsx(sh){
     }).join("")+`</row>`);
   });
   const H='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n',NS='xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"';
-  const sname=xe(sh.name.replace(/[\\\/?*\[\]:]/g,"").slice(0,31)||"Du lieu");
+  const sname=xe(sheetName.replace(/[\\\/?*\[\]:]/g,"").slice(0,31)||"Du lieu");
   const files=[
    ["[Content_Types].xml",H+'<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>'],
    ["_rels/.rels",H+'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>'],
    ["xl/workbook.xml",H+`<workbook ${NS} xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="${sname}" sheetId="1" r:id="rId1"/></sheets></workbook>`],
    ["xl/_rels/workbook.xml.rels",H+'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>'],
    ["xl/styles.xml",H+`<styleSheet ${NS}><numFmts count="1"><numFmt numFmtId="164" formatCode="dd/mm/yyyy"/></numFmts><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="3"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/></cellXfs></styleSheet>`],
-   ["xl/worksheets/sheet1.xml",H+`<worksheet ${NS}><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><sheetData>${rowsX.join("")}</sheetData><autoFilter ref="A1:${colLetter(cols.length-1)}${fr.length+1}"/></worksheet>`]];
+   ["xl/worksheets/sheet1.xml",H+`<worksheet ${NS}><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><sheetData>${rowsX.join("")}</sheetData><autoFilter ref="A1:${colLetter(headers.length-1)}${matrix.length+1}"/></worksheet>`]];
   const a=document.createElement("a");a.href=URL.createObjectURL(makeZipStored(files));
-  a.download=sh.name.replace(/[^\w\- ]+/g,"_")+"_loc.xlsx";a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+  a.download=fname;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000);
 }
-/* nhà cung cấp */
-function renderSuppliers(){
-  const q=(state.supQ||"").toLowerCase();const out=[];
+/* nhà cung cấp: gom từ tab PO (tự cập nhật theo PO), đối chiếu Phân loại với tab Công nợ NCC */
+function supplierRows(){
+  const out=[];
   state.sheets.forEach((sh,si)=>{
     if(!sh.wf)return;const sc=sh.cols.find(c=>/^nhà cung cấp$/i.test(c.name.trim()));if(!sc)return;
     const m=new Map();
     for(const r of sh.rows){
-      const k=String(r.v[sc.idx]??"(Trống)"),o=m.get(k)||{k,si,sc:sc.idx,n:0,open:0,late:0,quote:0,maxLate:0,sum:0,sumOpen:0};
+      const k=String(r.v[sc.idx]??"(Trống)").trim()||"(Trống)",o=m.get(k)||{k,si,sc:sc.idx,n:0,open:0,late:0,quote:0,maxLate:0,sum:0,sumOpen:0};
       const amt=sh.money?+r.v[sh.money.idx]||0:0;o.n++;o.sum+=amt;
       if(!r.done){o.open++;o.sumOpen+=amt;if(r.wf==="Chờ báo giá")o.quote++;
         if(r.st==="overdue"){o.late++;const d=dueOf(sh,r);if(d instanceof Date)o.maxLate=Math.max(o.maxLate,Math.round((TODAY-sod(d))/DAY))}}
@@ -2163,11 +2179,44 @@ function renderSuppliers(){
     }
     out.push(...m.values());
   });
+  // đối chiếu với tab Công nợ NCC
+  const S=nccSheets(),rec={ds:null,used:new Set(),dup:[],orphan:[]};
+  if(S){
+    const items=S.ds.rows.filter(r=>r.v[S.nc.idx]!=null&&String(r.v[S.nc.idx]).trim()).map(r=>({name:String(r.v[S.nc.idx]).trim(),row:r}));
+    const cache=new Map(items.map(it=>[it,NCC.cands(it.name)]));
+    for(const o of out){
+      const f=o.k==="(Trống)"?{hits:[]}:NCC.find(o.k,items,cache);
+      o.dsRows=f.hits.map(h=>h.row);o.cls=f.hits.length?[...new Set(f.hits.map(h=>String(h.row.v[S.tc.idx]??"").trim()))].join(" / "):null;
+      o.note=f.hits.length&&S.gc?String(f.hits[0].row.v[S.gc.idx]??""):"";
+      f.hits.forEach(h=>rec.used.add(h));if(f.hits.length>1)rec.dup.push({k:o.k,names:f.hits.map(h=>h.name)});
+    }
+    rec.ds=items.length;rec.orphan=items.filter(it=>!rec.used.has(it)).map(it=>it.name);rec.S=S;
+  }
+  return {out,rec};
+}
+function supplierExport(){
+  const {out}=supplierRows();
+  const hd=["Tên NCC","Phân loại","Ghi chú","Số PO","Đang mở","Trễ","Chờ báo giá","Trễ lâu nhất (ngày)","Giá trị đang mở"];
+  downloadXlsx("Nhà cung cấp",hd,out.map(o=>[o.k,o.cls||"",o.note||"",o.n,o.open,o.late,o.quote,o.maxLate||"",o.sumOpen||""]),"Nha-cung-cap.xlsx");
+}
+function supplierImport(){
+  const S=nccSheets();if(!S){toast("Không có tab Công nợ NCC để nhập (cần sheet “Công nợ NCC” và tab PO).",true);return}
+  state.impTarget=S.dsSi;$("#fileImp").click();
+}
+function renderSuppliers(){
+  const q=(state.supQ||"").toLowerCase();
+  const {out,rec}=supplierRows();
   const L=out.filter(o=>!q||o.k.toLowerCase().includes(q)).sort((a,b)=>b.late-a.late||b.maxLate-a.maxLate||b.sumOpen-a.sumOpen);
-  $("#main").innerHTML=`<div class="toolbar"><input type="search" id="supq" placeholder="Tìm nhà cung cấp…" value="${esc(state.supQ||"")}"><span class="sub">${L.length} nhà cung cấp · sắp theo số PO trễ giảm dần</span></div>
-   <div class="card scroll-x"><table class="mini"><thead><tr><th>Nhà cung cấp</th><th style="text-align:right">Số PO</th><th style="text-align:right">Đang mở</th><th style="text-align:right">Trễ</th><th style="text-align:right">Chờ báo giá</th><th style="text-align:right">Trễ lâu nhất</th><th style="text-align:right">Giá trị đang mở</th></tr></thead><tbody>`+
-   L.slice(0,300).map((o,i)=>`<tr class="click" data-sup="${i}"><td>${esc(o.k)}</td><td class="num">${o.n}</td><td class="num">${o.open}</td><td class="num" style="${o.late?"color:var(--bad);font-weight:700":""}">${o.late}</td><td class="num">${o.quote}</td><td class="num">${o.maxLate?o.maxLate+" ngày":""}</td><td class="num">${fmtBig(o.sumOpen)}</td></tr>`).join("")+`</tbody></table></div><div class="note">“Trễ” = PO chưa Hoàn thành và đã quá ngày nhận hàng. Bấm một dòng để mở sheet PO đã lọc theo nhà cung cấp đó.</div>`;
+  const hasDs=rec.ds!=null;
+  const sum=hasDs?`<div class="note" style="margin:0 0 12px"><b>Đối chiếu với tab Công nợ NCC:</b> tab này có <b>${out.length}</b> NCC (đang có PO trong tab PO), tab Công nợ NCC có <b>${rec.ds}</b> dòng. `+
+    `Khác nhau vì Công nợ NCC là danh sách gốc (giữ cả NCC cũ chưa có PO${rec.orphan.length?`: <i>${esc(rec.orphan.slice(0,6).join("; "))}${rec.orphan.length>6?"…":""}</i>`:""}) `+
+    `${rec.dup.length?`và có NCC ghi trùng 2 dòng khác cách viết (<i>${esc(rec.dup.slice(0,3).map(d=>d.names.join(" = ")).join("; "))}</i>)`:""}. NCC mới ở tab PO được tự thêm vào Công nợ NCC khi mở file và khi đồng bộ Odoo.</div>`:"";
+  $("#main").innerHTML=`<div class="toolbar"><input type="search" id="supq" placeholder="Tìm nhà cung cấp…" value="${esc(state.supQ||"")}"><span class="sub">${L.length} nhà cung cấp · sắp theo số PO trễ giảm dần</span>
+   <button class="btn" id="supExp" title="Xuất danh sách đang hiện ra Excel (Tên NCC, Phân loại, Ghi chú, số liệu PO)">⬇ Xuất Excel</button><button class="btn" id="supImp" title="Nhập Excel vào tab Công nợ NCC: khớp theo cột Tên NCC, cập nhật Phân loại/Ghi chú, NCC mới thì thêm dòng">⬆ Nhập Excel</button></div>${sum}
+   <div class="card scroll-x"><table class="mini"><thead><tr><th>Nhà cung cấp</th><th>Phân loại</th><th style="text-align:right">Số PO</th><th style="text-align:right">Đang mở</th><th style="text-align:right">Trễ</th><th style="text-align:right">Chờ báo giá</th><th style="text-align:right">Trễ lâu nhất</th><th style="text-align:right">Giá trị đang mở</th></tr></thead><tbody>`+
+   L.slice(0,300).map((o,i)=>`<tr class="click" data-sup="${i}"><td>${esc(o.k)}</td><td>${o.cls?esc(o.cls):(hasDs?'<span class="sub" title="Chưa khớp dòng nào trong Công nợ NCC">—</span>':"")}</td><td class="num">${o.n}</td><td class="num">${o.open}</td><td class="num" style="${o.late?"color:var(--bad);font-weight:700":""}">${o.late}</td><td class="num">${o.quote}</td><td class="num">${o.maxLate?o.maxLate+" ngày":""}</td><td class="num">${fmtBig(o.sumOpen)}</td></tr>`).join("")+`</tbody></table></div><div class="note">“Trễ” = PO chưa Hoàn thành và đã quá ngày nhận hàng. Bấm một dòng để mở sheet PO đã lọc theo nhà cung cấp đó. Danh sách này tự cập nhật theo tab PO.</div>`;
   $("#supq").oninput=e=>{state.supQ=e.target.value;const p=e.target.selectionStart;renderSuppliers();const n=$("#supq");n.focus();n.setSelectionRange(p,p)};
+  $("#supExp").onclick=supplierExport;$("#supImp").onclick=supplierImport;
   $("#main").querySelectorAll("[data-sup]").forEach(tr=>tr.onclick=()=>{const o=L[+tr.dataset.sup];goSheet(o.si,{filters:{[o.sc]:o.k==="(Trống)"?"":o.k}})});
 }
 /* giao diện sáng/tối */

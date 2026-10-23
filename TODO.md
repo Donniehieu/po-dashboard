@@ -168,6 +168,15 @@ Vì số PAY **đổi tên** thành chuỗi chứa `BNK` khi được thanh toá
 - 🟡 Dữ liệu PAY vào chung `PO-data.xlsx`; mỗi lần đồng bộ sẽ thêm commit như PO. Nếu file lớn dần, cân nhắc chuyển PAY đã TT quá 90 ngày sang sheet lưu trữ.
 - ⚠ Dashboard chưa có sẵn chỗ "nhắc kế toán" nào để nối vào – đây là chức năng mới hoàn toàn (4.5), không phải chỉnh sửa nhỏ.
 
+## Đợt 5 – Công nợ NCC, tab Nhà cung cấp, bấm ▶/◀ không giật (24/10/2026)
+- ✅ **Tab "DS NCC" đổi tên thành "Công nợ NCC"**: dashboard nhận cả hai tên; `config.json` (`supplier_sync.sheet`) dùng tên mới; script đồng bộ tự đổi tên sheet trong `PO-data.xlsx` ở lần chạy kế tiếp (giữ nguyên dữ liệu, `legacy_sheets`). Test: `tests/test_ncc_sync.py` (6 test, đạt).
+- ✅ **Kiểm tra NCC mới ở tab PO có tự thêm vào Công nợ NCC không**: CÓ — ở dashboard (mở file, nhập Excel) và ở script đồng bộ (15 phút). Đối chiếu bằng dữ liệu thật: 49 NCC ở PO đều đã khớp một dòng trong Công nợ NCC, không thiếu NCC nào.
+- ✅ **Tab Nhà cung cấp tự cập nhật theo PO**: CÓ (tính lại từ tab PO mỗi lần hiển thị).
+- ✅ **Vì sao số lượng khác nhau (49 so với 51)**: tab Nhà cung cấp chỉ đếm NCC đang có PO (49). Công nợ NCC là danh sách gốc, 51 dòng: 1 NCC cũ chưa có PO (CÔNG TY CỔ PHẦN NHỰA TIẾN ĐẠT) và 1 NCC ghi trùng 2 dòng khác cách viết (ĐẠI KINH BẮC: "…THƯƠNG MẠI XUẤT NHẬP KHẨU VÀ KỸ THUẬT…" và "…TM XNK VÀ KỸ THUẬT…"). Không phải lỗi đồng bộ. Tab Nhà cung cấp nay có dòng giải thích này + cột **Phân loại** (lấy từ Công nợ NCC). 🟡 Bạn nên xóa 1 trong 2 dòng trùng Đại Kinh Bắc ở Công nợ NCC.
+- ✅ **Lỗi tìm thấy & đã sửa**: các dòng đã xóa ở dashboard để lại dòng chỉ có STT trong Excel (Công nợ NCC có 117 dòng STT nhưng chỉ 51 dòng có tên). Dashboard đã bỏ qua các dòng này nên không ảnh hưởng số liệu; chưa dọn trong file Excel.
+- ✅ **Nhập/Xuất Excel ở tab Nhà cung cấp**: ⬇ Xuất Excel (Tên NCC, Phân loại, Ghi chú, Số PO, Đang mở, Trễ, Chờ báo giá, Trễ lâu nhất, Giá trị đang mở); ⬆ Nhập Excel vào Công nợ NCC (khớp theo Tên NCC, cả khi khác cách viết; cập nhật Phân loại/Ghi chú, NCC mới thì thêm dòng). Đã thử xuất rồi nhập lại: 0 dòng mới, không sinh trùng.
+- ✅ **Bấm ▶/◀ không giật / không "load lại trang"**: nguyên nhân chính là sau mỗi lần tự lưu (1,2 giây sau lần bấm) dashboard dựng lại toàn trang mà không giữ vị trí cuộn. Đã sửa: sau khi lưu chỉ bỏ nền "ô vừa sửa", không dựng lại; khi bấm ▶/◀ giữ nguyên cuộn ngang/dọc của bảng và của trang, đồng thời giữ hàng vừa bấm đứng yên dưới con trỏ (kể cả khi hàng dời chỗ do lọc/sắp xếp). Đã thử bấm ▶ 3 lần liên tiếp: vị trí cuộn và vị trí hàng không đổi. 🟡 Chưa thử cảm giác thực tế trên điện thoại/GitHub thật.
+
 ## Đã bỏ theo yêu cầu
 - Bot nhắc việc (Telegram/Zalo/email) và tuổi công nợ theo nhà cung cấp.
 
