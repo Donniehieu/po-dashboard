@@ -177,6 +177,8 @@ Vì số PAY **đổi tên** thành chuỗi chứa `BNK` khi được thanh toá
 - ✅ **Nhập/Xuất Excel ở tab Nhà cung cấp**: ⬇ Xuất Excel (Tên NCC, Phân loại, Ghi chú, Số PO, Đang mở, Trễ, Chờ báo giá, Trễ lâu nhất, Giá trị đang mở); ⬆ Nhập Excel vào Công nợ NCC (khớp theo Tên NCC, cả khi khác cách viết; cập nhật Phân loại/Ghi chú, NCC mới thì thêm dòng). Đã thử xuất rồi nhập lại: 0 dòng mới, không sinh trùng.
 - ✅ **Bấm ▶/◀ không giật / không "load lại trang"**: nguyên nhân chính là sau mỗi lần tự lưu (1,2 giây sau lần bấm) dashboard dựng lại toàn trang mà không giữ vị trí cuộn. Đã sửa: sau khi lưu chỉ bỏ nền "ô vừa sửa", không dựng lại; khi bấm ▶/◀ giữ nguyên cuộn ngang/dọc của bảng và của trang, đồng thời giữ hàng vừa bấm đứng yên dưới con trỏ (kể cả khi hàng dời chỗ do lọc/sắp xếp). Đã thử bấm ▶ 3 lần liên tiếp: vị trí cuộn và vị trí hàng không đổi. 🟡 Chưa thử cảm giác thực tế trên điện thoại/GitHub thật.
 
+- ✅ (24/10/2026) **Nhắc KT xác nhận hóa đơn cho PO "Chờ KT xác nhận công nợ"**: nút 💬 trên trang PO của Odoo (script v1.2.0) gõ sẵn @[HN0096] Nguyễn Thị Mai (Dung Quất) hoặc @[HN0176] Tống Sỹ Xuân Trường (Phúc Hà). Mặc định chỉ gõ sẵn. 🟡 Chưa thử Odoo thật; dashboard chưa có nút gọi, phải mở PO trên Odoo rồi bấm.
+
 ## Đã bỏ theo yêu cầu
 - Bot nhắc việc (Telegram/Zalo/email) và tuổi công nợ theo nhà cung cấp.
 
