@@ -69,6 +69,99 @@ Cập nhật: 22/10/2026. Ký hiệu: ✅ đã làm và đã test · 🟡 làm m
 **Cần bạn quyết định / kiểm tra**
 1. Sau khi bạn thay `index.html` mới lên repo po-dashboard, hãy thử: mở 1 file khác, sửa 1 ô, xác nhận `data/PO-data.xlsx` và `data/history.json` trên GitHub không có commit mới.
 
+## Đợt 4 – Tab "Theo dõi PAY" (thanh toán NCC) – ĐỀ XUẤT, chưa làm (23/10/2026)
+Ký hiệu riêng cho đợt này: ⬜ chưa làm (đề xuất chờ bạn duyệt).
+
+### 4.1 Hiện trạng đã đọc từ code (cơ sở cho đề xuất)
+- Dashboard chỉ đọc **một file Excel** `data/PO-data.xlsx` trên GitHub; mỗi sheet là một tab. Dữ liệu Odoo chỉ vào Excel qua `scripts/sync_odoo.py` (workflow `sync-odoo.yml`, 15 phút/lần, giờ hành chính T2–T6). Hiện **chỉ đồng bộ `purchase.order`**, chưa đọc gì từ trang `…/odoo/vendor-payments`.
+- Số PAY hiện chỉ có mặt dưới dạng **chữ gõ tay trong cột Note** của PO (vd. "PAY00598") – chưa có chỗ nào kiểm soát PAY đó đã thanh toán chưa. Luồng "Thanh toán trước" đã có hai bước `Chờ làm TT` → `Đã gửi UNC`.
+- Đã có sẵn: hộp 🔔 "Nhắc việc – đơn trễ hẹn" (`lateMsgs/renderMsgs`), banner đầu trang, mở Odoo theo mã, lịch sử thao tác, tab tự sinh từ sheet. Chưa có mục nào tên "nhắc nhở kế toán thanh toán" → đề xuất tạo mới (mục 4.5).
+- Script Tampermonkey `odoo-autofill-nhan-thanh-toan.user.js` đã chạy trên đúng trang `vendor-payments/…` nên biết các field tùy biến `x_beneficiary_*` của model thanh toán.
+
+### 4.2 Hướng quản lý đề xuất: "PAY là một hồ sơ có vòng đời", khóa theo ID chứ không theo số PAY
+Vì số PAY **đổi tên** thành chuỗi chứa `BNK` khi được thanh toán, **không dùng số PAY làm khóa** (sẽ mất dấu hồ sơ). Dùng **ID bản ghi Odoo** (`id` + công ty) làm khóa cố định, và lưu thêm:
+| Cột trong sheet mới "Theo dõi PAY" | Nguồn / cách tính |
+|---|---|
+| ID Odoo, Công ty | `account.payment.id`, công ty |
+| **Số PAY (ban đầu)** | tên lần đầu thấy dạng `PAY…` – **không ghi đè** khi đổi tên |
+| **Số chứng từ hiện tại** | tên hiện tại trên Odoo (PAY… hoặc …BNK…) |
+| NCC, Số tiền, Tiền tệ, Diễn giải (memo/ref) | từ Odoo |
+| **Ngày lập PAY** | `create_date` (đổi sang giờ VN) |
+| **Hạn thanh toán** | Ngày lập + 1 ngày (tham số `pay_overdue_days` trong `config.json`) |
+| **Trạng thái TT** | xem 4.3 |
+| Số BNK, Ngày thanh toán | tên chứa BNK; ngày lần đầu script thấy BNK (và `date` của phiếu) |
+| PO liên quan | tìm mã `PO…` trong memo/ref, trong hóa đơn gắn với phiếu, và PO nào có Note chứa số PAY (dò ngược) |
+| Số ngày chờ | hôm nay − ngày lập (chưa TT) hoặc ngày TT − ngày lập (đã TT) |
+| **Nhắc KT thanh toán** | nội dung nhắc tự sinh (4.5), **tự xóa khi đã BNK** |
+| Ngày nhắc, Số lần nhắc, Ghi chú | tay: bạn/kế toán ghi "đã nhắc chị X lúc…" |
+
+### 4.3 Quy tắc phân loại (đúng như bạn mô tả, thêm vài trường hợp biên để không sót)
+1. **Chưa thanh toán** = tên còn dạng `PAY…`, không chứa `BNK`, trạng thái Odoo chưa hủy.
+2. **Đã thanh toán** = tên **chứa `BNK`** (quy tắc chính, theo bạn). Dùng thêm trạng thái Odoo (`state`, đã đối chiếu `is_reconciled`) chỉ để **cảnh báo bất thường** (vd. có BNK nhưng state là nháp/hủy; hoặc state đã trả nhưng tên vẫn PAY) – hiển thị nhãn "⚠ Kiểm tra", không tự đổi.
+3. **Quá hạn** = Chưa thanh toán và (bây giờ − ngày lập) **> 1 ngày**. Tùy chọn (hỏi bạn ở 4.7): có bỏ qua T7/CN không (PAY lập chiều thứ Sáu thì thứ Hai mới coi là quá hạn).
+4. **Đã hủy** = state hủy hoặc phiếu bị xóa trên Odoo → chuyển nhãn "Đã hủy", **không xóa dòng**, không nhắc nữa (khác PO: giữ lịch sử để đối chiếu; PAY mất mà chưa BNK phải được thấy).
+5. **PAY biến mất khỏi Odoo nhưng chưa BNK** → nhãn "⚠ Không còn trên Odoo", không nhắc.
+6. Thanh toán **một phần / gộp nhiều PO / nhiều PAY cho một PO**: tab hiển thị theo từng PAY; ở cấp PO gộp lại: "đã TT x/y PAY".
+
+### 4.4 Cách lấy dữ liệu (kiến trúc: tái dùng hạ tầng sẵn có, không thêm dịch vụ)
+- ⬜ **Bước 0 – thăm dò (làm đầu tiên, 15 phút):** chạy thử với tài khoản API hiện tại xem đọc được model **`account.payment`** không (điều kiện: `payment_type = outbound`, `partner_type = supplier`; trang `vendor-payments` của Odoo 17 chính là model này). Lấy `fields_get` để xác nhận tên field thật (`name`, `partner_id`, `amount`, `currency_id`, `state`, `create_date`, `date`, `memo`/`ref`, `move_id`, `is_reconciled`, các field `x_beneficiary_*`). Kết quả quyết định đi đường A hay B.
+- ⬜ **Đường A (ưu tiên) – mở rộng đồng bộ Odoo hiện có:** thêm `scripts/sync_pay.py` (dùng chung lớp `Odoo` trong `sync_odoo.py`, cùng secrets, cùng workflow 15 phút, cùng cơ chế `git add -A data/` + thử lại khi xung đột). Khóa = ID Odoo; **thêm dòng mới, cập nhật dòng cũ, không xóa**; giữ nguyên các cột tay (Ghi chú, Số lần nhắc). Cấu hình trong mục `pay_sync` của `config.json` (tên model, domain, công ty, `pay_overdue_days`, mẫu nhận diện `PAY`/`BNK`). Lỗi ở bước PAY **không được làm hỏng** đồng bộ PO (giống cách `ncc_sync` đang làm).
+- ⬜ **Đường B (dự phòng nếu tài khoản API không đọc được `account.payment`):** mở rộng userscript Tampermonkey: khi bạn mở danh sách `vendor-payments`, script đọc các dòng đang hiển thị (số chứng từ, NCC, số tiền, ngày) rồi đẩy lên GitHub (cần token) hoặc xuất file JSON để dashboard nạp. Kém tự động hơn (chỉ chạy khi bạn mở Odoo) nên chỉ dùng khi buộc phải.
+- ⬜ **Đồng bộ ngược khi bạn tạo PAY:** nút "＋ Đã lập PAY" ở PO (hoặc tự dò memo chứa mã PO) để gắn PO↔PAY ngay cả khi memo không ghi mã PO; nếu PO đang ở `Chờ làm TT` thì **gợi ý** chuyển `Đã gửi UNC` (chỉ gợi ý, không tự đổi – giống nút 💡 Hoàn thành).
+- ⬜ Mỗi lần chạy ghi log: số PAY mới, số vừa chuyển BNK, số quá hạn, các PAY bất thường – xem được trong Actions như log PO hiện nay.
+
+### 4.5 Giao diện dashboard
+- ⬜ **Tab mới "Theo dõi PAY"** (sheet cùng tên trong `PO-data.xlsx`, tận dụng cơ chế tab theo sheet + bộ lọc kiểu Excel + ẩn/hiện cột + xuất Excel đã có; thêm hiển thị riêng):
+  - Thanh tóm tắt trên cùng: **Chưa TT (n, tổng tiền) · Quá hạn (n, tổng tiền) · Đã TT hôm nay · Đã TT 7 ngày**; bấm vào để lọc.
+  - Nhãn màu theo trạng thái: 🟢 Đã TT (BNK) · 🟡 Chưa TT trong hạn · 🔴 Quá hạn N ngày · ⚪ Đã hủy · ⚠ Bất thường. Mặc định sắp xếp: quá hạn lâu nhất lên đầu.
+  - Bấm số PAY/BNK → mở đúng phiếu trên Odoo (giống `odoo-ids.json` đang dùng cho PO: thêm `pay-ids.json`).
+  - Cột "PO liên quan" bấm để nhảy sang tab PO đã lọc đúng PO đó.
+- ⬜ **Mục "Nhắc kế toán thanh toán"** (tạo mới, theo yêu cầu "quá hạn 1 ngày từ khi lập PAY thì note báo lại"):
+  1. Script đồng bộ tự điền cột **"Nhắc KT thanh toán"** của dòng PAY quá hạn, nội dung ví dụ: `Quá hạn 2 ngày: PAY00598 – NCC X – 12.500.000đ (lập 21/10) – chưa có BNK, nhờ KT thanh toán`. Chỉ ghi khi chưa có nội dung (không đè ghi chú tay), và **tự xóa/đổi thành "Đã TT <số BNK> ngày …"** khi PAY chuyển BNK.
+  2. Trong hộp 🔔 hiện nhóm riêng "Nhắc kế toán thanh toán" (tách khỏi "đơn trễ hẹn"), có nút: 🔍 Mở trên Odoo · ✅ Đã nhắc (ghi ngày + tăng số lần nhắc) · 📋 Sao chép nội dung nhắc (dán vào Zalo/email gửi kế toán) · 🎤 Ghi chú. Banner đầu trang thêm "n PAY quá hạn thanh toán".
+  3. Ở tab **PO**: thêm huy hiệu cạnh Note: `PAY00598 · chờ TT 2 ngày` (đỏ khi quá hạn) hoặc `BNK… ✔` (xanh), để thấy ngay đơn nào đã/chưa thanh toán mà không phải mở tab PAY.
+  4. Khóa chống nhắc lặp: mỗi PAY mỗi ngày chỉ hiện một tin; bấm "Đã nhắc" thì ẩn đến hết ngày, sang ngày sau nếu vẫn chưa BNK thì hiện lại với "quá hạn N+1 ngày".
+- ⬜ Gửi nhắc tự động ra ngoài (Zalo/email cho kế toán) **vẫn chưa làm** vì cùng lý do mục Zalo/email ở Đợt 2; trước mắt dùng nút "Sao chép nội dung nhắc".
+
+### 4.6 Các bước triển khai (thứ tự đề xuất, mỗi bước kiểm chứng được độc lập)
+1. ⬜ Bước 0: thăm dò quyền đọc `account.payment` + tên field (xem 4.4). **Cần bạn cung cấp:** một vài số PAY chưa TT và vài số BNK đã TT thật (để đối chiếu quy tắc nhận diện, và xem memo có ghi mã PO không).
+2. ⬜ Viết `scripts/sync_pay.py` + mục `pay_sync` trong `config.json` + sheet "Theo dõi PAY" (tự tạo cột); thêm vào `sync-odoo.yml`; chạy `--probe` kiểm tra không ghi file.
+3. ⬜ Test tự động với dữ liệu giả (đúng thói quen thư mục `tests/`): PAY mới → chưa TT; đổi tên sang BNK → Đã TT & giữ khóa/Số PAY ban đầu; quá 1 ngày → có nhắc; có BNK → xóa nhắc; PAY biến mất → "Không còn trên Odoo"; lỗi API không làm hỏng sync PO.
+4. ⬜ Dashboard: tab "Theo dõi PAY" + thanh tóm tắt + nhãn màu + lọc (không động tới logic các tab cũ).
+5. ⬜ Dashboard: nhóm "Nhắc kế toán thanh toán" trong 🔔 + banner + huy hiệu PAY ở tab PO + nút "Đã nhắc/Sao chép".
+6. ⬜ Gắn PAY↔PO (memo/hóa đơn/Note) và gợi ý đổi bước `Chờ làm TT` → `Đã gửi UNC` → các bước sau.
+7. ⬜ Cập nhật `HUONG_DAN.md`; chạy thử trên dữ liệu thật 2–3 ngày rồi chỉnh quy tắc.
+
+### 4.7 Đã chốt (23/10/2026, theo trả lời của bạn)
+1. ✅ **Quá hạn tính theo ngày làm việc T2–T6, T7/CN không tính**: hạn thanh toán = ngày lập PAY (lập T7/CN thì hạn là thứ Hai kế tiếp); khi đã qua ≥ 1 ngày làm việc kể từ hạn mà PAY chưa thanh toán thì quá hạn và bị nhắc (vd. lập T2 → nhắc từ T3; lập T6 → nhắc từ T2). Ngưỡng đổi ở `pay_sync.overdue_days` trong config.json.
+2. ✅ **Nhắc kế toán bằng tin nhắn trong Chatter của Odoo**, gắn vào chính phiếu PAY (hoặc PO): ô "Gửi tin" (nút `o-mail-Chatter-sendMessage`), bỏ chế độ email (chọn Ghi chú/Gửi tin nội bộ), @tag tên kế toán. Dashboard soạn sẵn nội dung + nút mở đúng phiếu; ⬜ việc tự động đăng tin cần ghi vào Odoo (mail.message) nên phải kiểm tra quyền ghi của tài khoản API – nếu chưa có thì dùng nút "Sao chép nội dung" dán vào Chatter.
+3. ✅ **Quản lý theo số PAY** (một PAY gộp nhiều PO). Cột "PO liên quan" liệt kê tất cả PO trong phiếu.
+4. ✅ **Tự động đổi bước PO** khi PAY thành BNK (PO đang `Chờ làm TT` / bước trả trước trước `Đã gửi UNC` -> chuyển sang bước kế tiếp theo quy trình); mọi lần đổi ghi vào lịch sử thao tác.
+5. ✅ **Lấy PAY của cả 2 công ty** từ `erp.dekko.com.vn/odoo/vendor-payments` (tiền tố số BNK: **DQ/** = Nhựa Dung Quất, **PH/** = Phúc Hà).
+6. ✅ **Nhận diện trạng thái theo cột "Trạng thái" trên Odoo**: **Nháp** = chưa thanh toán (số PAY…, vd PAY01086, PAY02087); đã thanh toán thì số đổi thành BNK (vd DQ/BNK526092400061, PH/BNK526101900466).
+7. ✅ **Bấm đúp một dòng ở tab Phiếu thanh toán → mở phiếu đó trên Odoo.**
+8. ⬜ Cách lấy dữ liệu: crawl trang vendor-payments bằng phiên đăng nhập của bạn (bước 0) để xác nhận field thật; sau đó script đồng bộ đọc qua API.
+
+### 4.9 Kết quả khảo sát Odoo thật (23/10/2026, qua Chrome đã đăng nhập, chỉ ĐỌC) và tình trạng làm
+**Khảo sát (model `account.payment`, payment_type=outbound, partner_type=supplier, tổng 1.503 phiếu của 27 người lập, 6 công ty):**
+- Trạng thái Odoo có 4 giá trị đang dùng: **draft (Nháp) 123 · approved (Đã duyệt) 134 · paid 1.231 · canceled 15**. ⚠ Phiếu **Đã duyệt vẫn mang số PAY** (vd. PAY03285, PAY02939) nên **"chưa thanh toán" = Nháp + Đã duyệt**, không chỉ Nháp như bạn nêu; đã thanh toán = `paid` (số `PH/BNK…` hoặc `DQ/BNK…`). Đã đưa cả hai vào quy tắc.
+- Mẫu số của chính bạn (create_uid = tài khoản đăng nhập, 2 công ty Phúc Hà + Dung Quất): 73 phiếu – PAY nháp 11, PAY đã duyệt 9, BNK đã thanh toán 50, hủy 1, và **2 phiếu số `DQ/BNK…` nhưng trạng thái vẫn Nháp** (bất thường → dashboard/script ghi nhãn "⚠ Kiểm tra" và KHÔNG nhắc; cần bạn xem 2 phiếu này).
+- Memo (diễn giải) có mã PO ở 35/73 phiếu (vd. "Cty Phúc Hà tt POKR&D00019") → dùng để gắn PAY↔PO; phiếu memo kiểu "TT hóa đơn 1564" không có mã PO nên gắn thêm bằng Note của PO có ghi số PAY. Phiếu đang mở chưa có hóa đơn đối chiếu (`reconciled_bill_ids` trống) nên không dùng được.
+- Ngày lập lấy `create_date` (đổi sang giờ VN). Phạm vi mặc định: **chỉ phiếu do chính bạn lập** (`create_uid = {uid}`) của 2 công ty trong config.json; muốn lấy phiếu của cả đồng nghiệp thì bỏ điều kiện `create_uid` trong `pay_sync.domain` (sẽ thành ~1.300 phiếu).
+- Tôi không dùng khóa API bạn gửi trong chat; việc đọc đã làm bằng phiên Chrome. Khóa đã nằm trong chat nên nếu lo ngại hãy tạo lại khóa mới trên Odoo (Tài khoản → Bảo mật → Khóa API).
+
+**Đã viết (🟡 chưa chạy thử trên GitHub/Odoo thật vì máy này không có Python):**
+- ✅ `po-data/scripts/pay_sync.py` + mục `pay_sync` trong `config.json` + móc vào `sync_odoo.py` (chạy cùng workflow 15 phút; lỗi PAY không làm hỏng sync PO). Tạo/ghi sheet **"Phiếu thanh toán"** (khóa theo ID Odoo, giữ cột "Ghi chú" và mọi cột lạ bạn thêm), tính trạng thái, hạn, số ngày làm việc trễ, PO liên quan, cột "Nhắc KT thanh toán"; PAY thành BNK thì PO trả trước (Thanh toán trước = Có) đang ở bước trước "Đã gửi UNC" **tự chuyển "Đã gửi UNC"**, mỗi PAY một lần (nhớ trong `data/pay-state.json`).
+- ✅ Dashboard (`index.html`): tab "Phiếu thanh toán" tự hiện khi sheet có trong Excel; **bấm đúp vào dòng → mở phiếu trên Odoo** (riêng cột Ghi chú vẫn sửa được); quá hạn tính theo ngày làm việc (đã thử hàm tính ngày: lập T6 → T2 trễ 1, T3 trễ 2…); PAY quá hạn vào hộp 🔔, banner và tab Ưu tiên, kèm nút "Mở phiếu trên Odoo" và "Sao chép nhắc KT". Đã kiểm tra cú pháp `index.html`; chưa mở thử với file Excel có sheet này.
+- ⬜ Chưa làm: tự đăng tin vào Chatter Odoo và tag kế toán (cần quyền ghi `mail.message`; hiện dùng nút sao chép rồi dán vào ô Gửi tin, bỏ chế độ email); ô `pay_sync.accountant_tag` trong config.json dành sẵn để chèn tên kế toán vào đầu nội dung nhắc (bạn cho tên cần tag); huy hiệu PAY/BNK ngay ở tab PO; test tự động cho `pay_sync`; hướng dẫn trong HUONG_DAN.md.
+- 🟡 Cách chạy kiểm thử đầu tiên: Actions → "Đồng bộ đơn mua từ Odoo" → **Run workflow với "Chạy thử" (probe)** xem log dòng "PAY: …", rồi chạy thật.
+
+### 4.8 Rủi ro / giới hạn cần biết trước
+- 🟡 Chưa xác minh được tài khoản API hiện tại có quyền đọc thanh toán nhà cung cấp; nếu không, đi đường B hoặc nhờ quản trị Odoo cấp quyền đọc `account.payment` (chỉ đọc).
+- 🟡 Quy tắc "tên chứa BNK" phụ thuộc cách đặt tên của Dekko; cần đối chiếu với dữ liệu thật ở bước 0 (vd. nếu có nhiều sổ nhật ký ngân hàng, hay phiếu tiền mặt `CSH…` thì cũng là đã thanh toán nhưng không có BNK → thêm mẫu vào `config.json`).
+- 🟡 Dữ liệu PAY vào chung `PO-data.xlsx`; mỗi lần đồng bộ sẽ thêm commit như PO. Nếu file lớn dần, cân nhắc chuyển PAY đã TT quá 90 ngày sang sheet lưu trữ.
+- ⚠ Dashboard chưa có sẵn chỗ "nhắc kế toán" nào để nối vào – đây là chức năng mới hoàn toàn (4.5), không phải chỉnh sửa nhỏ.
+
 ## Đã bỏ theo yêu cầu
 - Bot nhắc việc (Telegram/Zalo/email) và tuổi công nợ theo nhà cung cấp.
 

@@ -509,6 +509,10 @@ function wfDerive(sh,r){
   if((st==="đã phê duyệt"||st==="đơn mua hàng")&&rc==="chưa nhận")return "Chờ gửi NCC"; // “Đơn mua hàng” = nhãn Odoo của đơn đã xác nhận
   return "Chờ báo giá";
 }
+/* Số ngày làm việc (T2-T6) đã qua kể từ hạn; hạn rơi vào T7/CN thì tính từ thứ Hai kế tiếp */
+function bdLate(due){let d=sod(due);while(d.getDay()===0||d.getDay()===6)d=new Date(d.getFullYear(),d.getMonth(),d.getDate()+1);let n=0;while(d<TODAY){d=new Date(d.getFullYear(),d.getMonth(),d.getDate()+1);if(d.getDay()!==0&&d.getDay()!==6)n++}return n}
+function payUrl(sh,r){const id=r.v[sh.payId],cid=r.v[sh.payCid];if(id==null||id==="")return null;return new URL(ODOO_LIST()).origin+"/odoo/vendor-payments/"+id+(cid?"?cids="+cid:"")}
+function openPay(sh,r){const u=payUrl(sh,r);if(!u){toast("Phiếu này chưa có ID Odoo (cần một lần đồng bộ Odoo)",true);return}window.open(u,"odoo-erp");toast("Đang mở phiếu "+r.v[sh.title]+" trên Odoo…")}
 const dueOf=(sh,r)=>sh.dueIdx!=null?r.v[sh.dueIdx]:null;
 /* Phiếu nhập kho “Đã nhận hết” -> tối thiểu “Cần lập hóa đơn”; “Đã nhận một phần” -> tối thiểu “Chờ nhận hàng” (chỉ nâng các bước đứng trước, không hạ bước đã đi xa hơn) */
 const WF_FLOOR=[
@@ -546,12 +550,16 @@ function analyze(raw){
   const hasKey=hdr.some(h=>/^mã đơn hàng$/i.test(String(h||"").trim()));
   const FORCE_RE=/^(thanh toán trước|ghi chú|trạng thái quy trình|note|ngày đổi trạng thái)$/i;
   const isDs=/^ds ncc$/i.test(String(raw.name||"").trim());
+  const isPaySheet=/^phiếu thanh toán$/i.test(String(raw.name||"").trim());
+  const hIdx=re=>hdr.findIndex(h=>re.test(String(h||"").trim()));
+  const payId=isPaySheet?hIdx(/^id odoo$/i):-1,payCid=isPaySheet?hIdx(/^mã công ty$/i):-1;
   const forced=n=>(hasKey&&FORCE_RE.test(n.trim()))||(isDs&&/^ngày điều chỉnh$/i.test(n.trim()));
   for(let c=0;c<maxC;c++){
     const name=(hdr[c]!=null?String(hdr[c]):"");
     const vals=rows.map(r=>r.v[c]).filter(x=>x!=null);
     if(!name&&!vals.length)continue;
     if(hasKey&&/^ngày cam kết giao$/i.test(name.trim()))continue; // đã bỏ cột này khỏi tab PO
+    if(isPaySheet&&(c===payId||c===payCid))continue; // cột kỹ thuật (dùng để mở phiếu trên Odoo), không hiển thị
     if(!vals.length&&!forced(name))continue;
     const nD=vals.filter(x=>x instanceof Date).length,nN=vals.filter(x=>typeof x==="number").length;
     const strs=vals.filter(x=>typeof x==="string");
@@ -613,12 +621,25 @@ function analyze(raw){
     sh.stIdx=f(/^trạng thái quy trình$/i);sh.rcIdx=f(/^trạng thái phiếu nhập kho$/i);sh.ivIdx=f(/^trạng thái hóa đơn$/i);sh.chgIdx=f(/^ngày đổi trạng thái$/i);
     sh.progIdx=sh.noteIdx;sh.blockIdx=null;
   }
+  if(isPaySheet){ // tab Phiếu thanh toán: quá hạn = chưa thanh toán và đã qua >=1 ngày làm việc (T2-T6) kể từ ngày lập
+    const f=re=>{const c=cols.find(c=>re.test(c.name.trim()));return c?c.idx:null};
+    sh.pay=true;sh.payId=payId;sh.payCid=payCid;sh.payStIdx=f(/^trạng thái tt$/i);sh.payNoteIdx=f(/^nhắc kt thanh toán$/i);sh.payMemoIdx=f(/^diễn giải$/i);
+    sh.dueIdx=f(/^hạn thanh toán$/i);sh.sub=f(/^nhà cung cấp$/i);sh.title=f(/^số pay$/i)??sh.title;sh.progIdx=null;sh.blockIdx=sh.payStIdx;
+    const m=cols.find(c=>/^số tiền$/i.test(c.name.trim()));if(m)sh.money=m;
+    sh.checklist=false;
+  }
   sh.ui={filters:{},cf:{},special:null,range:null,search:"",sort:null,shown:100,metric:"count"};
   return sh;
 }
 function setStatus(sh){
   for(const r of sh.rows){
     r.st=null;r.done=null;
+    if(sh.pay){
+      const s=wfn(r.v[sh.payStIdx]);r.done=s==="đã thanh toán"||s==="đã hủy"||s.startsWith("⚠ không còn");
+      const d0=dueOf(sh,r);
+      if(!r.done&&d0 instanceof Date&&bdLate(d0)>=1)r.st="overdue";
+      continue;
+    }
     if(sh.wf){
       r.wf=wfOf(sh,r);r.done=r.wf===WF_DONE; // đã “Hoàn thành” thì không bao giờ tính là trễ
       const d0=dueOf(sh,r);
@@ -1405,10 +1426,11 @@ function collectItems(){
   const out=[];
   state.sheets.forEach((sh,i)=>sh.rows.forEach(r=>{
     const wf=sh.wf;
+    if(sh.pay&&r.done)return;
     if(wf&&r.done)return; // PO đã “Hoàn thành” thì thoát khỏi danh sách xử lý dù trễ hay không
     const quote=wf&&r.wf==="Chờ báo giá";
     if(!r.st&&!quote)return;
-    const due=dueOf(sh,r);const late=due instanceof Date?Math.round((TODAY-sod(due))/DAY):0;
+    const due=dueOf(sh,r);const late=due instanceof Date?(sh.pay?bdLate(due):Math.round((TODAY-sod(due))/DAY)):0;
     const amt=sh.money?+r.v[sh.money.idx]||0:0;
     let lvl=r.st==="soon"?"soon":(late>7||amt>=5e7?"urgent":"high"),tier=2;
     if(!r.st)lvl="urgent";
@@ -1786,7 +1808,10 @@ function renderTable(sh,fr){
   if(mo){mo.onclick=()=>{u.shown+=200;renderTable(sh,fr)};
     if("IntersectionObserver" in window){const io=new IntersectionObserver(es=>{if(es[0].isIntersecting){io.disconnect();u.shown+=200;renderTable(sh,fr)}},{rootMargin:"300px"});io.observe(mo)}} // cuộn tới cuối tự tải thêm
   const touch=matchMedia("(pointer:coarse)").matches;
-  t.querySelectorAll("td[data-c]").forEach(td=>{td.ondblclick=()=>startEdit(sh,td);if(touch)td.onclick=e=>{if(!td.querySelector("input")&&!e.target.closest("button,.ol,.sl"))startEdit(sh,td)}});
+  const cellEdit=td=>{ // tab Phiếu thanh toán: bấm đúp mở phiếu trên Odoo, riêng cột Ghi chú vẫn sửa được
+    if(sh.pay){const ci=+td.dataset.c,col=sh.cols.find(c=>c.idx===ci);if(!col||!/^ghi chú$/i.test(col.name.trim())){const r=sh.rows.find(x=>x.n===+td.dataset.r);if(r)openPay(sh,r);return}}
+    startEdit(sh,td)};
+  t.querySelectorAll("td[data-c]").forEach(td=>{td.ondblclick=()=>cellEdit(td);if(touch)td.onclick=e=>{if(!td.querySelector("input")&&!e.target.closest("button,.ol,.sl"))cellEdit(td)}});
   t.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>deleteRow(si,+b.dataset.del));
   t.querySelectorAll("a.sl").forEach(a=>{a.onclick=e=>{e.preventDefault();e.stopPropagation();u.filters[+a.dataset.sup]=a.dataset.v;u.shown=100;renderDyn(sh);const tb=$("#tbl");if(tb)tb.scrollIntoView({block:"start"});toast("Đang lọc các PO của: "+a.dataset.v)};a.ondblclick=e=>e.stopPropagation()});
   t.querySelectorAll("[data-ck]").forEach(cb=>cb.onchange=()=>{
@@ -2236,11 +2261,14 @@ function renderMsgs(){
   const lvlC={urgent:"var(--bad)",high:"var(--warn)",soon:"var(--brand)"};
   $("#msgbody").innerHTML=L.length?L.slice(0,60).map(x=>{
     const vend=x.s.sub!=null?x.r.v[x.s.sub]:"";
-    return `<div class="msg" style="--c:${lvlC[x.lvl]}"><div class="mh"><a class="ol" href="#" data-code="${esc(x.r.v[x.s.title])}" title="Mở Odoo để tìm đơn này"><b>${esc(x.r.v[x.s.title])}</b></a><span class="late">trễ ${x.late} ngày</span></div>
+    return `<div class="msg" style="--c:${lvlC[x.lvl]}"><div class="mh"><a class="ol" href="#" data-code="${esc(x.r.v[x.s.title])}" title="Mở Odoo để tìm đơn này"><b>${esc(x.r.v[x.s.title])}</b></a><span class="late">${x.s.pay?"💳 chưa thanh toán · trễ "+x.late+" ngày làm việc":"trễ "+x.late+" ngày"}</span></div>
       <div class="sub">${x.wfs?`<span class="chip" style="--c:${colorFor(x.wfs)}">${esc(x.wfs)}</span> `:""}${esc(vend||"")}${x.amt?" · "+fmtN(x.amt):""} · hạn ${fmtD(x.due)} · ${esc(x.s.name)}</div>
-      <div class="ma"><button class="btn sm" data-mo="${esc(x.r.v[x.s.title])}">🔍 Tìm trên Odoo</button><button class="btn sm" data-mv="${x.i}|${x.r.n}">🎤 Ghi chú</button><button class="btn sm" data-mg="${x.i}|${esc(String(x.r.v[x.s.title]))}">📄 Xem dòng</button><button class="btn sm" data-mx="${esc(x.key)}" title="Ẩn tin này đến hết hôm nay">✕</button></div></div>`}).join("")+(L.length>60?`<div class="note">… và ${L.length-60} đơn nữa. Xem tab “Ưu tiên xử lý”.</div>`:""):`<div class="sub" style="padding:18px 8px">Không có đơn nào trễ hẹn. 🎉</div>`;
+      <div class="ma">${x.s.pay?`<button class="btn sm" data-mp="${x.i}|${x.r.n}">🔍 Mở phiếu trên Odoo</button><button class="btn sm" data-mc="${x.i}|${x.r.n}" title="Sao chép nội dung nhắc để dán vào Chatter của phiếu (gửi tin, tag kế toán)">📋 Sao chép nhắc KT</button>`:`<button class="btn sm" data-mo="${esc(x.r.v[x.s.title])}">🔍 Tìm trên Odoo</button>`}<button class="btn sm" data-mv="${x.i}|${x.r.n}">🎤 Ghi chú</button><button class="btn sm" data-mg="${x.i}|${esc(String(x.r.v[x.s.title]))}">📄 Xem dòng</button><button class="btn sm" data-mx="${esc(x.key)}" title="Ẩn tin này đến hết hôm nay">✕</button></div></div>`}).join("")+(L.length>60?`<div class="note">… và ${L.length-60} đơn nữa. Xem tab “Ưu tiên xử lý”.</div>`:""):`<div class="sub" style="padding:18px 8px">Không có đơn nào trễ hẹn. 🎉</div>`;
   const b=$("#msgbody");
   b.querySelectorAll("[data-mo]").forEach(x=>x.onclick=()=>openOdoo(x.dataset.mo));
+  const payRow=k=>{const [i,n]=k.split("|"),sh=state.sheets[+i];return [sh,sh&&sh.rows.find(r=>r.n===+n)]};
+  b.querySelectorAll("[data-mp]").forEach(x=>x.onclick=()=>{const [sh,r]=payRow(x.dataset.mp);if(r)openPay(sh,r)});
+  b.querySelectorAll("[data-mc]").forEach(x=>x.onclick=async()=>{const [sh,r]=payRow(x.dataset.mc);if(!r)return;const t=r.v[sh.payNoteIdx]||"";try{await navigator.clipboard.writeText(String(t));toast("Đã sao chép nội dung nhắc. Dán vào ô “Gửi tin” trong Chatter của phiếu và tag kế toán.")}catch(e){toast(String(t),true)}});
   b.querySelectorAll("[data-mv]").forEach(x=>x.onclick=()=>{const [i,n]=x.dataset.mv.split("|");voiceNote(+i,+n)});
   b.querySelectorAll("[data-mg]").forEach(x=>x.onclick=()=>{const k=x.dataset.mg.indexOf("|");msgs.open=false;goSheet(+x.dataset.mg.slice(0,k),{search:x.dataset.mg.slice(k+1).toLowerCase()});renderMsgs()});
   b.querySelectorAll("[data-mx]").forEach(x=>x.onclick=()=>{dismissMsg(x.dataset.mx);renderMsgs()});
