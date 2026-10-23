@@ -53,6 +53,22 @@ Cập nhật: 22/10/2026. Ký hiệu: ✅ đã làm và đã test · 🟡 làm m
 - 🟡 **Bảng dài**: cuộn tới cuối tự tải thêm 200 dòng (thay cho bấm "Hiện thêm"). Chưa ảo hóa thật, chưa cần với ~150 PO.
 - 🟡 **Dọn trùng lặp mã** (rowsFor/collectItems…): chỉ dọn phần mới viết, chưa tái cấu trúc toàn bộ để tránh làm hỏng chức năng đang chạy.
 
+## Đợt 3 – Kiểm tra mở file Excel khác tên PO-data (23/10/2026)
+**Kết luận kiểm tra (đọc code `index.html`, `sync-odoo.yml`, chưa thử trên GitHub thật):**
+- Mở file khác (nút chọn file / kéo thả): dashboard coi là nguồn "local". Sửa ô, thêm, xóa dòng chỉ **ghi vào chính file đó trên máy** (Chrome/Edge có quyền ghi) hoặc **tải về `<tên>_da-cap-nhat.xlsx`** (trình duyệt khác). **Không có đường nào tự đẩy lên GitHub** và không sửa `data/PO-data.xlsx`.
+- Tự đồng bộ Odoo không bị ảnh hưởng: workflow chỉ chạy `data/PO-data.xlsx` và `git add -A data/`; với file local dashboard tắt hẳn việc theo dõi/kích hoạt đồng bộ Odoo.
+- Dữ liệu phụ lưu **trong trình duyệt** (localStorage/IndexedDB), theo tên file: cột ẩn, độ rộng cột, chế độ xem, lịch sử thao tác.
+- ✅ **Lỗi tìm thấy & đã sửa 1**: lịch sử thao tác của file khác bị bỏ vào hàng đợi chung `qlcv:histq`, lần sau mở PO-data từ GitHub sẽ bị đẩy vào `data/history.json` (lẫn tab/mã lạ). Giờ file local chỉ lưu lịch sử trong trình duyệt, không vào hàng đợi đẩy GitHub.
+- ✅ **Lỗi tìm thấy & đã sửa 2**: hộp "Kết nối GitHub" cho đổi đường dẫn file tùy ý; nếu đặt `data/Khac.xlsx` thì `history.json` và `odoo-ids.json` dùng chung thư mục `data/` với PO-data. Giờ mọi đường dẫn khác `data/PO-data.xlsx` tự được đưa vào thư mục **`Dữ liệu Khác/`** ở gốc repo (nằm ngoài `data/` nên đồng bộ Odoo không đụng tới; history.json của file đó nằm riêng trong thư mục này).
+- ✅ **Nút "☁ Đẩy lên GitHub"** (thanh trên cùng; chỉ hiện khi đã kết nối GitHub và đang mở file từ máy): đẩy file vào `Dữ liệu Khác/<tên file>`, luôn hỏi xác nhận (hỏi thêm nếu ghi đè), chỉ đẩy khi không còn thay đổi chưa lưu. Không đổi cấu hình GitHub. Cần token Contents: Read and write (thư mục tự tạo). 🟡 Mới kiểm tra cú pháp, chưa thử đẩy thật.
+- ✅ **History riêng cho từng file**: PO-data giữ `data/history.json`; file khác trên GitHub dùng `Dữ liệu Khác/<tên>.history.json` và hàng đợi riêng trong trình duyệt; file mở từ máy chỉ lưu lịch sử trong trình duyệt. Với file khác PO-data, nút Đồng bộ Odoo và theo dõi đồng bộ Odoo bị tắt.
+- ✅ **Lưu trữ riêng (không qua GitHub)**: (1) **Cloud riêng** = Google Drive của người dùng qua Apps Script tự cài (`cloud/apps-script.gs`, nút ☁ Cloud riêng, ☁ Đẩy lên cloud riêng; có khóa KEY, chặn ghi đè khi nơi khác vừa sửa); (2) **Trên máy**: nhớ file đã chọn, nút 📁 Mở lại file trên máy, tự ghi lại vào file (Chrome/Edge; để trong OneDrive/Drive desktop để đồng bộ nhiều máy). CSP đã mở thêm script.google.com và script.googleusercontent.com. File lưu dạng .xlsx trên Drive, KHÔNG phải Google Sheet đồng bộ từng ô. Cloud không có đồng bộ Odoo, lịch sử chỉ trong trình duyệt. 🟡 Mới kiểm tra cú pháp, chưa thử với Apps Script/Google thật (cần bạn thử theo HUONG_DAN.md); chưa xử lý xung đột kiểu gộp như GitHub, chỉ báo Tải lại.
+- 🟡 Hai file local trùng tên với nhau (hoặc trùng `PO-data.xlsx`) sẽ dùng chung cột ẩn/độ rộng/lịch sử trong trình duyệt (chỉ ảnh hưởng cách xem). Chưa sửa.
+- 🟡 Thao tác "tự thêm NCC vào DS NCC" và "tự tick TT trước" chạy với bất kỳ file nào có sheet cùng tên; chỉ thay đổi trong file đang mở rồi lưu về file đó.
+
+**Cần bạn quyết định / kiểm tra**
+1. Sau khi bạn thay `index.html` mới lên repo po-dashboard, hãy thử: mở 1 file khác, sửa 1 ô, xác nhận `data/PO-data.xlsx` và `data/history.json` trên GitHub không có commit mới.
+
 ## Đã bỏ theo yêu cầu
 - Bot nhắc việc (Telegram/Zalo/email) và tuổi công nợ theo nhà cung cấp.
 

@@ -173,3 +173,21 @@ Mỗi lần đồng bộ Odoo (15 phút/lần hoặc bấm nút đồng bộ), h
 ### Ẩn cột, cột mới ở DS NCC
 - Nút **👁 Chọn cột hiển thị** trên đầu mỗi bảng để ẩn/hiện cột (chỉ đổi cách xem). Cột đang ẩn hiện thành thanh "Cột đang ẩn: ＋ tên cột" phía trên bảng - bấm ＋ để hiện lại từng cột hoặc "Hiện tất cả". Tab PO không còn cột "Ngày cam kết giao".
 - Tab DS NCC có cột: STT · Tên NCC · **Phân loại** (Đơn hàng/Công nợ) · **Ngày điều chỉnh** (tự điền khi sửa Phân loại hoặc Ghi chú) · **Ghi chú** · Trạng thái · Phát sinh công nợ. Đổi tên/thêm cột trong Excel do script đồng bộ làm ở lần chạy kế tiếp (sau khi bạn upload script mới).
+
+---
+
+## Lưu trữ riêng, không dùng GitHub (tránh quá tải GitHub, giữ dữ liệu riêng tư)
+
+Dashboard có 3 nơi lưu; mỗi lần chỉ làm việc trên một nơi:
+
+1. **GitHub** (nút ⚙ GitHub): như cũ, dùng cho PO-data và đồng bộ Odoo.
+2. **Trên máy của bạn** (Chrome/Edge): bấm *Chọn file Excel* một lần; sửa xong tự ghi vào chính file đó. Lần sau bấm **📁 Mở lại file trên máy** (trình duyệt hỏi cho phép đọc/ghi). Muốn đồng bộ giữa nhiều máy thì để file trong thư mục OneDrive/Google Drive for desktop/Dropbox. Trình duyệt khác (Firefox, Safari, điện thoại) không ghi trực tiếp được, chỉ tải về bản `_da-cap-nhat.xlsx`.
+3. **Cloud riêng = Google Drive của bạn** (nút ☁ Cloud riêng), cài một lần:
+   1. Vào script.google.com → Dự án mới → dán toàn bộ `cloud/apps-script.gs` vào Code.gs.
+   2. Bên trái bấm **Dịch vụ (+)** → thêm **Drive API** (v3).
+   3. Cài đặt dự án → *Thuộc tính tập lệnh* → thêm `KEY` = chuỗi bí mật bạn tự đặt (nên đặt, ai có link nhưng không có KEY sẽ không đọc/ghi được).
+   4. Triển khai → Ứng dụng web → Thực thi bằng *Tôi*, Ai có quyền truy cập *Bất kỳ ai* → Triển khai → cấp quyền → sao chép địa chỉ `…/exec`.
+   5. Trong dashboard: ☁ Cloud riêng → dán địa chỉ và KEY → *Lưu & tải dữ liệu* (cloud còn trống thì thông báo). Mở file Excel trên máy rồi bấm **☁ Đẩy lên cloud riêng** để nạp lần đầu.
+   - File nằm trong Google Drive của bạn dạng .xlsx (mở được bằng Google Sheets, Drive giữ các phiên bản cũ). Nó **không phải** Google Sheet đồng bộ theo từng ô.
+   - Ghi đè an toàn: nếu nơi khác vừa sửa file trên cloud, dashboard báo và yêu cầu Tải lại thay vì ghi đè.
+   - Không có đồng bộ Odoo trên cloud riêng (việc đó chỉ chạy với PO-data trên GitHub). Lịch sử thao tác chỉ lưu trong trình duyệt.

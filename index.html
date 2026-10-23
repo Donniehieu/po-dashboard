@@ -2,7 +2,7 @@
 <html lang="vi">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://api.github.com; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://script.google.com https://script.googleusercontent.com; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none'">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
@@ -261,9 +261,13 @@ body.rzing,body.rzing *{cursor:col-resize!important;user-select:none!important}
   <span class="grow"></span>
   <button class="btn sm" id="btnNotify" title="Nhắc việc trễ bằng thông báo của trình duyệt (khi đang mở trang)">🔔 Bật nhắc</button>
   <button class="btn sm" id="btnImport" hidden title="Gộp file Excel xuất từ Odoo vào dữ liệu nguồn">⬆ Nhập file Odoo</button>
+  <button class="btn sm" id="btnPushOther" hidden title="Đẩy file đang mở từ máy lên GitHub vào thư mục riêng “Dữ liệu Khác”, không ảnh hưởng PO-data">☁ Đẩy lên GitHub</button>
   <button class="btn sm" id="btnSync" hidden title="Yêu cầu GitHub chạy đồng bộ từ Odoo ngay">🔄 Đồng bộ Odoo</button>
   <button class="btn sm" id="btnRefresh" hidden>↻ Tải lại</button>
   <button class="btn sm" id="btnTheme" title="Đổi giao diện sáng/tối">🌓</button>
+  <button class="btn sm" id="btnLast" hidden title="Mở lại file Excel đã chọn lần trước trên máy này (trình duyệt sẽ hỏi cho phép đọc/ghi)">📁 Mở lại file trên máy</button>
+  <button class="btn sm" id="btnPushCloud" hidden title="Đẩy file đang mở lên cloud riêng của bạn (Google Drive qua Apps Script)">☁ Đẩy lên cloud riêng</button>
+  <button class="btn sm" id="btnCloud" title="Lưu và đồng bộ trên cloud riêng (Google Drive/Sheets qua Apps Script)">☁ Cloud riêng</button>
   <button class="btn sm" id="btnGh">⚙ GitHub</button>
   <button class="btn primary" id="btnPick">Chọn file Excel</button>
   <input type="file" id="fileImp" accept=".xlsx,.xlsm" hidden>
@@ -292,6 +296,13 @@ body.rzing,body.rzing *{cursor:col-resize!important;user-select:none!important}
   <label>Nhánh</label><input id="ghBranch" placeholder="main">
   <label>Mã truy cập (fine-grained token: Contents + Actions = Read &amp; write, chỉ cho repo dữ liệu)</label><input id="ghToken" type="password" placeholder="github_pat_…" autocomplete="off">
   <div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap"><button class="btn primary" id="ghSave">Lưu &amp; tải dữ liệu</button><button class="btn" id="ghForget">Xoá mã truy cập</button><button class="btn" id="ghClose">Đóng</button></div>
+</dialog>
+<dialog id="dlgCloud">
+  <h3>Cloud riêng (Google Drive / Google Sheets)</h3>
+  <p class="sub">Dữ liệu lưu trong Google Drive <b>của chính bạn</b> qua một Google Apps Script bạn tự tạo (file mẫu: <code>cloud/apps-script.gs</code>, xem <code>HUONG_DAN.md</code>). Không qua GitHub và không qua máy chủ nào khác. File lưu dạng .xlsx, mở bằng Google Sheets được.</p>
+  <label>Địa chỉ Web App (Apps Script, dạng https://script.google.com/macros/s/…/exec)</label><input id="clUrl" placeholder="https://script.google.com/macros/s/…/exec">
+  <label>Khóa bí mật (đặt trong Script Properties, tên KEY; để trống nếu không đặt)</label><input id="clKey" type="password" autocomplete="off">
+  <div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap"><button class="btn primary" id="clSave">Lưu &amp; tải dữ liệu</button><button class="btn" id="clForget">Ngắt kết nối</button><button class="btn" id="clClose">Đóng</button></div>
 </dialog>
 
 <script>
@@ -636,7 +647,7 @@ const state={fileName:"",sheets:[],active:"overview",handle:null,buf:null,sha:nu
 function toast(msg,err){const t=$("#toast");t.textContent=msg;t.className="toast"+(err?" err":"");t.hidden=false;clearTimeout(toast._t);toast._t=setTimeout(()=>{t.hidden=true},err?9000:5000)}
 
 /* ---- GitHub ---- */
-const GH_KEY="qlcv:gh";
+const GH_KEY="qlcv:gh",GH_MAIN_PATH="data/PO-data.xlsx",GH_OTHER_DIR="Dữ liệu Khác";
 const ghCfg=()=>Object.assign({owner:"Donniehieu",repo:"po-data",path:"data/PO-data.xlsx",branch:"main",token:""},store.get(GH_KEY)||{});
 const ghReady=()=>{const c=ghCfg();return !!(c.token&&c.owner&&c.repo&&c.path)};
 const ghUrl=(c,p)=>`https://api.github.com/repos/${encodeURIComponent(c.owner)}/${encodeURIComponent(c.repo)}/${p}`;
@@ -671,7 +682,7 @@ async function loadFromGitHub(silent){
     const keep=state.active;
     const fc0=await ghFileCommit().catch(()=>null); // lấy mốc commit trước khi tải file để không bỏ sót thay đổi
     const f=await ghFetchFile();
-    state.sha=f.sha;state.handle=null;state.stale=false;
+    state.sha=f.sha;state.handle=null;state.stale=false;state.histQ=store.get(histQKey())||[];
     await loadBuffer(f.buf,f.name,{src:"github"});
     ods.fileSha=fc0?fc0.sha:null;
     if(keep!=="overview"&&(typeof keep!=="number"||state.sheets[keep])){state.active=keep;renderTabs();render()}
@@ -690,11 +701,13 @@ async function loadBuffer(buf,name,opts={}){
     state.sheets=raw.map(analyze).filter(sh=>!HIDE_SHEETS.has(String(sh.name).toLowerCase().replace(/\s+/g," ").trim())); // sheet ẩn khỏi dashboard (vẫn còn nguyên trong file Excel)
     state.sheets.forEach(s=>{s.baseLast=s.lastRow;setStatus(s)});
     state.active="overview";
-    $("#fname").textContent=name+(state.src==="github"?"  ·  GitHub":"");
+    $("#fname").textContent=name+(state.src==="github"?"  ·  GitHub":state.src==="cloud"?"  ·  Cloud riêng":"");
     $("#fname").title=name;
-    $("#btnRefresh").hidden=!(state.handle||state.src==="github");
+    $("#btnRefresh").hidden=!(state.handle||state.src==="github"||state.src==="cloud");
+    $("#btnPushCloud").hidden=!(cloudReady()&&state.src==="local");
     $("#btnImport").hidden=false;
-    $("#btnSync").hidden=!ghReady();
+    $("#btnSync").hidden=!(ghReady()&&state.src==="github"&&isMainPath());
+    $("#btnPushOther").hidden=!(ghReady()&&state.src==="local");
     renderTabs();render();updateChrome();notifyDaily();
     const a1=nccAddMissing(),a2=nccEnforceAll(true);
     if(a1||a2){renderTabs();render();updateChrome();if(a2)toast(`Đã tự động cập nhật “TT trước” cho ${a2} PO theo Phân loại NCC (cột này chỉ do hệ thống tick).`)}
@@ -713,6 +726,7 @@ async function pick(){
     try{
       const [h]=await showOpenFilePicker({types:[{description:"Excel",accept:{"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":[".xlsx",".xlsm"]}}]});
       state.handle=h;try{await h.requestPermission({mode:"readwrite"})}catch(e){}
+      kvSet("lastHandle",h);showLast();
       const f=await h.getFile();await loadBuffer(await f.arrayBuffer(),f.name,{mtime:f.lastModified});return;
     }catch(e){if(e&&e.name==="AbortError")return}
   }
@@ -721,6 +735,7 @@ async function pick(){
 async function refresh(){
   if(!confirmLoss())return;
   if(state.src==="github"&&ghReady())return loadFromGitHub();
+  if(state.src==="cloud"&&cloudReady())return loadFromCloud();
   if(!state.handle)return;
   try{const keep=state.active;const f=await state.handle.getFile();await loadBuffer(await f.arrayBuffer(),f.name,{mtime:f.lastModified});
     if(typeof keep==="number"&&state.sheets[keep]){state.active=keep;renderTabs();render()}}catch(e){toast("Không làm mới được: "+e.message,true)}
@@ -735,18 +750,109 @@ addEventListener("beforeunload",e=>{if(state.pending.size){e.preventDefault();e.
 /* ---- Hộp thoại GitHub ---- */
 $("#btnGh").onclick=()=>{const c=ghCfg();for(const k of ["owner","repo","path","branch","token"])$("#gh"+k[0].toUpperCase()+k.slice(1)).value=c[k]||"";$("#dlg").showModal()};
 $("#ghClose").onclick=()=>$("#dlg").close();
-$("#ghForget").onclick=()=>{const c=ghCfg();c.token="";store.set(GH_KEY,c);$("#ghToken").value="";$("#btnSync").hidden=true;toast("Đã xoá mã truy cập khỏi trình duyệt này")};
+$("#ghForget").onclick=()=>{const c=ghCfg();c.token="";store.set(GH_KEY,c);$("#ghToken").value="";$("#btnSync").hidden=true;$("#btnPushOther").hidden=true;toast("Đã xoá mã truy cập khỏi trình duyệt này")};
 $("#ghSave").onclick=async()=>{
   const c={owner:$("#ghOwner").value.trim(),repo:$("#ghRepo").value.trim(),path:$("#ghPath").value.trim(),branch:$("#ghBranch").value.trim()||"main",token:$("#ghToken").value.trim()};
   if(!c.owner||!c.repo||!c.path||!c.token){toast("Cần điền đủ tài khoản, repo, đường dẫn file và mã truy cập",true);return}
   if(!confirmLoss())return;
+  const p0=c.path.replace(/^\/+/,"");
+  if(p0!==GH_MAIN_PATH&&!p0.startsWith(GH_OTHER_DIR+"/")){ // file khác PO-data luôn nằm trong thư mục riêng để không đụng data/ (đồng bộ Odoo, history.json)
+    c.path=GH_OTHER_DIR+"/"+p0.split("/").pop();$("#ghPath").value=c.path;
+    toast(`File khác PO-data được đặt trong thư mục “${GH_OTHER_DIR}”: ${c.path}`);
+  }else c.path=p0;
   store.set(GH_KEY,c);$("#dlg").close();await loadFromGitHub();
 };
 $("#btnSync").onclick=()=>requestSync(true);
+/* Đẩy file mở từ máy lên GitHub, luôn vào thư mục GH_OTHER_DIR (không đụng data/PO-data.xlsx, data/history.json, đồng bộ Odoo) */
+$("#btnPushOther").onclick=async()=>{
+  if(!ghReady()||state.src==="github"||!state.buf)return;
+  if(state.pending.size||state.pendingDel.size){toast("Có thay đổi chưa lưu. Hãy lưu vào file trước rồi mới đẩy lên GitHub.",true);return}
+  const name=state.fileName.replace(/[\\\/:*?"<>|]+/g,"_").trim();
+  if(!/\.xlsx?m?$/i.test(name)){toast("Tên file không hợp lệ",true);return}
+  const c=ghCfg(),path=GH_OTHER_DIR+"/"+name,url=ghUrl(c,`contents/${path.split("/").map(encodeURIComponent).join("/")}`);
+  const btn=$("#btnPushOther");btn.disabled=true;
+  try{
+    const r0=await fetch(url+`?ref=${encodeURIComponent(c.branch||"main")}`,{headers:ghHead(c),cache:"no-store"});
+    let sha;
+    if(r0.ok){
+      if(!confirm(`Đã có “${path}” trên GitHub. Ghi đè bằng file đang mở?`))return;
+      sha=(await r0.json()).sha;
+    }else if(r0.status!==404)throw new Error("GitHub trả lỗi "+r0.status+" khi kiểm tra thư mục");
+    else if(!confirm(`Đẩy “${name}” lên GitHub tại ${c.owner}/${c.repo}/${path}?\n(Nằm riêng, không ảnh hưởng PO-data và đồng bộ Odoo.)`))return;
+    const body={message:`Dashboard: đẩy file ${name} (${new Date().toLocaleString("vi-VN")})`,content:bufToB64(new Uint8Array(state.buf)),branch:c.branch||"main"};
+    if(sha)body.sha=sha;
+    const r=await fetch(url,{method:"PUT",headers:{...ghHead(c),"Content-Type":"application/json"},body:JSON.stringify(body)});
+    if(!r.ok)throw new Error("GitHub trả lỗi "+r.status+" khi ghi file (mã truy cập cần quyền Contents: Read and write)");
+    toast(`Đã đẩy lên GitHub: ${path}. Muốn mở lại từ GitHub, vào “Kết nối GitHub” và nhập đường dẫn này.`);
+  }catch(e){toast(e.message,true)}
+  finally{btn.disabled=false}
+};
+
+/* ---- Cloud riêng: Google Drive của người dùng qua Apps Script (cloud/apps-script.gs). Không dùng GitHub, lịch sử thao tác chỉ lưu trong trình duyệt ---- */
+const CL_KEY="qlcv:cloud";
+const clCfg=()=>Object.assign({url:"",key:""},store.get(CL_KEY)||{});
+const cloudReady=()=>/^https:\/\/script\.google(usercontent)?\.com\//.test(clCfg().url);
+async function clCall(body){
+  const c=clCfg();
+  let r;
+  if(body){r=await fetch(c.url,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify({...body,key:c.key}),cache:"no-store"})}
+  else r=await fetch(c.url+(c.url.includes("?")?"&":"?")+"action=get&key="+encodeURIComponent(c.key),{cache:"no-store"});
+  if(!r.ok)throw new Error("Cloud trả lỗi "+r.status);
+  let j;try{j=await r.json()}catch(e){throw new Error("Cloud không trả dữ liệu hợp lệ (kiểm tra địa chỉ Web App và quyền truy cập “Bất kỳ ai”)")}
+  if(j.error==="auth")throw new Error("Khóa bí mật cloud không đúng");
+  if(j.error)throw new Error("Cloud báo lỗi: "+j.error);
+  return j;
+}
+async function loadFromCloud(silent){
+  try{
+    if(!silent)toast("Đang tải dữ liệu từ cloud riêng…");
+    const j=await clCall();
+    if(j.empty){toast("Cloud còn trống. Mở file Excel trên máy rồi bấm “☁ Đẩy lên cloud riêng”.");return}
+    state.cloudVer=j.version;state.handle=null;state.stale=false;state.histQ=[];
+    await loadBuffer(b64ToBuf(j.content),j.name||"du-lieu.xlsx",{src:"cloud"});
+    if(!silent)toast("Đã tải “"+(j.name||"")+"” từ cloud riêng");
+  }catch(e){toast(e.message,true)}
+}
+async function cloudPut(bytes,force){
+  const j=await clCall({action:"put",name:state.fileName,version:force?null:state.cloudVer,content:bufToB64(bytes)});
+  if(j.conflict){const e=new Error("Dữ liệu trên cloud vừa được thay đổi từ nơi khác. Bấm “Tải lại” rồi sửa lại để không ghi đè.");throw e}
+  state.cloudVer=j.version;
+}
+$("#btnCloud").onclick=()=>{const c=clCfg();$("#clUrl").value=c.url;$("#clKey").value=c.key;$("#dlgCloud").showModal()};
+$("#clClose").onclick=()=>$("#dlgCloud").close();
+$("#clForget").onclick=()=>{store.set(CL_KEY,{url:"",key:""});$("#clUrl").value="";$("#clKey").value="";$("#btnPushCloud").hidden=true;toast("Đã ngắt kết nối cloud riêng khỏi trình duyệt này")};
+$("#clSave").onclick=async()=>{
+  const c={url:$("#clUrl").value.trim(),key:$("#clKey").value};
+  if(!/^https:\/\/script\.google(usercontent)?\.com\//.test(c.url)){toast("Địa chỉ phải là link Web App của Google Apps Script (https://script.google.com/macros/s/…/exec)",true);return}
+  if(!confirmLoss())return;
+  store.set(CL_KEY,c);$("#dlgCloud").close();await loadFromCloud();
+};
+$("#btnPushCloud").onclick=async()=>{
+  if(!cloudReady()||state.src!=="local"||!state.buf)return;
+  if(state.pending.size||state.pendingDel.size){toast("Có thay đổi chưa lưu. Hãy lưu vào file trước rồi mới đẩy lên cloud.",true);return}
+  const btn=$("#btnPushCloud");btn.disabled=true;
+  try{
+    const j=await clCall();
+    if(!j.empty&&!confirm(`Cloud riêng đang có file “${j.name||""}”. Ghi đè bằng “${state.fileName}”?`))return;
+    if(j.empty&&!confirm(`Đẩy “${state.fileName}” lên cloud riêng của bạn?`))return;
+    await cloudPut(new Uint8Array(state.buf),true);
+    toast("Đã đẩy lên cloud riêng. Từ nay bấm “☁ Cloud riêng” → “Lưu & tải dữ liệu” để làm việc trực tiếp trên cloud.");
+  }catch(e){toast(e.message,true)}
+  finally{btn.disabled=false}
+};
+/* Lưu trên máy: nhớ file Excel đã chọn (Chrome/Edge) để mở lại bằng một cú bấm, sửa xong tự ghi lại vào chính file đó */
+async function showLast(){const h=await kvGet("lastHandle");const b=$("#btnLast");b.hidden=!h;if(h)b.title="Mở lại “"+h.name+"” (trình duyệt sẽ hỏi cho phép đọc/ghi)"}
+$("#btnLast").onclick=async()=>{
+  const h=await kvGet("lastHandle");if(!h||!confirmLoss())return;
+  try{
+    if((await h.requestPermission({mode:"readwrite"}))!=="granted"){toast("Chưa được cho phép đọc/ghi file này",true);return}
+    state.handle=h;const f=await h.getFile();await loadBuffer(await f.arrayBuffer(),f.name,{mtime:f.lastModified});
+  }catch(e){toast("Không mở lại được file: "+e.message,true)}
+};
 
 /* ---- Sửa dữ liệu, tự động lưu, lịch sử ---- */
 state.auto=store.get("qlcv:auto")!==false;state.via="dashboard";state.pendingDel=new Map();
-state.history=[];state.histQ=store.get("qlcv:histq")||[];state.saveErr=null;state.lastSave="";state.fileMtime=null;
+state.history=[];state.histQ=[];state.saveErr=null;state.lastSave="";state.fileMtime=null;
 const pad2=n=>String(n).padStart(2,"0");
 const ser=v=>v instanceof Date?`${v.getFullYear()}-${pad2(v.getMonth()+1)}-${pad2(v.getDate())}T${pad2(v.getHours())}:${pad2(v.getMinutes())}:${pad2(v.getSeconds())}`:v;
 const deser=(v,col)=>col&&col.type==="date"&&typeof v==="string"?parseAnyDate(v):v;
@@ -820,7 +926,7 @@ function delRowCore(si,n){
 
 /* ---- Trạng thái lưu & tự động lưu ---- */
 function setSaveState(txt,cls){const s=$("#saveState");s.textContent=txt;s.className="sub "+(cls||"")}
-const canAutoSave=()=>(state.src==="github"&&ghReady())||!!state.handle;
+const canAutoSave=()=>(state.src==="github"&&ghReady())||(state.src==="cloud"&&cloudReady())||!!state.handle;
 let saving=false,again=false,autoTimer=null;
 function scheduleAutoSave(){
   clearTimeout(autoTimer);
@@ -837,7 +943,7 @@ function updateSavebar(){
   if(!n){sb.hidden=true;if(!saving&&!state.saveErr)setSaveState(state.lastSave?"✔ Đã lưu lúc "+state.lastSave:"");return}
   if(auto&&!state.saveErr){sb.hidden=true;if(!saving)setSaveState("● Có thay đổi, sắp tự động lưu…","warn");return}
   const c=ghCfg();const gh=ghReady()&&state.src==="github";
-  const dest=gh?`GitHub ${esc(c.owner)}/${esc(c.repo)}`:(state.handle?"file Excel trên máy":"tải file mới về máy");
+  const dest=gh?`GitHub ${esc(c.owner)}/${esc(c.repo)}`:(state.src==="cloud"?"cloud riêng (Google Drive)":state.handle?"file Excel trên máy":"tải file mới về máy");
   const note=state.saveErr?`<span style="color:#fecaca">⚠ ${esc(state.saveErr)}</span>`:(!canAutoSave()?`<span class="sub" style="color:inherit;opacity:.75">Chưa có nơi tự lưu: kết nối GitHub hoặc chọn file bằng Chrome/Edge</span>`:"");
   sb.hidden=false;
   sb.innerHTML=`<span>✏ <b>${n}</b> thay đổi chưa lưu → ${dest}</span>${note}<span class="grow"></span><button class="btn sm" id="sbUndo">Hoàn tác tất cả</button><button class="btn sm primary" id="sbSave">💾 ${state.saveErr?"Thử lưu lại":"Lưu vào Excel"}</button>`;
@@ -857,7 +963,7 @@ async function saveAll(auto){
   if(saving){again=true;return}
   if(state.stale){toast('Chưa tải được dữ liệu mới nhất từ GitHub nên chưa lưu (tránh ghi đè). Bấm ↻ Tải lại rồi thử lại.',true);return}
   if(!state.pending.size&&!state.pendingDel.size)return;
-  const target=(state.src==="github"&&ghReady())?"gh":(state.handle?"file":"download");
+  const target=(state.src==="github"&&ghReady())?"gh":(state.src==="cloud"&&cloudReady())?"cloud":(state.handle?"file":"download");
   if(auto===true&&target==="download")return; // không tự tải file về liên tục
   saving=true;setSaveState("Đang lưu…");
   const snapE=new Map(state.pending),snapD=new Map(state.pendingDel);
@@ -877,6 +983,8 @@ async function saveAll(auto){
         }
         state.sha=f.sha;bytes=await applyEdits(f.buf,edits);await ghPutFile(bytes,msg);
       }
+    }else if(target==="cloud"){
+      await cloudPut(bytes);
     }else if(target==="file"){
       const f=await state.handle.getFile();
       if(state.fileMtime&&f.lastModified!==state.fileMtime)throw new Error("File Excel trên máy đã bị thay đổi từ bên ngoài. Bấm “Tải lại” để lấy bản mới trước khi lưu.");
@@ -901,7 +1009,7 @@ async function saveAll(auto){
     });
     const d=new Date();state.lastSave=pad2(d.getHours())+":"+pad2(d.getMinutes())+":"+pad2(d.getSeconds());
     setSaveState("✔ Đã lưu lúc "+state.lastSave,"ok");
-    if(target==="gh")toast("Đã lưu vào GitHub ✔");else if(target==="file")toast("Đã lưu vào file Excel ✔");
+    if(target==="gh")toast("Đã lưu vào GitHub ✔");else if(target==="cloud")toast("Đã lưu vào cloud riêng ✔");else if(target==="file")toast("Đã lưu vào file Excel ✔");
     const a=document.activeElement;if(!(a&&a.classList&&a.classList.contains("cell")))render();
     updateChrome();
     if(ods.deferred&&!state.pending.size&&!state.pendingDel.size){const d=ods.deferred;ods.deferred=null;setTimeout(()=>reloadFromOdoo(d),600)}
@@ -935,12 +1043,15 @@ function makeHistory(edits,dels){
 function recordHistory(list){
   if(!list.length)return;
   state.history=[...list,...state.history].slice(0,5000);
-  state.histQ.push(...list);
-  store.set(histKey(),state.history.slice(0,800));store.set("qlcv:histq",state.histQ);
+  store.set(histKey(),state.history.slice(0,800));
+  if(state.src==="github"&&ghReady()){state.histQ.push(...list);store.set(histQKey(),state.histQ)} // file mở từ máy: lịch sử chỉ ở trình duyệt, không vào hàng đợi đẩy lên history.json của PO-data
   if(state.active==="history")fillHistory();
   if(state.src==="github"&&ghReady())pushHistory().catch(e=>console.warn("Chưa ghi được lịch sử lên GitHub:",e.message));
 }
-const histPath=()=>{const c=ghCfg();const i=c.path.lastIndexOf("/");return (i>=0?c.path.slice(0,i+1):"")+"history.json"};
+const isMainPath=()=>ghCfg().path===GH_MAIN_PATH;
+/* PO-data giữ nguyên data/history.json; mỗi file khác có history riêng: Dữ liệu Khác/<tên>.history.json và hàng đợi riêng trong trình duyệt */
+const histPath=()=>{const c=ghCfg();if(isMainPath()){const i=c.path.lastIndexOf("/");return (i>=0?c.path.slice(0,i+1):"")+"history.json"}return c.path.replace(/\.[^.\/]*$/,"")+".history.json"};
+const histQKey=()=>isMainPath()?"qlcv:histq":"qlcv:histq:"+ghCfg().path;
 async function ghGetHistory(){
   const c=ghCfg();const url=ghUrl(c,`contents/${histPath().split("/").map(encodeURIComponent).join("/")}?ref=${encodeURIComponent(c.branch||"main")}`);
   const r=await fetch(url,{headers:ghHead(c),cache:"no-store"});
@@ -961,7 +1072,7 @@ async function pushHistory(){
       const body={message:"Dashboard: ghi lịch sử thao tác",content:bufToB64(new TextEncoder().encode(JSON.stringify(merged))),branch:c.branch||"main"};
       if(h.sha)body.sha=h.sha;
       const r=await fetch(h.url.split("?")[0],{method:"PUT",headers:{...ghHead(c),"Content-Type":"application/json"},body:JSON.stringify(body)});
-      if(r.ok){state.histQ=[];store.set("qlcv:histq",[]);return}
+      if(r.ok){state.histQ=[];store.set(histQKey(),[]);return}
       if(r.status!==409&&r.status!==422)throw new Error("GitHub trả lỗi "+r.status+" khi ghi lịch sử");
     }
   }finally{pushingHist=false}
@@ -1787,7 +1898,7 @@ function odooSchedule(ms){
   ods.timer=setTimeout(async()=>{if(!document.hidden||ods.wait)await odooTick();odooSchedule(ods.wait?5000:POLL_MS)},ms);
 }
 function odooStart(){
-  if(state.src!=="github"||!ghReady()){$("#odooState").textContent="";hideOdooFail();clearTimeout(ods.timer);return}
+  if(state.src!=="github"||!ghReady()||!isMainPath()){$("#odooState").textContent="";hideOdooFail();clearTimeout(ods.timer);return}
   odooSchedule(400);
 }
 document.addEventListener("visibilitychange",()=>{
@@ -2016,7 +2127,7 @@ async function kvSet(k,v){try{const db=await idbOpen();await new Promise(res=>{c
 const ghCacheKey=()=>{const c=ghCfg();return `gh:${c.owner}/${c.repo}/${c.path}@${c.branch||"main"}`};
 async function bootCache(){
   const c=await kvGet(ghCacheKey());
-  if(c&&c.buf){try{await loadBuffer(c.buf,c.name,{src:"github"});state.sha=c.sha;state.stale=true;setSaveState("Bản lưu trong máy, đang cập nhật…","warn")}catch(e){}}
+  if(c&&c.buf){try{state.histQ=store.get(histQKey())||[];await loadBuffer(c.buf,c.name,{src:"github"});state.sha=c.sha;state.stale=true;setSaveState("Bản lưu trong máy, đang cập nhật…","warn")}catch(e){}}
 }
 
 /* ---- Mở Odoo để tìm đơn hàng ---- */
@@ -2152,6 +2263,8 @@ applyTheme();$("#btnTheme").onclick=cycleTheme;
 document.addEventListener("keydown",e=>{if(e.key==="/"&&!/^(INPUT|TEXTAREA|SELECT)$/.test((document.activeElement||{}).tagName)&&!e.ctrlKey&&!e.metaKey){const q=$("#q");if(q){e.preventDefault();q.focus()}}});
 if("serviceWorker" in navigator&&location.protocol==="https:")navigator.serviceWorker.register("sw.js").catch(()=>{});
 if(ghReady())bootCache().then(()=>loadFromGitHub(!!state.stale));
+else if(cloudReady())loadFromCloud(true);
+showLast();
 /* ---- Pomodoro: 25 phút tập trung / 5 phút nghỉ, nhắc nhẹ nhàng ---- */
 (function(){
   const KEY="qlcv:pomo", pad=n=>String(n).padStart(2,"0");
