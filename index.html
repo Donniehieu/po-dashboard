@@ -378,7 +378,7 @@ function buildZip(zi,rep){
 }
 function colLetter(i){let s="";i++;while(i>0){const m=(i-1)%26;s=String.fromCharCode(65+m)+s;i=Math.floor((i-1)/26)}return s}
 const dateToSerial=d=>Date.UTC(d.getFullYear(),d.getMonth(),d.getDate(),d.getHours(),d.getMinutes(),d.getSeconds())/864e5+25569;
-function patchSheet(txt,edits){
+function patchSheet(txt,edits,opt){
   const doc=new DOMParser().parseFromString(txt,"application/xml");
   const ns=doc.documentElement.namespaceURI;const sd=doc.getElementsByTagName("sheetData")[0];
   const rows=new Map();for(const r of sd.children)rows.set(+r.getAttribute("r"),r);
@@ -423,14 +423,76 @@ function patchSheet(txt,edits){
       }
     }
   }
-  return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\r\n'+new XMLSerializer().serializeToString(doc.documentElement);
+  const removed=opt&&opt.del&&opt.del.size&&shiftable(txt)?removeRows(doc,sd,edits,opt):[];
+  return {xml:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\r\n'+new XMLSerializer().serializeToString(doc.documentElement),removed};
 }
-async function applyEdits(buf,edits){
+/* Xóa dòng thật trong Excel: chỉ làm với sheet “đơn giản” (không công thức, ô gộp, liên kết, định dạng có điều kiện, bảng…) vì các thứ đó trỏ theo số dòng.
+   Sheet khác vẫn chỉ xóa dữ liệu của dòng như trước. */
+function shiftable(txt){return !/<f[ >\/]|<mergeCell[ >]|<hyperlink[ >]|<conditionalFormatting|<dataValidation[ >]|<tablePart|<drawing[ >\/]|<rowBreaks|<colBreaks/.test(txt)}
+function removeRows(doc,sd,edits,opt){
+  const cellFilled=c=>{if(c.getElementsByTagName("v").length)return true;const is=c.getElementsByTagName("is")[0];return !!(is&&is.textContent!=="")};
+  const keepN=new Set(edits.map(e=>e.n));  // dòng đang có thay đổi chưa lưu (vd. dòng mới vừa thêm) thì không dọn
+  const rm=new Set(opt.del);
+  if(opt.ix!=null)for(const r of sd.children){ // dòng chỉ còn STT (do bản cũ xóa dữ liệu mà để lại dòng) -> dọn luôn
+    const n=+r.getAttribute("r");if(n<=opt.hdr||keepN.has(n)||rm.has(n))continue;
+    const f=[...r.children].filter(cellFilled);
+    if(f.length===1&&colNum(f[0].getAttribute("r"))===opt.ix&&!f[0].getAttribute("t"))rm.add(n);
+  }
+  if(!rm.size)return [];
+  const gone=[...rm].sort((a,b)=>a-b);
+  const mapN=n=>{let k=0;for(const g of gone){if(g<n)k++;else break}return n-k};
+  for(const r of [...sd.children]){
+    const n=+r.getAttribute("r");
+    if(rm.has(n)){r.remove();continue}
+    const nn=mapN(n);if(nn===n)continue;
+    r.setAttribute("r",nn);for(const c of r.children)c.setAttribute("r",colLetter(colNum(c.getAttribute("r")))+nn);
+  }
+  if(opt.ix!=null){ // đánh lại STT 1..hết cho các dòng đang có STT là số
+    let k=0;
+    for(const r of sd.children){
+      if(+r.getAttribute("r")<=opt.hdr)continue;
+      const c=[...r.children].find(c=>colNum(c.getAttribute("r"))===opt.ix);if(!c)continue;
+      const v=c.getElementsByTagName("v")[0];if(!v||(c.getAttribute("t")&&c.getAttribute("t")!=="n")||isNaN(+v.textContent))continue;
+      v.textContent=String(++k);
+    }
+  }
+  const shiftRef=ref=>ref.replace(/([A-Z]+)(\d+)/g,(m,a,b)=>a+mapN(+b));
+  const dim=doc.getElementsByTagName("dimension")[0];if(dim)dim.setAttribute("ref",shiftRef(dim.getAttribute("ref")));
+  const af=doc.getElementsByTagName("autoFilter")[0];if(af&&af.getAttribute("ref"))af.setAttribute("ref",shiftRef(af.getAttribute("ref")));
+  for(const sel of doc.getElementsByTagName("selection")){sel.setAttribute("activeCell","A1");sel.setAttribute("sqref","A1")}
+  return gone;
+}
+/* ghi chú (comment) của ô: bỏ ghi chú của dòng bị xóa, dời ghi chú của các dòng phía dưới */
+function shiftComments(cx,vml,gone){
+  const mapN=n=>{let k=0;for(const g of gone){if(g<n)k++;else break}return n-k},has=new Set(gone);
+  if(cx){const d=xml(cx);let ch=false;
+    for(const c of [...d.getElementsByTagName("comment")]){const m=/^([A-Z]+)(\d+)$/.exec(c.getAttribute("ref")||"");if(!m)continue;
+      if(has.has(+m[2])){c.remove();ch=true}else if(mapN(+m[2])!==+m[2]){c.setAttribute("ref",m[1]+mapN(+m[2]));ch=true}}
+    if(ch)cx='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\r\n'+new XMLSerializer().serializeToString(d.documentElement)}
+  if(vml)vml=vml.replace(/<v:shape\b[\s\S]*?<\/v:shape>/g,sh=>{
+    const m=/<x:Row>(\d+)<\/x:Row>/.exec(sh);if(!m)return sh;const r0=+m[1]+1;
+    if(has.has(r0))return "";
+    const d=mapN(r0)-r0;if(!d)return sh;
+    return sh.replace(/<x:Row>\d+<\/x:Row>/,"<x:Row>"+(+m[1]+d)+"</x:Row>").replace(/(<x:Anchor>\s*)([^<]*)/,(q,a,v)=>{const p=v.split(",").map(x=>x.trim());if(p.length>=8){p[2]=+p[2]+d;p[6]=+p[6]+d}return a+p.join(", ")});
+  });
+  return {cx,vml};
+}
+/* edits: ô cần ghi; dels: dòng cần xóa hẳn [{path,n,ix,hdr}]. Trả về {buf,removed:{path:[số dòng đã bị bỏ]}} */
+async function applyEdits(buf,edits,dels){
   const zi=zipIndex(buf);const by=new Map();
   for(const e of edits){if(!by.has(e.path))by.set(e.path,[]);by.get(e.path).push(e)}
-  const rep=new Map();
-  for(const [path,list] of by){const t=await zi.get(path);if(t==null)throw new Error("Không tìm thấy "+path);rep.set(path,new TextEncoder().encode(patchSheet(t,list)))}
-  return buildZip(zi,rep);
+  const rep=new Map(),removed={},dby=new Map();
+  for(const d of dels||[]){if(!dby.has(d.path))dby.set(d.path,{del:new Set(),ix:d.ix,hdr:d.hdr});dby.get(d.path).del.add(d.n);if(!by.has(d.path))by.set(d.path,[])}
+  for(const [path,list] of by){const t=await zi.get(path);if(t==null)throw new Error("Không tìm thấy "+path);
+    const o=patchSheet(t,list,dby.get(path));rep.set(path,new TextEncoder().encode(o.xml));
+    if(o.removed.length){removed[path]=o.removed;
+      const relP=path.replace(/([^\/]+)$/,"_rels/$1.rels"),rl=await zi.get(relP);
+      if(rl){let cp=null,vp=null;
+        for(const r of xml(rl).getElementsByTagName("Relationship")){const ty=r.getAttribute("Type")||"",tg=r.getAttribute("Target")||"";
+          const full=tg.startsWith("/")?tg.slice(1):"xl/"+tg.replace(/^\.\.\//,"");if(/\/comments$/.test(ty))cp=full;else if(/\/vmlDrawing$/.test(ty))vp=full}
+        const ct=cp?await zi.get(cp):null,vt=vp?await zi.get(vp):null,res=shiftComments(ct,vt,o.removed);
+        if(cp&&res.cx!==ct)rep.set(cp,new TextEncoder().encode(res.cx));if(vp&&res.vml!==vt)rep.set(vp,new TextEncoder().encode(res.vml))}}}
+  return {buf:buildZip(zi,rep),removed};
 }
 const xml=t=>new DOMParser().parseFromString(t,"application/xml");
 const colNum=ref=>{let n=0;for(const ch of ref.replace(/[0-9]/g,""))n=n*26+ch.charCodeAt(0)-64;return n-1};
@@ -970,7 +1032,7 @@ function delRowCore(si,n){
   state.via="dashboard";
   for(const c of sh.cols)if(c.type!=="index"&&r.v[c.idx]!=null)setCell(si,r,c.idx,null,key);
   if(wasNew){for(const k of [...state.pending.keys()])if(k.startsWith(si+"|"+n+"|"))state.pending.delete(k)}
-  else{(sh.removed||(sh.removed=[])).push(r);state.pendingDel.set(si+"|"+n,{si,n,key,sheet:sh.name,snap})}
+  else{(sh.removed||(sh.removed=[])).push(r);state.pendingDel.set(si+"|"+n,{si,n,key,sheet:sh.name,snap,path:sh.path})}
   sh.rows=sh.rows.filter(x=>x!==r);
 }
 
@@ -978,6 +1040,26 @@ function delRowCore(si,n){
 function setSaveState(txt,cls){const s=$("#saveState");s.textContent=txt;s.className="sub "+(cls||"")}
 const canAutoSave=()=>(state.src==="github"&&ghReady())||(state.src==="cloud"&&cloudReady())||!!state.handle;
 let saving=false,again=false,autoTimer=null;
+/* Sau khi lưu mà Excel đã xóa hẳn dòng: dồn số dòng trong bộ nhớ cho khớp file, đánh lại STT 1..hết (bảng đang lọc vẫn hiện STT 1,2,3… như cũ) */
+function applyRemoved(removed){
+  for(const [path,gone] of Object.entries(removed||{})){
+    const si=state.sheets.findIndex(s=>s.path===path);if(si<0||!gone.length)continue;
+    const sh=state.sheets[si],has=new Set(gone),mapN=n=>n-gone.filter(g=>g<n).length;
+    sh.rows=sh.rows.filter(r=>!has.has(r.n));
+    sh.removed=(sh.removed||[]).filter(r=>!has.has(r.n));
+    for(const r of sh.rows.concat(sh.removed)){r.n=mapN(r.n);r._t=null}
+    const ix=sh.cols.find(c=>c.type==="index");
+    if(ix){let k=0;for(const r of [...sh.rows].sort((a,b)=>a.n-b.n))if(typeof r.v[ix.idx]==="number")r.v[ix.idx]=++k}
+    const g=[];sh.grid.forEach((row,i)=>{if(!has.has(i+1))g[mapN(i+1)-1]=row});sh.grid=g;
+    if(ix){let k=0;for(const row of sh.grid)if(row&&typeof row[ix.idx]==="number")row[ix.idx]=++k}
+    sh.lastRow=sh.grid.length;sh.baseLast=sh.lastRow;
+    sh.blank=sh.blank.filter(b=>!has.has(b.n)).map(b=>({...b,n:mapN(b.n)}));sh.blank0=sh.blank.slice();
+    const P=new Map();
+    for(const e of state.pending.values()){if(e.si===si){e.n=mapN(e.n);if(ix&&e.col===ix.idx){const r=sh.rows.find(x=>x.n===e.n);if(r&&typeof r.v[ix.idx]==="number")e.val=r.v[ix.idx]}}P.set(pkey(e.si,e.n,e.col),e)}
+    state.pending=P;
+    const D=new Map();for(const e of state.pendingDel.values()){if(e.si===si)e.n=mapN(e.n);D.set(e.si+"|"+e.n,e)}state.pendingDel=D;
+  }
+}
 function scheduleAutoSave(){
   clearTimeout(autoTimer);
   if(!state.auto||state.saveErr||state.stale||!(state.pending.size||state.pendingDel.size)||!canAutoSave())return;
@@ -1019,7 +1101,8 @@ async function saveAll(auto){
   const snapE=new Map(state.pending),snapD=new Map(state.pendingDel);
   try{
     const edits=[...snapE.values()];
-    let bytes=await applyEdits(state.buf,edits);
+    const dels=[...snapD.values()].filter(d=>d.path).map(d=>{const sh=state.sheets[d.si],ix=sh&&sh.cols.find(c=>c.type==="index");return {path:d.path,n:d.n,ix:ix?ix.idx:null,hdr:sh?sh.hdrRow:1}});
+    let ar=await applyEdits(state.buf,edits,dels),bytes=ar.buf,removed=ar.removed;
     const msg=`Dashboard: cập nhật ${snapE.size} ô${snapD.size?`, xóa ${snapD.size} dòng`:""} (${new Date().toLocaleString("vi-VN")})`;
     if(target==="gh"){
       try{await ghPutFile(bytes,msg)}
@@ -1031,7 +1114,7 @@ async function saveAll(auto){
           const sh=state.sheets[x.si];const g=(raw.find(s=>s.path===x.path)||{}).grid||[];
           if(x.key!=null&&sh.title!=null){const cur=g[x.n-1]&&g[x.n-1][sh.title];if(String(cur??"")!==x.key)throw new Error(`Dòng ${x.n} trên GitHub đã khác (mã ${x.key}). Bấm “Tải lại” để lấy bản mới rồi sửa lại.`)}
         }
-        state.sha=f.sha;bytes=await applyEdits(f.buf,edits);await ghPutFile(bytes,msg);
+        state.sha=f.sha;ar=await applyEdits(f.buf,edits,dels);bytes=ar.buf;removed=ar.removed;await ghPutFile(bytes,msg);
       }
     }else if(target==="cloud"){
       await cloudPut(bytes);
@@ -1051,6 +1134,7 @@ async function saveAll(auto){
     state.buf=bytes.buffer;state.saveErr=null;
     for(const [k,v] of snapE)if(state.pending.get(k)===v)state.pending.delete(k);
     for(const k of snapD.keys())state.pendingDel.delete(k);
+    applyRemoved(removed);
     const left=new Set([...state.pending.values()].map(e=>e.si+"|"+e.n));
     state.sheets.forEach((sh,si)=>{
       sh.baseLast=sh.lastRow;sh.blank0=sh.blank.slice();
@@ -1145,11 +1229,7 @@ function restoreEntry(id){
   const sh=state.sheets[si];state.via="khôi phục";
   try{
     if(e.act==="xóa"){
-      if(!sh.rows.some(x=>x.n===e.n)){ // đặt lại đúng dòng cũ nếu còn trống
-        const ixc=sh.cols.find(c=>c.type==="index");
-        sh.blank=sh.blank.filter(b=>b.n!==e.n);sh.blank.unshift({n:e.n,ix:ixc&&sh.grid[e.n-1]?sh.grid[e.n-1][ixc.idx]:undefined});
-      }
-      const r=addRow(si,true);
+      const r=addRow(si,true); // dòng cũ đã bị xóa hẳn khỏi Excel nên khôi phục thành dòng mới ở cuối bảng
       for(const [cn,v] of Object.entries(e.snap||{})){const c=sh.cols.find(x=>x.name===cn);if(c)setCell(si,r,c.idx,deser(v,c))}
       toast(`Đã khôi phục bản ghi ${e.key||""} (đặt ở dòng ${r.n})`);
     }else{
@@ -1432,6 +1512,7 @@ function nccEnforceAll(silent){ // “TT trước” chỉ do code quyết đị
 }
 function nccOnEdit(si,r,ci){
   const S=nccSheets();if(!S||si!==S.dsSi)return;
+  if(!S.ds.rows.includes(r))return; // dòng vừa bị xóa (xóa dữ liệu từng ô) thì không điền ngày/đồng bộ gì nữa
   // 1) Phân loại hoặc Ghi chú đổi -> tự điền “Ngày điều chỉnh” = hôm nay
   if(S.dc&&(ci===S.tc.idx||(S.gc&&ci===S.gc.idx))){
     nccBusy=true;state.via="đồng bộ NCC";try{setCell(si,r,S.dc.idx,new Date(TODAY))}finally{nccBusy=false;state.via="dashboard"}

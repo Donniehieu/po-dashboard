@@ -242,3 +242,6 @@ Khi PAY thành BNK, PO **trả trước** (cột TT trước được tick) đan
 - Tab **Công nợ NCC** là danh sách gốc các NCC kèm Phân loại (Đơn hàng/Công nợ), Ghi chú. NCC mới xuất hiện ở tab PO được tự thêm vào (khi mở file, khi nhập Excel, và mỗi lần script đồng bộ chạy). File Excel cũ có sheet "DS NCC" sẽ tự được đổi tên ở lần đồng bộ kế tiếp.
 - Tab **Nhà cung cấp** chỉ liệt kê NCC đang có PO ở tab PO nên thường ít hơn Công nợ NCC (danh sách gốc còn giữ NCC cũ và có thể có NCC ghi trùng). Dòng giải thích ở đầu tab nêu rõ các NCC chênh lệch.
 - Nút **⬇ Xuất Excel** xuất danh sách đang hiện; **⬆ Nhập Excel** nhập vào Công nợ NCC (khớp theo cột *Tên NCC*, cập nhật *Phân loại* và *Ghi chú*, NCC chưa có thì thêm dòng). Xong bấm "Lưu vào Excel" (hoặc chờ tự lưu).
+
+## Xóa dòng
+Nút 🗑 ở mọi bảng xóa **hẳn dòng** khỏi file Excel khi lưu (các dòng dưới dồn lên) và đánh lại cột STT từ 1 đến hết. Dòng đã xóa có thể khôi phục trong tab Lịch sử (thành dòng mới ở cuối bảng). Riêng sheet có công thức/ô gộp/liên kết (vd. Bảng kê TT, Thông báo duyệt giá) chỉ xóa dữ liệu của dòng, không dồn dòng.
