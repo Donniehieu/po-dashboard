@@ -210,9 +210,9 @@
   /* ---------- tin nhắn nhắc kế toán trong Chatter: mẫu có sẵn + @tag người nhận ---------- */
   // Sửa tên/mã/nội dung ở đây khi đổi người nhận. Dung Quất kiểm tra trước vì tên công ty Dung Quất cũng chứa "Phúc Hà".
   const TPL = [
-    { key: "pay_dq", label: "Duyệt PAY – Dung Quất (Nguyễn Thị Mai)", code: "HN0096", name: "Nguyễn Thị Mai", text: "Chị ơi xem giúp em PAY này ạ" },
-    { key: "pay_ph", label: "Duyệt PAY – Phúc Hà (Lê Xuân Giang)", code: "HN0025", name: "Lê Xuân Giang", text: "Anh ơi kiểm tra duyệt giúp em PAY này ạ" },
-    { key: "ktnh", label: "KTNH xác nhận – thanh toán (Phạm Thị Mai Lê)", code: "HN10265", name: "Phạm Thị Mai Lê", text: "Em ơi xem thanh toán cho anh PAY này" },
+    { key: "pay_dq", label: "Duyệt PAY – Dung Quất (Nguyễn Thị Mai)", code: "HN0096", name: "Nguyễn Thị Mai", text: "Chị ơi, kiểm tra giúp em phiếu này ạ" },
+    { key: "pay_ph", label: "Duyệt PAY – Phúc Hà (Lê Xuân Giang)", code: "HN0025", name: "Lê Xuân Giang", text: "Anh ơi, kiểm tra giúp em phiếu này ạ" },
+    { key: "ktnh", label: "KTNH xác nhận – thanh toán (Phạm Thị Mai Lê)", code: "HN10265", name: "Phạm Thị Mai Lê", text: "Em ơi, kiểm tra giúp anh phiếu này" },
     { key: "inv_dq", label: "Xác nhận hóa đơn PO – Dung Quất (Nguyễn Thị Mai)", code: "HN0096", name: "Nguyễn Thị Mai", text: "Chị ơi, xác nhận hóa đơn này giúp em" },
     { key: "inv_ph", label: "Xác nhận hóa đơn PO – Phúc Hà (Tống Sỹ Xuân Trường)", code: "HN0176", name: "Tống Sỹ Xuân Trường", text: "Anh ơi, xác nhận hóa đơn này giúp em" },
   ];
