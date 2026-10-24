@@ -1519,8 +1519,46 @@ function applyRemindLog(extra){
   }finally{remindBusy=false}
   return total;
 }
+/* Odoo Helper chạy trong tab Odoo (mở từ dashboard) gửi nhật ký tin đã gửi về đây bằng postMessage */
+addEventListener("message",e=>{
+  if(e.origin!=="https://erp.dekko.com.vn")return;
+  const d=e.data;if(!d||d.qlcv!=="remindlog"||!Array.isArray(d.log))return;
+  try{
+    let cur=[];try{cur=JSON.parse(localStorage.getItem(REMIND_LOG_KEY)||"[]")}catch(_){}
+    const seen=new Set(cur.map(remindKey));let add=0;
+    for(const x of d.log){if(x&&typeof x==="object"&&(x.id||x.rid)&&x.date&&!seen.has(remindKey(x))){cur.push({id:String(x.id||""),rid:x.rid,kind:x.kind,tpl:x.tpl,label:x.label,to:x.to,text:x.text,date:String(x.date)});seen.add(remindKey(x));add++}}
+    if(add){try{localStorage.setItem(REMIND_LOG_KEY,JSON.stringify(cur.slice(-500)))}catch(_){}}
+    applyRemindLog();
+  }catch(err){console.error(err)}
+});
 setInterval(()=>{try{applyRemindLog()}catch(e){console.error(e)}},6000);
 addEventListener("focus",()=>{try{applyRemindLog()}catch(e){console.error(e)}});
+/* Nút bookmark “Odoo Helper”: thay cho Tampermonkey. Mã nằm trong odoo-helper.js cạnh index.html nên luôn là bản mới nhất, không phải cập nhật tay */
+function helperUrl(){const u=new URL("odoo-helper.js",location.href);u.hash="";u.search="";return u.href}
+function helperBookmarklet(){return "javascript:(function(){var s=document.createElement('script');s.src='"+helperUrl()+"?v='+Date.now();document.body.appendChild(s)})();"}
+function showHelperDialog(){
+  let d=document.getElementById("helperdlg");if(d)d.remove();
+  d=document.createElement("dialog");d.id="helperdlg";d.style.cssText="max-width:560px;width:92vw;border:1px solid var(--line);border-radius:14px;background:var(--card);color:var(--ink);padding:18px";
+  const bm=helperBookmarklet(),ok=location.protocol==="https:";
+  d.innerHTML=`<h3 style="margin:0 0 8px">🔖 Nút Odoo Helper (thay cho Tampermonkey)</h3>
+  <p class="sub" style="margin:0 0 10px">Tự điền thụ hưởng NCC và soạn tin nhắc kế toán (@tag) ngay trong Odoo. Mã chạy được tải từ dashboard mỗi lần bấm nên <b>luôn là bản mới nhất</b>, không cần cài hay cập nhật script.</p>
+  ${ok?"":`<div class="note" style="margin:0 0 10px;color:var(--bad)">Bạn đang mở dashboard bằng ${esc(location.protocol)} (không phải https). Hãy mở dashboard bằng địa chỉ https (GitHub Pages) rồi tạo nút từ đó, nếu không nút sẽ không tải được.</div>`}
+  <ol style="margin:0 0 10px 18px;padding:0;line-height:1.6">
+   <li>Hiện thanh dấu trang của trình duyệt (Ctrl+Shift+B).</li>
+   <li><b>Kéo</b> nút bên dưới lên thanh dấu trang (hoặc bấm “Sao chép mã nút” rồi tạo dấu trang mới, dán mã vào ô địa chỉ/URL).</li>
+   <li>Mở Odoo <b>từ dashboard</b> (nút 🔍 Mở phiếu/Mở đơn), vào một phiếu thanh toán hoặc đơn mua, bấm dấu trang <b>Odoo Helper</b> một lần: khung nút hiện ở góc phải dưới. Mỗi tab Odoo chỉ cần bấm một lần.</li>
+  </ol>
+  <p style="margin:0 0 10px"><a id="helperlink" class="btn" draggable="true" style="display:inline-block;text-decoration:none">💬 Odoo Helper</a>
+  <button class="btn" id="helpercopy">Sao chép mã nút</button></p>
+  <p class="sub" style="margin:0 0 10px">Nhật ký tin đã gửi tự chuyển về dashboard khi tab Odoo được mở từ dashboard. Nếu mở Odoo bằng cách khác, dùng “⬇ Xuất nhật ký nhắn” trong khung nút rồi “⬆ Nhập nhật ký nhắn” ở hộp 🔔. Dữ liệu NCC thụ hưởng lưu riêng trong trình duyệt cho trang Odoo: lần đầu hãy nạp lại file Excel NCC (không lấy được từ Tampermonkey cũ; trong Tampermonkey cũ có thể bấm “⬇ Xuất DB ra Excel” trước).</p>
+  <div style="display:flex;justify-content:flex-end"><button class="btn" id="helperclose">Đóng</button></div>`;
+  document.body.appendChild(d);
+  d.querySelector("#helperlink").setAttribute("href",bm);
+  d.querySelector("#helpercopy").onclick=async()=>{try{await navigator.clipboard.writeText(bm);toast("Đã sao chép mã nút. Tạo dấu trang mới và dán vào ô URL.")}catch(e){toast("Không sao chép được, hãy kéo nút lên thanh dấu trang.",true)}};
+  d.querySelector("#helperclose").onclick=()=>d.close();
+  d.querySelector("#helperlink").onclick=e=>{e.preventDefault();toast("Hãy KÉO nút này lên thanh dấu trang (bấm ở đây không chạy gì).")};
+  d.showModal();
+}
 /* ---- Đồng bộ NCC: PO -> Công nợ NCC (thêm NCC mới) và Công nợ NCC "Đơn hàng" -> tick "Thanh toán trước" ---- */
 const NCC=(()=>{
   const fold=s=>String(s==null?"":s).toLowerCase().replace(/đ/g,"d").normalize("NFD").replace(/[̀-ͯ]/g,"");
@@ -2507,7 +2545,7 @@ function renderMsgs(){
       <div class="sub">${x.wfs?`<span class="chip" style="--c:${colorFor(x.wfs)}">${esc(x.wfs)}</span> `:""}${esc(vend||"")}${x.amt?" · "+fmtN(x.amt):""} ${x.due instanceof Date?" · hạn "+fmtD(x.due):""} · ${esc(x.s.name)}</div>
       <div class="ma">${x.s.pay?`<button class="btn sm" data-mp="${x.i}|${x.r.n}">🔍 Mở phiếu trên Odoo</button><span class="tplrow"><select class="tplsel" data-ms="${x.i}|${x.r.n}" title="Chọn mẫu tin nhắn có sẵn để nhắn kế toán">${REMIND_TPL.map(t=>`<option value="${t.key}" ${t.key===defaultTpl(x.s,x.r)?"selected":""}>${esc(t.label)}</option>`).join("")}</select><button class="btn sm" data-mt="${x.i}|${x.r.n}" title="Sao chép nội dung mẫu đã chọn để dán vào Chatter của phiếu">📋 Sao chép mẫu</button><button class="btn sm" data-md="${x.i}|${x.r.n}" title="Đã gửi tin theo mẫu này: ghi vào cột Ghi chú của phiếu">✅ Đã gửi</button></span><button class="btn sm" data-mc="${x.i}|${x.r.n}" title="${x.chk?"Sao chép tin tag người duyệt. Nhanh hơn: mở phiếu rồi bấm nút 💬 Nhắc duyệt PAY của Tampermonkey":"Sao chép nội dung nhắc để dán vào Chatter của phiếu (gửi tin, tag kế toán)"}">📋 Sao chép ${x.chk?"tin nhắc duyệt":"nhắc KT"}</button>`:`<button class="btn sm" data-mo="${esc(x.r.v[x.s.title])}">🔍 Tìm trên Odoo</button>`}<button class="btn sm" data-mv="${x.i}|${x.r.n}">🎤 Ghi chú</button><button class="btn sm" data-mg="${x.i}|${esc(String(x.r.v[x.s.title]))}">📄 Xem dòng</button><button class="btn sm" data-mx="${esc(x.key)}" title="Ẩn tin này đến hết hôm nay">✕</button></div></div>`}).join("")+(L.length>60?`<div class="note">… và ${L.length-60} đơn nữa. Xem tab “Ưu tiên xử lý”.</div>`:""):`<div class="sub" style="padding:18px 8px">Không có đơn nào trễ hẹn. 🎉</div>`;
   const b=$("#msgbody");
-  b.insertAdjacentHTML("afterbegin",`<div class="note" style="margin:0 0 8px">Nhật ký tin nhắn từ Tampermonkey: <b>${remindStat.total}</b> tin · đã ghi vào Ghi chú: <b>${remindStat.done}</b> · chưa khớp: <b>${remindStat.miss}</b>${remindStat.total?"":". Chưa nhận được tin nào: kiểm tra script v1.4.0 đã cài trong Tampermonkey và dashboard đang mở bằng địa chỉ donniehieu.github.io (không phải file trên máy)."}</div>`);
+  b.insertAdjacentHTML("afterbegin",`<div class="note" style="margin:0 0 8px">Nhật ký tin nhắn từ nút Odoo Helper: <b>${remindStat.total}</b> tin · đã ghi vào Ghi chú: <b>${remindStat.done}</b> · chưa khớp: <b>${remindStat.miss}</b>${remindStat.total?"":". Chưa nhận được tin nào: bấm 🔖 Nút Odoo để cài nút Odoo Helper, mở Odoo từ dashboard và bấm nút trên trang Odoo (hoặc dùng Nhập nhật ký nhắn)."}</div>`);
   b.querySelectorAll("[data-mo]").forEach(x=>x.onclick=()=>openOdoo(x.dataset.mo));
   const payRow=k=>{const [i,n]=k.split("|"),sh=state.sheets[+i];return [sh,sh&&sh.rows.find(r=>r.n===+n)]};
   b.querySelectorAll("[data-mp]").forEach(x=>x.onclick=()=>{const [sh,r]=payRow(x.dataset.mp);if(r)openPay(sh,r)});
@@ -2524,11 +2562,12 @@ function renderMsgs(){
 (function(){
   const w=document.createElement("div");
   w.innerHTML=`<button id="fab" class="fab" aria-label="Tin nhắn nhắc việc" title="Đơn trễ hẹn">🔔<span id="fabn" class="fabn" hidden></span></button>
-  <section id="msgpanel" class="msgpanel" hidden><div class="mp-h"><b>Nhắc việc – đơn trễ hẹn</b><span class="grow"></span><button class="btn sm" id="msglog" title="Nhập file nhật ký tin nhắn (.json) xuất từ script Tampermonkey nếu dashboard chưa tự nhận">⬆ Nhập nhật ký nhắn</button><button class="btn sm" id="msgx" aria-label="Đóng">✕</button></div><div id="msgbody" class="mp-b"></div></section>
+  <section id="msgpanel" class="msgpanel" hidden><div class="mp-h"><b>Nhắc việc – đơn trễ hẹn</b><span class="grow"></span><button class="btn sm" id="msghelper" title="Cài nút Odoo Helper (thay cho Tampermonkey)">🔖 Nút Odoo</button><button class="btn sm" id="msglog" title="Nhập file nhật ký tin nhắn (.json) xuất từ script Tampermonkey nếu dashboard chưa tự nhận">⬆ Nhập nhật ký nhắn</button><button class="btn sm" id="msgx" aria-label="Đóng">✕</button></div><div id="msgbody" class="mp-b"></div></section>
   <dialog id="vdlg"><h3 id="vtitle">Ghi chú</h3><p class="sub">Bấm micro rồi đọc nội dung. Có thể sửa lại chữ trước khi lưu.</p><textarea id="vtxt" rows="4" placeholder="Nội dung ghi chú…"></textarea><div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap"><button class="btn" id="vmic">🎤 Đọc</button><span class="grow"></span><button class="btn" id="vcancel">Hủy</button><button class="btn primary" id="vsave">Lưu ghi chú</button></div></dialog>`;
   while(w.firstChild)document.body.appendChild(w.firstChild);
   $("#fab").onclick=()=>{msgs.open=!msgs.open;renderMsgs()};
   $("#msgx").onclick=()=>{msgs.open=false;renderMsgs()};
+  $("#msghelper").onclick=showHelperDialog;
   $("#msglog").onclick=()=>$("#fileRemindLog").click();
   $("#fileRemindLog").onchange=async e=>{const f=e.target.files[0];e.target.value="";if(!f)return;
     try{const j=JSON.parse(await f.text());const n=applyRemindLog(Array.isArray(j)?j:[]);if(!n)toast("Không có dòng nhật ký mới nào khớp với phiếu/PO trong file này.")}catch(err){toast("Không đọc được file nhật ký: "+err.message,true)}};
