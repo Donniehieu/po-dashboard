@@ -25,10 +25,22 @@ body{background:var(--bg);color:var(--ink);font:14px/1.45 "Segoe UI",system-ui,-
 button{font:inherit;color:inherit;cursor:pointer}
 header.top{display:flex;gap:12px;align-items:center;flex-wrap:wrap;padding:14px 20px;background:var(--card);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:20}
 header.top h1{font-size:17px;margin:0;font-weight:700;letter-spacing:-.2px}
-.tgrp{display:flex;flex-direction:column;gap:4px;padding:5px 9px 7px;border:1px solid var(--line);border-radius:12px;background:var(--soft)}
-.tgrp .gl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--mute);line-height:1}
-.tgrp .gb{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
-.tgrp:not(:has(.btn:not([hidden]))){display:none}
+.tgrp{position:relative}
+.tgrp .gt{font:inherit;font-size:13px;font-weight:600;padding:6px 12px;border:1px solid var(--line);border-radius:10px;background:var(--soft);color:var(--ink);cursor:pointer;transition:background .15s,border-color .15s}
+.tgrp .gt:hover,.tgrp.open .gt{border-color:var(--brand);background:color-mix(in srgb,var(--brand) 10%,var(--soft))}
+.tgrp .gt i{font-style:normal;display:inline-block;transition:transform .2s;opacity:.7}
+.tgrp.open .gt i{transform:rotate(180deg)}
+.tgrp .gb{position:absolute;left:0;top:calc(100% + 8px);z-index:40;min-width:230px;max-width:min(92vw,360px);padding:10px 12px 12px;border:1px solid var(--line);border-radius:14px;background:var(--card);box-shadow:0 12px 36px rgba(15,23,42,.22);
+  opacity:0;visibility:hidden;pointer-events:none;transform:translateY(-8px) scale(.97);transform-origin:top left;transition:opacity .2s ease,transform .22s cubic-bezier(.2,.8,.2,1),visibility 0s linear .22s}
+.tgrp.open .gb{opacity:1;visibility:visible;pointer-events:auto;transform:none;transition:opacity .2s ease,transform .22s cubic-bezier(.2,.8,.2,1),visibility 0s}
+.tgrp .gh{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px}
+.tgrp .gh b{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--mute)}
+.tgrp .gx{border:0;background:transparent;color:var(--mute);font-size:15px;line-height:1;width:26px;height:26px;border-radius:8px;cursor:pointer}
+.tgrp .gx:hover{background:var(--soft);color:var(--ink)}
+.tgrp .gl2{display:flex;flex-direction:column;gap:6px}
+.tgrp .gl2 .btn{text-align:left;width:100%}
+.tgrp:not(:has(.gl2 .btn:not([hidden]))){display:none}
+@media (prefers-reduced-motion:reduce){.tgrp .gb,.tgrp .gt i{transition:none}}
 .grow{flex:1}
 .btn{border:1px solid var(--line);background:var(--card);padding:8px 14px;border-radius:8px;font-weight:600}
 .btn:hover{background:var(--soft)}
@@ -263,22 +275,22 @@ body.rzing,body.rzing *{cursor:col-resize!important;user-select:none!important}
   <span class="grow"></span>
   <button class="btn sm" id="btnNotify" title="Nhắc việc trễ bằng thông báo của trình duyệt (khi đang mở trang)">🔔 Bật Thông báo</button>
   <button class="btn sm" id="btnTheme" title="Đổi giao diện sáng/tối">🌓</button>
-  <div class="tgrp" id="grpLoad"><span class="gl">Load dữ liệu</span><div class="gb">
+  <div class="tgrp" id="grpLoad"><button type="button" class="gt" aria-expanded="false" aria-haspopup="true">Load dữ liệu <i>▾</i></button><div class="gb" role="group" aria-label="Load dữ liệu"><div class="gh"><b>Load dữ liệu</b><button type="button" class="gx" aria-label="Đóng">✕</button></div><div class="gl2">
     <button class="btn sm" id="btnGh">⚙ GitHub</button>
     <button class="btn sm" id="btnCloud" title="Lưu và đồng bộ trên cloud riêng (Google Drive/Sheets qua Apps Script)">☁ Cloud riêng</button>
     <button class="btn primary" id="btnPick">Chọn file Excel</button>
     <button class="btn sm" id="btnLast" hidden title="Mở lại file Excel đã chọn lần trước trên máy này (trình duyệt sẽ hỏi cho phép đọc/ghi)">📁 Mở lại file trên máy</button>
     <button class="btn sm" id="btnPushOther" hidden title="Đẩy file đang mở từ máy lên GitHub vào thư mục riêng “Dữ liệu Khác”, không ảnh hưởng PO-data">☁ Đẩy lên GitHub</button>
     <button class="btn sm" id="btnPushCloud" hidden title="Đẩy file đang mở lên cloud riêng của bạn (Google Drive qua Apps Script)">☁ Đẩy lên cloud riêng</button>
-  </div></div>
-  <div class="tgrp" id="grpSync"><span class="gl">Đồng bộ Odoo thủ công</span><div class="gb">
+  </div></div></div>
+  <div class="tgrp" id="grpSync"><button type="button" class="gt" aria-expanded="false" aria-haspopup="true">Đồng bộ Odoo thủ công <i>▾</i></button><div class="gb" role="group" aria-label="Đồng bộ Odoo thủ công"><div class="gh"><b>Đồng bộ Odoo thủ công</b><button type="button" class="gx" aria-label="Đóng">✕</button></div><div class="gl2">
     <button class="btn sm" id="btnSync" hidden title="Yêu cầu GitHub chạy đồng bộ từ Odoo ngay">🔄 Đồng bộ Odoo</button>
     <button class="btn sm" id="btnRefresh" hidden>↻ Tải lại</button>
-  </div></div>
-  <div class="tgrp" id="grpAuto"><span class="gl">Auto nhập liệu</span><div class="gb">
+  </div></div></div>
+  <div class="tgrp" id="grpAuto"><button type="button" class="gt" aria-expanded="false" aria-haspopup="true">Auto nhập liệu <i>▾</i></button><div class="gb" role="group" aria-label="Auto nhập liệu"><div class="gh"><b>Auto nhập liệu</b><button type="button" class="gx" aria-label="Đóng">✕</button></div><div class="gl2">
     <button class="btn sm" id="btnImport" hidden title="Gộp file Excel xuất từ Odoo vào dữ liệu nguồn">⬆ Nhập file Odoo</button>
     <button class="btn sm" id="btnHelper" title="Cài nút Odoo Helper (tự điền thụ hưởng NCC, soạn tin nhắc kế toán trong Odoo)">🔖 Nút Odoo</button>
-  </div></div>
+  </div></div></div>
   <input type="file" id="fileImp" accept=".xlsx,.xlsm" hidden><input type="file" id="fileRemindLog" accept=".json,application/json" hidden>
   <input type="file" id="file" accept=".xlsx,.xlsm" hidden>
 </header>
@@ -1329,7 +1341,32 @@ function startEdit(sh,td){
     dropIfEmpty(sh,si,r);
     renderDyn(sh,true);updateChrome();
   };
-  inp.onkeydown=e=>{if(e.key==="Enter")finish(true);else if(e.key==="Escape")finish(false)};
+  /* Excel: Tab / Shift+Tab / ← → (ở mép chữ) / ↑ ↓ lưu ô đang nhập rồi sang ô liền kề và mở nhập tiếp */
+  const canEdit=t=>{const c=sh.cols.find(c=>c.idx===+t.dataset.c);return !!c&&!sh.fset.has(t.dataset.r+":"+t.dataset.c)&&!(sh.pay&&!/^ghi chú$/i.test(c.name.trim()))};
+  const rowCells=tr=>[...tr.querySelectorAll("td[data-c]")].filter(canEdit);
+  const nav=(dx,dy)=>{
+    const tr=td.closest("tr");if(!tr)return false;let target=null;
+    if(dx){const cs=rowCells(tr),k=cs.indexOf(td);target=cs[k+dx]||null;
+      if(!target){const adj=dx>0?tr.nextElementSibling:tr.previousElementSibling;if(adj){const c2=rowCells(adj);target=dx>0?c2[0]:c2[c2.length-1]}}}
+    else{const adj=dy>0?tr.nextElementSibling:tr.previousElementSibling;target=adj?[...rowCells(adj)].find(t=>t.dataset.c===td.dataset.c)||null:null}
+    if(!target)return false;
+    const key=[target.dataset.r,target.dataset.c];
+    finish(true);
+    const nt=document.querySelector(`#tbl td[data-r="${key[0]}"][data-c="${key[1]}"]`);
+    if(nt){nt.scrollIntoView({block:"nearest",inline:"nearest"});startEdit(sh,nt)}
+    return true;
+  };
+  inp.onkeydown=e=>{
+    if(e.key==="Enter")finish(true);
+    else if(e.key==="Escape")finish(false);
+    else if(e.key==="Tab"){e.preventDefault();if(!nav(e.shiftKey?-1:1,0))finish(true)}
+    else if(inp.type==="text"&&!e.ctrlKey&&!e.metaKey&&!e.altKey&&!e.shiftKey){
+      const a=inp.selectionStart,b=inp.selectionEnd,len=inp.value.length,all=a===0&&b===len;
+      if(e.key==="ArrowLeft"&&(all||(a===b&&a===0))){if(nav(-1,0))e.preventDefault()}
+      else if(e.key==="ArrowRight"&&(all||(a===b&&a===len))){if(nav(1,0))e.preventDefault()}
+      else if((e.key==="ArrowDown"||e.key==="ArrowUp")&&!inp.getAttribute("list")){if(nav(0,e.key==="ArrowDown"?1:-1))e.preventDefault()}
+    }
+  };
   inp.onblur=e=>{const nx=e.relatedTarget;if(nx&&nx.classList&&nx.classList.contains('micbtn'))return;finish(true)};
 }
 
@@ -2575,6 +2612,17 @@ function voiceNote(si,rn){
 
 $("#fileRemindLog").onchange=async e=>{const f=e.target.files[0];e.target.value="";if(!f)return;
   try{const j=JSON.parse(await f.text());const n=applyRemindLog(Array.isArray(j)?j:[]);if(!n)toast("Không có dòng nhật ký mới nào khớp với phiếu/PO trong file này.")}catch(err){toast("Không đọc được file nhật ký: "+err.message,true)}};
+(function(){ // ba khối nút trên cùng: bấm mới thả nổi (không mở khi rê chuột), bấm ✕ / bấm ra ngoài / Esc để đóng
+  const gs=[...document.querySelectorAll(".tgrp")];
+  const setOpen=(g,on)=>{g.classList.toggle("open",on);g.querySelector(".gt").setAttribute("aria-expanded",String(on))};
+  gs.forEach(g=>{
+    g.querySelector(".gt").onclick=e=>{e.stopPropagation();const on=!g.classList.contains("open");gs.forEach(x=>setOpen(x,false));setOpen(g,on)};
+    g.querySelector(".gx").onclick=e=>{e.stopPropagation();setOpen(g,false)};
+    g.querySelector(".gb").addEventListener("click",e=>{if(e.target.closest("button.btn"))setTimeout(()=>setOpen(g,false),120)}); // chọn xong chức năng thì tự thu lại
+  });
+  document.addEventListener("click",e=>{if(!e.target.closest(".tgrp"))gs.forEach(x=>setOpen(x,false))});
+  document.addEventListener("keydown",e=>{if(e.key==="Escape")gs.forEach(x=>setOpen(x,false))});
+})();
 $("#chkAuto").checked=state.auto;
 $("#chkSync").checked=state.autosync;
 $("#chkSync").onchange=e=>{state.autosync=e.target.checked;store.set("qlcv:autosync",state.autosync)};
