@@ -1574,13 +1574,13 @@ function nccAddMissing(){ // NCC có ở tab PO mà chưa có ở Công nợ NCC
   toast(`Đã thêm ${add.length} NCC mới vào tab Công nợ NCC (cột Phân loại để trống - hãy chọn Đơn hàng/Công nợ).`);
   return add.length;
 }
-function nccEnforceAll(silent){ // “TT trước” chỉ do code quyết định: Đơn hàng = tick, Công nợ = bỏ tick (PO chưa Hoàn thành); Phân loại trống/không khớp thì giữ nguyên
+function nccEnforceAll(silent){ // “TT trước” chỉ do code quyết định: Đơn hàng = tick, Công nợ = bỏ tick (áp dụng cho mọi PO, kể cả Hoàn thành); Phân loại trống/không khớp thì giữ nguyên
   const S=nccSheets();if(!S||state.stale)return 0;
   const items=S.ds.rows.filter(x=>x.v[S.nc.idx]!=null&&String(x.v[S.nc.idx]).trim()).map(x=>({name:String(x.v[S.nc.idx]).trim(),row:x}));
   const cache=new Map(items.map(it=>[it,NCC.cands(it.name)])),memo=new Map();let on=0,off=0;
   nccBusy=true;state.via="đồng bộ NCC";
   try{for(const po of S.po.rows){
-    const sup=po.v[S.sc.idx];if(sup==null||po.done)continue;
+    const sup=po.v[S.sc.idx];if(sup==null)continue;
     const k=String(sup);if(!memo.has(k)){const f=NCC.find(k,items,cache);const ty=new Set(f.hits.map(h=>NCC.fold(h.row.v[S.tc.idx]).trim()));memo.set(k,ty.size===1?[...ty][0]:"")}
     const t=memo.get(k);if(t!=="don hang"&&t!=="cong no")continue;
     const has=po.v[S.po.payIdx]!=null&&String(po.v[S.po.payIdx]).trim()!=="";
@@ -1606,7 +1606,7 @@ function nccOnEdit(si,r,ci){
   const me=items.find(it=>it.row===r);if(!me)return;
   let on=0,off=0;nccBusy=true;state.via="đồng bộ NCC";
   try{for(const po of S.po.rows){
-      const sup=po.v[S.sc.idx];if(sup==null||po.done)continue;
+      const sup=po.v[S.sc.idx];if(sup==null)continue;
       const f=NCC.find(String(sup),items,cache);
       if(!f.hits.includes(me)||new Set(f.hits.map(h=>NCC.fold(h.row.v[S.tc.idx]).trim())).size>1)continue;
       const has=po.v[S.po.payIdx]!=null&&String(po.v[S.po.payIdx]).trim()!=="";
