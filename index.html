@@ -1711,7 +1711,7 @@ $("#btnNotify").onclick=async()=>{
 };
 function updateChrome(){updateSavebar();scheduleAutoSave();updateBanner();const t=document.querySelector('#tabs [data-i="priority"] .n');if(t)t.textContent=collectItems().length}
 
-function goSheet(si,patch){const sh=state.sheets[si];sh.ui.filters={};sh.ui.cf={};sh.ui.special=null;sh.ui.range=null;sh.ui.search="";sh.ui.shown=100;Object.assign(sh.ui,patch||{});state.active=si;renderTabs();render();scrollTo(0,0)}
+function goSheet(si,patch){const sh=state.sheets[si];sh.ui.noteGrp=null;sh.ui.filters={};sh.ui.cf={};sh.ui.special=null;sh.ui.range=null;sh.ui.search="";sh.ui.shown=100;Object.assign(sh.ui,patch||{});state.active=si;renderTabs();render();scrollTo(0,0)}
 
 function renderPriority(){
   const it=collectItems();
@@ -1846,6 +1846,7 @@ function rowsFor(sh,except){
   return sh.rows.filter(r=>{
     for(const k in u.filters){if(except===+k)continue;if(String(cellVal(sh,r,+k)??"")!==u.filters[k])return false}
     for(const k in u.cf){if(!cfTest(sh,r,+k,u.cf[k]))return false}
+    if(u.noteGrp&&except!=="noteGrp"&&sh.pay&&sh.ghiIdx!=null&&payNoteGroup(sh,r)!==u.noteGrp)return false;
     if(u.special&&except!=="special"&&r.st!==u.special)return false;
     if(u.range&&except!=="range"){const d=r.v[sh.dueIdx];if(!(d instanceof Date)||d<u.range.from||d>=u.range.to)return false}
     if(u.search){if(!(r._t||(r._t=r.v.map(x=>x instanceof Date?fmtD(x):String(x??"")).join(" ").toLowerCase()+" "+String(r.wf||"").toLowerCase())).includes(u.search))return false}
@@ -1930,25 +1931,20 @@ function timeline(sh,fr){
   return `<div class="card"><h3>Tiến độ theo ${byWeek?"tuần":"ngày"} <small>cột “${esc(sh.cols.find(c=>c.idx===di).name)}” · <span style="color:var(--ok)">■</span> đã xong <span style="color:var(--warn)">■</span> chưa xong · bấm cột để lọc</small></h3><div class="scroll-x">${svg}</div></div>`;
 }
 
-/* Tab Phiếu thanh toán: tỷ lệ phiếu theo nội dung cột Ghi chú (chưa có ghi chú / đã nhắn ai / ghi chú khác), tính trên các dòng đang lọc */
-function payNoteStats(sh,fr){
-  const m=new Map();let none=0,other=0;
-  for(const r of fr){
-    const t=String(r.v[sh.ghiIdx]??"").trim();
-    if(!t){none++;continue}
-    const hits=[...t.matchAll(/Đã nhắn ([^:•\[]+?):/g)];
-    if(hits.length){const k="Đã nhắn "+hits[hits.length-1][1].trim();m.set(k,(m.get(k)||0)+1)}else other++;
-  }
-  const rows=[...m].sort((a,b)=>b[1]-a[1]).map(([k,n])=>({k,n}));
-  rows.push({k:"Ghi chú khác (không phải tin nhắn)",n:other},{k:"Chưa có ghi chú",n:none});
-  return {total:fr.length,rows:rows.filter(x=>x.n)};
+/* Tab Phiếu thanh toán: nhóm theo nội dung cột Ghi chú (chưa có ghi chú / đã nhắn ai / ghi chú khác) – bấm một nhóm để lọc như các biểu đồ cột khác */
+const NOTE_NONE="Chưa có ghi chú",NOTE_OTHER="Ghi chú khác (không phải tin nhắn)";
+function payNoteGroup(sh,r){
+  const t=String(r.v[sh.ghiIdx]??"").trim();if(!t)return NOTE_NONE;
+  const hits=[...t.matchAll(/Đã nhắn ([^:•\[]+?):/g)];
+  return hits.length?"Đã nhắn "+hits[hits.length-1][1].trim():NOTE_OTHER;
 }
 function payNoteCard(sh,fr){
-  const st=payNoteStats(sh,fr),pct=n=>st.total?(n/st.total*100):0;
-  return `<div class="card" style="grid-column:1/-1"><h3>Tỷ lệ theo cột Ghi chú <small>${fmtN(st.total)} phiếu đang hiện</small></h3>
-  <table class="mini"><thead><tr><th style="text-align:left!important">Nội dung Ghi chú</th><th>Số phiếu</th><th>Tỷ lệ</th><th style="width:40%"></th></tr></thead><tbody>`+
-  (st.rows.length?st.rows.map(x=>`<tr><td>${esc(x.k)}</td><td class="num">${fmtN(x.n)}</td><td class="num"><b>${pct(x.n).toFixed(1)}%</b></td><td><div class="prog" style="min-width:80px"><i style="width:${pct(x.n).toFixed(1)}%"></i></div></td></tr>`).join(""):`<tr><td colspan="4" class="sub">Không có phiếu nào.</td></tr>`)+
-  `<tr><td><b>Tổng</b></td><td class="num"><b>${fmtN(st.total)}</b></td><td class="num"><b>100%</b></td><td></td></tr></tbody></table></div>`;
+  const m=new Map();for(const r of fr){const k=payNoteGroup(sh,r);m.set(k,(m.get(k)||0)+1)}
+  const rank=k=>k===NOTE_NONE?2:k===NOTE_OTHER?1:0;
+  const arr=[...m].sort((a,b)=>rank(a[0])-rank(b[0])||b[1]-a[1]);
+  const tot=arr.reduce((a,x)=>a+x[1],0)||1,mx=arr.reduce((a,x)=>Math.max(a,x[1]),1),sel=sh.ui.noteGrp;
+  return `<div class="card"><h3>Ghi chú <small>tỷ lệ theo nội dung Ghi chú · bấm để lọc</small></h3><div class="bars">`+
+    arr.map(([k,v])=>`<div class="bar ${sel===k?"sel":""}" data-ng="${esc(k)}" title="Bấm để lọc"><span class="t">${esc(k)}</span><span class="tr"><span class="f" style="display:block;width:${(v/mx*100).toFixed(1)}%;background:${k===NOTE_NONE?"var(--mute)":colorFor(k)}"></span></span><span class="n">${fmtN(v)} · ${(v/tot*100).toFixed(0)}%</span></div>`).join("")+`</div></div>`;
 }
 function renderDyn(sh,keep,anchor){
   const u=sh.ui;const fr=rowsFor(sh);
@@ -1960,6 +1956,7 @@ function renderDyn(sh,keep,anchor){
   const chips=[];
   for(const k in u.filters){const c=sh.cols.find(c=>c.idx===+k);chips.push(`<span class="fchip">${esc(colLabel(c))}: ${esc(u.filters[k]||"(Trống)")} <b data-rm="${k}">×</b></span>`)}
   for(const k in u.cf){const c=sh.cols.find(c=>c.idx===+k);if(c)chips.push(`<span class="fchip">${esc(colLabel(c))}: ${esc(cfDescribe(sh,c,u.cf[k]))} <b data-rmf="${k}">×</b></span>`)}
+  if(u.noteGrp)chips.push(`<span class="fchip">Ghi chú: ${esc(u.noteGrp)} <b data-rm="noteGrp">×</b></span>`);
   if(u.special)chips.push(`<span class="fchip">${u.special==="overdue"?"Quá hạn":"Sắp đến hạn"} <b data-rm="special">×</b></span>`);
   if(u.range)chips.push(`<span class="fchip">Khoảng ${fmtDS(u.range.from)}–${fmtDS(new Date(u.range.to-DAY))} <b data-rm="range">×</b></span>`);
   let html=chips.length?`<div class="chips">${chips.join("")}<button class="btn" data-clear>Xoá tất cả bộ lọc</button></div>`:"";
@@ -1989,19 +1986,20 @@ function renderDyn(sh,keep,anchor){
   }
   for(const c of sh.cat){if(c.idx===sh.progIdx)continue;
     html+=`<div class="card"><h3>${esc(c.name)}</h3>${barsHtml(sh,c.idx,rowsFor(sh,c.idx),u.metric)}</div>`}
-  if(sh.pay&&sh.ghiIdx!=null)html+=payNoteCard(sh,fr);
+  if(sh.pay&&sh.ghiIdx!=null)html+=payNoteCard(sh,rowsFor(sh,"noteGrp"));
   if(sh.dueIdx!=null)html+=timeline(sh,rowsFor(sh,"range")).replace('class="card"','class="card" style="grid-column:1/-1"');
   html+=`</div>`;
   html+=`<div id="tbl"></div>`;
   dyn.innerHTML=html;
   // sự kiện
   dyn.querySelectorAll(".bar").forEach(b=>b.onclick=()=>{const c=b.dataset.c,v=b.dataset.v;if(u.filters[c]===v)delete u.filters[c];else u.filters[c]=v;u.shown=100;renderDyn(sh)});
+  dyn.querySelectorAll("[data-ng]").forEach(b=>b.onclick=()=>{const v=b.dataset.ng;u.noteGrp=u.noteGrp===v?null:v;u.shown=100;renderDyn(sh)});
   dyn.querySelectorAll(".tb").forEach(g=>g.onclick=()=>{const f=new Date(+g.dataset.from),t=new Date(+g.dataset.to);
     if(u.range&&+u.range.from===+f)u.range=null;else u.range={from:f,to:t};u.shown=100;renderDyn(sh)});
   dyn.querySelectorAll("[data-k]").forEach(k=>k.onclick=()=>{u.special=u.special===k.dataset.k?null:k.dataset.k;u.shown=100;renderDyn(sh)});
-  dyn.querySelectorAll("[data-rm]").forEach(b=>b.onclick=()=>{const k=b.dataset.rm;if(k==="special")u.special=null;else if(k==="range")u.range=null;else delete u.filters[k];renderDyn(sh)});
+  dyn.querySelectorAll("[data-rm]").forEach(b=>b.onclick=()=>{const k=b.dataset.rm;if(k==="special")u.special=null;else if(k==="noteGrp")u.noteGrp=null;else if(k==="range")u.range=null;else delete u.filters[k];renderDyn(sh)});
   dyn.querySelectorAll("[data-rmf]").forEach(b=>b.onclick=()=>{delete u.cf[b.dataset.rmf];u.shown=100;renderDyn(sh)});
-  const cl=dyn.querySelector("[data-clear]");if(cl)cl.onclick=()=>{u.filters={};u.cf={};u.special=null;u.range=null;renderDyn(sh)};
+  const cl=dyn.querySelector("[data-clear]");if(cl)cl.onclick=()=>{u.filters={};u.cf={};u.noteGrp=null;u.special=null;u.range=null;renderDyn(sh)};
   renderTable(sh,fr);
   if(ks){const nw=dyn.querySelector(".tablewrap");if(nw){nw.scrollLeft=ks.l;nw.scrollTop=ks.t}scrollTo(ks.x,ks.y)
     if(at!=null){const na=dyn.querySelector(`tr[data-row="${anchor}"]`);if(na){let d=na.getBoundingClientRect().top-at;
