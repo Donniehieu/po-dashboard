@@ -149,6 +149,7 @@ table.hist td{vertical-align:top}
 .msg{border:1px solid var(--line);border-left:4px solid var(--c);border-radius:10px;padding:9px 11px;background:var(--bg)}
 .msg .mh{display:flex;justify-content:space-between;gap:8px;align-items:center}
 .msg .ma{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.tplrow{display:flex;gap:6px;flex-wrap:wrap;width:100%;align-items:center}.tplsel{flex:1 1 220px;min-width:0;max-width:100%;padding:5px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink);font:inherit;font-size:12px}
 #vtxt{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;font:inherit;background:var(--card);color:var(--ink)}
 @media (max-width:700px){
   body{font-size:15px}
@@ -271,7 +272,7 @@ body.rzing,body.rzing *{cursor:col-resize!important;user-select:none!important}
   <button class="btn sm" id="btnCloud" title="Lưu và đồng bộ trên cloud riêng (Google Drive/Sheets qua Apps Script)">☁ Cloud riêng</button>
   <button class="btn sm" id="btnGh">⚙ GitHub</button>
   <button class="btn primary" id="btnPick">Chọn file Excel</button>
-  <input type="file" id="fileImp" accept=".xlsx,.xlsm" hidden>
+  <input type="file" id="fileImp" accept=".xlsx,.xlsm" hidden><input type="file" id="fileRemindLog" accept=".json,application/json" hidden>
   <input type="file" id="file" accept=".xlsx,.xlsm" hidden>
 </header>
 <nav class="tabs" id="tabs" hidden></nav>
@@ -617,7 +618,7 @@ function analyze(raw){
   const isPaySheet=/^phiếu thanh toán$/i.test(String(raw.name||"").trim());
   const hIdx=re=>hdr.findIndex(h=>re.test(String(h||"").trim()));
   const payId=isPaySheet?hIdx(/^id odoo$/i):-1,payCid=isPaySheet?hIdx(/^mã công ty$/i):-1;
-  const forced=n=>(hasKey&&FORCE_RE.test(n.trim()))||(isDs&&/^ngày điều chỉnh$/i.test(n.trim()));
+  const forced=n=>(hasKey&&FORCE_RE.test(n.trim()))||(isDs&&/^ngày điều chỉnh$/i.test(n.trim()))||(isPaySheet&&/^ghi chú$/i.test(n.trim()));
   for(let c=0;c<maxC;c++){
     const name=(hdr[c]!=null?String(hdr[c]):"");
     const vals=rows.map(r=>r.v[c]).filter(x=>x!=null);
@@ -688,7 +689,7 @@ function analyze(raw){
   if(isPaySheet){ // tab Phiếu thanh toán: quá hạn = chưa thanh toán và đã qua >=1 ngày làm việc (T2-T6) kể từ ngày lập
     const f=re=>{const c=cols.find(c=>re.test(c.name.trim()));return c?c.idx:null};
     sh.pay=true;sh.payId=payId;sh.payCid=payCid;sh.payStIdx=f(/^trạng thái tt$/i);sh.payNoteIdx=f(/^nhắc kt thanh toán$/i);sh.payMemoIdx=f(/^diễn giải$/i);
-    sh.dueIdx=f(/^hạn thanh toán$/i);sh.sub=f(/^nhà cung cấp$/i);sh.title=f(/^số pay$/i)??sh.title;sh.payPoIdx=f(/^po liên quan$/i);sh.payCurIdx=f(/^số chứng từ hiện tại$/i);sh.progIdx=null;sh.blockIdx=sh.payStIdx;
+    sh.dueIdx=f(/^hạn thanh toán$/i);sh.sub=f(/^nhà cung cấp$/i);sh.title=f(/^số pay$/i)??sh.title;sh.payPoIdx=f(/^po liên quan$/i);sh.payCurIdx=f(/^số chứng từ hiện tại$/i);sh.payCoIdx=f(/^công ty$/i);sh.payOdooIdx=f(/^trạng thái odoo$/i);sh.ghiIdx=f(/^ghi chú$/i);sh.progIdx=null;sh.blockIdx=sh.payStIdx;
     const m=cols.find(c=>/^số tiền$/i.test(c.name.trim()));if(m)sh.money=m;
     sh.checklist=false;
   }
@@ -821,6 +822,7 @@ async function loadBuffer(buf,name,opts={}){
     $("#btnSync").hidden=!(ghReady()&&state.src==="github"&&isMainPath());
     $("#btnPushOther").hidden=!(ghReady()&&state.src==="local");
     renderTabs();render();updateChrome();notifyDaily();
+    try{applyRemindLog()}catch(e){console.error(e)}
     const a1=nccAddMissing(),a2=nccEnforceAll(true);
     if(a1||a2){renderTabs();render();updateChrome();if(a2)toast(`Đã tự động cập nhật “TT trước” cho ${a2} PO theo Phân loại NCC (cột này chỉ do hệ thống tick).`)}
     if(state.src==="github"&&ghReady())loadRemoteHistory();
@@ -1442,6 +1444,74 @@ let rzT=null;
 function rzScan(){document.querySelectorAll("#main table").forEach((tb,i)=>enableResize(tb,tb.closest("#tbl")?"d":String(i)))}
 new MutationObserver(()=>{clearTimeout(rzT);rzT=setTimeout(rzScan,40)}).observe($("#main"),{childList:true,subtree:true});
 
+/* ---- Mẫu tin nhắn nhắc kế toán (dùng chung với script Tampermonkey; sửa ở cả hai nơi khi đổi người/nội dung) ---- */
+const REMIND_TPL=[
+  {key:"pay_dq",label:"Duyệt PAY – Dung Quất (Nguyễn Thị Mai)",tag:"@[HN0096] Nguyễn Thị Mai",name:"Nguyễn Thị Mai",text:"Chị ơi xem giúp em PAY này ạ"},
+  {key:"pay_ph",label:"Duyệt PAY – Phúc Hà (Lê Xuân Giang)",tag:"@[HN0025] Lê Xuân Giang",name:"Lê Xuân Giang",text:"Anh ơi kiểm tra duyệt giúp em PAY này ạ"},
+  {key:"ktnh",label:"KTNH xác nhận – thanh toán (Phạm Thị Mai Lê)",tag:"@[HN10265] Phạm Thị Mai Lê",name:"Phạm Thị Mai Lê",text:"Em ơi xem thanh toán cho anh PAY này"},
+  {key:"inv_dq",label:"Xác nhận hóa đơn PO – Dung Quất (Nguyễn Thị Mai)",tag:"@[HN0096] Nguyễn Thị Mai",name:"Nguyễn Thị Mai",text:"Chị ơi, xác nhận hóa đơn này giúp em"},
+  {key:"inv_ph",label:"Xác nhận hóa đơn PO – Phúc Hà (Tống Sỹ Xuân Trường)",tag:"@[HN0176] Tống Sỹ Xuân Trường",name:"Tống Sỹ Xuân Trường",text:"Anh ơi, xác nhận hóa đơn này giúp em"}];
+const tplOf=k=>REMIND_TPL.find(t=>t.key===k);
+function defaultTpl(sh,r){ // mẫu gợi ý theo bước Odoo và công ty của phiếu
+  const od=sh.payOdooIdx!=null?wfn(r.v[sh.payOdooIdx]):"",co=sh.payCoIdx!=null?wfn(r.v[sh.payCoIdx]):"";
+  if(/ktnh/.test(od))return "ktnh";
+  return /dung qu[aấ]t/.test(co)?"pay_dq":"pay_ph";
+}
+const REMIND_LOG_KEY="qlcv:remindlog",REMIND_APPLIED_KEY="qlcv:remindapplied";
+const fmtDT=iso=>{const m=/^(\d{4})-(\d\d)-(\d\d)T(\d\d):(\d\d)/.exec(String(iso));return m?`${m[3]}/${m[2]}/${m[1]} ${m[4]}:${m[5]}`:String(iso||"")};
+/* Ghi “đã nhắn ai, nội dung gì, ngày nào” vào cột Ghi chú của phiếu thanh toán tương ứng (theo số PAY, số BNK hoặc mã PO) */
+function remindNoteText(e){return `[${fmtDT(e.date)}] Đã nhắn ${e.to||""}: ${e.text||""}`}
+function remindTargets(e){ // -> [{si,sh,r}] các dòng cần ghi
+  const id=String(e.id||"").trim().toUpperCase();if(!id)return [];
+  const out=[];
+  state.sheets.forEach((sh,si)=>{
+    if(sh.pay&&sh.ghiIdx!=null){
+      for(const r of sh.rows){
+        const no=String(r.v[sh.title]??"").trim().toUpperCase(),cur=sh.payCurIdx!=null?String(r.v[sh.payCurIdx]??"").trim().toUpperCase():"";
+        if(e.kind==="PO"){const codes=String(r.v[sh.payPoIdx]??"").toUpperCase().split(/[,;\s]+/);if(codes.includes(id))out.push({si,sh,r,col:sh.ghiIdx})}
+        else if(no===id||cur===id)out.push({si,sh,r,col:sh.ghiIdx});
+      }
+    }
+  });
+  if(!out.length&&e.kind==="PO"){ // PO chưa có phiếu thanh toán nào -> ghi vào Ghi chú của chính PO
+    state.sheets.forEach((sh,si)=>{if(sh.wf&&sh.ghiIdx!=null){const r=sh.rows.find(x=>String(x.v[sh.title]??"").trim().toUpperCase()===id);if(r)out.push({si,sh,r,col:sh.ghiIdx})}});
+  }
+  return out;
+}
+function applyRemindEntry(e){
+  const ts=remindTargets(e);if(!ts.length)return 0;
+  const line=remindNoteText(e);let n=0;
+  state.via="nhật ký nhắn";
+  try{for(const t of ts){
+    const old=String(t.r.v[t.col]??"");if(old.includes(line))continue;
+    if(setCell(t.si,t.r,t.col,old?old+" • "+line:line))n++}}finally{state.via="dashboard"}
+  return n;
+}
+function remindKey(e){return [e.id,e.tpl,e.date].join("|")}
+let remindBusy=false;
+function applyRemindLog(extra){
+  if(remindBusy||!state.sheets.length||state.stale)return 0;
+  remindBusy=true;let total=0;
+  try{
+    let log=[];try{log=JSON.parse(localStorage.getItem(REMIND_LOG_KEY)||"[]")}catch(_){}
+    if(extra)log=log.concat(extra);
+    let done={};try{done=JSON.parse(localStorage.getItem(REMIND_APPLIED_KEY)||"{}")}catch(_){}
+    let changed=false;
+    for(const e of log){
+      const k=remindKey(e);if(done[k])continue;
+      const n=applyRemindEntry(e);
+      if(n){total+=n;done[k]=1;changed=true}
+    }
+    if(changed){
+      try{localStorage.setItem(REMIND_APPLIED_KEY,JSON.stringify(done))}catch(_){}
+      const sh=state.sheets[state.active];if(sh&&sh.pay)renderDyn(sh,true);
+      updateChrome();toast(`Đã ghi ${total} lần nhắn vào cột Ghi chú (từ nhật ký tin nhắn). Chưa ghi vào Excel nếu tự lưu đang tắt.`);
+    }
+  }finally{remindBusy=false}
+  return total;
+}
+setInterval(()=>{try{applyRemindLog()}catch(e){console.error(e)}},6000);
+addEventListener("focus",()=>{try{applyRemindLog()}catch(e){console.error(e)}});
 /* ---- Đồng bộ NCC: PO -> Công nợ NCC (thêm NCC mới) và Công nợ NCC "Đơn hàng" -> tick "Thanh toán trước" ---- */
 const NCC=(()=>{
   const fold=s=>String(s==null?"":s).toLowerCase().replace(/đ/g,"d").normalize("NFD").replace(/[̀-ͯ]/g,"");
@@ -2423,12 +2493,17 @@ function renderMsgs(){
     const vend=x.s.sub!=null?x.r.v[x.s.sub]:"";
     return `<div class="msg" style="--c:${lvlC[x.lvl]}"><div class="mh"><a class="ol" href="#" data-code="${esc(x.r.v[x.s.title])}" title="Mở Odoo để tìm đơn này"><b>${esc(x.r.v[x.s.title])}</b></a><span class="late">${x.chk?"⚠ Kiểm tra · nhờ người duyệt":x.s.pay?"💳 chưa thanh toán · trễ "+x.late+" ngày làm việc":"trễ "+x.late+" ngày"}</span></div>
       <div class="sub">${x.wfs?`<span class="chip" style="--c:${colorFor(x.wfs)}">${esc(x.wfs)}</span> `:""}${esc(vend||"")}${x.amt?" · "+fmtN(x.amt):""} ${x.due instanceof Date?" · hạn "+fmtD(x.due):""} · ${esc(x.s.name)}</div>
-      <div class="ma">${x.s.pay?`<button class="btn sm" data-mp="${x.i}|${x.r.n}">🔍 Mở phiếu trên Odoo</button><button class="btn sm" data-mc="${x.i}|${x.r.n}" title="${x.chk?"Sao chép tin tag người duyệt. Nhanh hơn: mở phiếu rồi bấm nút 💬 Nhắc duyệt PAY của Tampermonkey":"Sao chép nội dung nhắc để dán vào Chatter của phiếu (gửi tin, tag kế toán)"}">📋 Sao chép ${x.chk?"tin nhắc duyệt":"nhắc KT"}</button>`:`<button class="btn sm" data-mo="${esc(x.r.v[x.s.title])}">🔍 Tìm trên Odoo</button>`}<button class="btn sm" data-mv="${x.i}|${x.r.n}">🎤 Ghi chú</button><button class="btn sm" data-mg="${x.i}|${esc(String(x.r.v[x.s.title]))}">📄 Xem dòng</button><button class="btn sm" data-mx="${esc(x.key)}" title="Ẩn tin này đến hết hôm nay">✕</button></div></div>`}).join("")+(L.length>60?`<div class="note">… và ${L.length-60} đơn nữa. Xem tab “Ưu tiên xử lý”.</div>`:""):`<div class="sub" style="padding:18px 8px">Không có đơn nào trễ hẹn. 🎉</div>`;
+      <div class="ma">${x.s.pay?`<button class="btn sm" data-mp="${x.i}|${x.r.n}">🔍 Mở phiếu trên Odoo</button><span class="tplrow"><select class="tplsel" data-ms="${x.i}|${x.r.n}" title="Chọn mẫu tin nhắn có sẵn để nhắn kế toán">${REMIND_TPL.map(t=>`<option value="${t.key}" ${t.key===defaultTpl(x.s,x.r)?"selected":""}>${esc(t.label)}</option>`).join("")}</select><button class="btn sm" data-mt="${x.i}|${x.r.n}" title="Sao chép nội dung mẫu đã chọn để dán vào Chatter của phiếu">📋 Sao chép mẫu</button><button class="btn sm" data-md="${x.i}|${x.r.n}" title="Đã gửi tin theo mẫu này: ghi vào cột Ghi chú của phiếu">✅ Đã gửi</button></span><button class="btn sm" data-mc="${x.i}|${x.r.n}" title="${x.chk?"Sao chép tin tag người duyệt. Nhanh hơn: mở phiếu rồi bấm nút 💬 Nhắc duyệt PAY của Tampermonkey":"Sao chép nội dung nhắc để dán vào Chatter của phiếu (gửi tin, tag kế toán)"}">📋 Sao chép ${x.chk?"tin nhắc duyệt":"nhắc KT"}</button>`:`<button class="btn sm" data-mo="${esc(x.r.v[x.s.title])}">🔍 Tìm trên Odoo</button>`}<button class="btn sm" data-mv="${x.i}|${x.r.n}">🎤 Ghi chú</button><button class="btn sm" data-mg="${x.i}|${esc(String(x.r.v[x.s.title]))}">📄 Xem dòng</button><button class="btn sm" data-mx="${esc(x.key)}" title="Ẩn tin này đến hết hôm nay">✕</button></div></div>`}).join("")+(L.length>60?`<div class="note">… và ${L.length-60} đơn nữa. Xem tab “Ưu tiên xử lý”.</div>`:""):`<div class="sub" style="padding:18px 8px">Không có đơn nào trễ hẹn. 🎉</div>`;
   const b=$("#msgbody");
   b.querySelectorAll("[data-mo]").forEach(x=>x.onclick=()=>openOdoo(x.dataset.mo));
   const payRow=k=>{const [i,n]=k.split("|"),sh=state.sheets[+i];return [sh,sh&&sh.rows.find(r=>r.n===+n)]};
   b.querySelectorAll("[data-mp]").forEach(x=>x.onclick=()=>{const [sh,r]=payRow(x.dataset.mp);if(r)openPay(sh,r)});
   b.querySelectorAll("[data-mc]").forEach(x=>x.onclick=async()=>{const [sh,r]=payRow(x.dataset.mc);if(!r)return;const t=r.v[sh.payNoteIdx]||"";try{await navigator.clipboard.writeText(String(t));toast("Đã sao chép nội dung nhắc. Dán vào ô “Gửi tin” trong Chatter của phiếu và tag kế toán.")}catch(e){toast(String(t),true)}});
+  const tplPick=k=>tplOf(b.querySelector(`select[data-ms="${k}"]`).value);
+  b.querySelectorAll("[data-mt]").forEach(x=>x.onclick=async()=>{const t=tplPick(x.dataset.mt);if(!t)return;const s=t.tag+" "+t.text;try{await navigator.clipboard.writeText(s);toast("Đã sao chép: "+s+". Dán vào ô “Gửi tin” trong Chatter của phiếu (hoặc dùng nút 💬 của script Tampermonkey để tự gõ và @tag).")}catch(e){toast(s,true)}});
+  b.querySelectorAll("[data-md]").forEach(x=>x.onclick=()=>{const [sh,r]=payRow(x.dataset.md);if(!r)return;const t=tplPick(x.dataset.md);if(!t)return;
+    const e={id:String(r.v[sh.payCurIdx!=null&&/bnk/i.test(String(r.v[sh.payCurIdx]??""))?sh.payCurIdx:sh.title]??""),kind:/bnk/i.test(String(r.v[sh.payCurIdx]??""))?"BNK":"PAY",tpl:t.key,to:t.name,text:t.text,date:new Date(Date.now()-new Date().getTimezoneOffset()*6e4).toISOString().slice(0,19)};
+    const n=applyRemindEntry(e);if(n){{const as=state.sheets[state.active];if(as&&as.pay)renderDyn(as,true)}updateChrome();toast("Đã ghi vào cột Ghi chú: "+remindNoteText(e))}else toast("Không ghi được vào cột Ghi chú của phiếu này.",true)});
   b.querySelectorAll("[data-mv]").forEach(x=>x.onclick=()=>{const [i,n]=x.dataset.mv.split("|");voiceNote(+i,+n)});
   b.querySelectorAll("[data-mg]").forEach(x=>x.onclick=()=>{const k=x.dataset.mg.indexOf("|");msgs.open=false;goSheet(+x.dataset.mg.slice(0,k),{search:x.dataset.mg.slice(k+1).toLowerCase()});renderMsgs()});
   b.querySelectorAll("[data-mx]").forEach(x=>x.onclick=()=>{dismissMsg(x.dataset.mx);renderMsgs()});
@@ -2436,11 +2511,14 @@ function renderMsgs(){
 (function(){
   const w=document.createElement("div");
   w.innerHTML=`<button id="fab" class="fab" aria-label="Tin nhắn nhắc việc" title="Đơn trễ hẹn">🔔<span id="fabn" class="fabn" hidden></span></button>
-  <section id="msgpanel" class="msgpanel" hidden><div class="mp-h"><b>Nhắc việc – đơn trễ hẹn</b><span class="grow"></span><button class="btn sm" id="msgx" aria-label="Đóng">✕</button></div><div id="msgbody" class="mp-b"></div></section>
+  <section id="msgpanel" class="msgpanel" hidden><div class="mp-h"><b>Nhắc việc – đơn trễ hẹn</b><span class="grow"></span><button class="btn sm" id="msglog" title="Nhập file nhật ký tin nhắn (.json) xuất từ script Tampermonkey nếu dashboard chưa tự nhận">⬆ Nhập nhật ký nhắn</button><button class="btn sm" id="msgx" aria-label="Đóng">✕</button></div><div id="msgbody" class="mp-b"></div></section>
   <dialog id="vdlg"><h3 id="vtitle">Ghi chú</h3><p class="sub">Bấm micro rồi đọc nội dung. Có thể sửa lại chữ trước khi lưu.</p><textarea id="vtxt" rows="4" placeholder="Nội dung ghi chú…"></textarea><div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap"><button class="btn" id="vmic">🎤 Đọc</button><span class="grow"></span><button class="btn" id="vcancel">Hủy</button><button class="btn primary" id="vsave">Lưu ghi chú</button></div></dialog>`;
   while(w.firstChild)document.body.appendChild(w.firstChild);
   $("#fab").onclick=()=>{msgs.open=!msgs.open;renderMsgs()};
   $("#msgx").onclick=()=>{msgs.open=false;renderMsgs()};
+  $("#msglog").onclick=()=>$("#fileRemindLog").click();
+  $("#fileRemindLog").onchange=async e=>{const f=e.target.files[0];e.target.value="";if(!f)return;
+    try{const j=JSON.parse(await f.text());const n=applyRemindLog(Array.isArray(j)?j:[]);if(!n)toast("Không có dòng nhật ký mới nào khớp với phiếu/PO trong file này.")}catch(err){toast("Không đọc được file nhật ký: "+err.message,true)}};
 })();
 
 $("#chkAuto").checked=state.auto;
