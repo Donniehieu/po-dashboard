@@ -1464,14 +1464,16 @@ const fmtDT=iso=>{const m=/^(\d{4})-(\d\d)-(\d\d)T(\d\d):(\d\d)/.exec(String(iso
 /* Ghi “đã nhắn ai, nội dung gì, ngày nào” vào cột Ghi chú của phiếu thanh toán tương ứng (theo số PAY, số BNK hoặc mã PO) */
 function remindNoteText(e){return `[${fmtDT(e.date)}] Đã nhắn ${e.to||""}: ${e.text||""}`}
 function remindTargets(e){ // -> [{si,sh,r}] các dòng cần ghi
-  const id=String(e.id||"").trim().toUpperCase();if(!id)return [];
+  let id=String(e.id||"").trim().toUpperCase();const rid=String(e.rid||"").trim(); // rid = ID bản ghi trong địa chỉ trang Odoo (script v1.4.0)
+  if(e.kind==="PO"&&odooIds&&rid&&!(id&&odooIds[id]))for(const k of Object.keys(odooIds))if(String(odooIds[k].id)===rid){id=k.toUpperCase();break}
+  if(!id&&!rid)return [];
   const out=[];
   state.sheets.forEach((sh,si)=>{
     if(sh.pay&&sh.ghiIdx!=null){
       for(const r of sh.rows){
         const no=String(r.v[sh.title]??"").trim().toUpperCase(),cur=sh.payCurIdx!=null?String(r.v[sh.payCurIdx]??"").trim().toUpperCase():"";
         if(e.kind==="PO"){const codes=String(r.v[sh.payPoIdx]??"").toUpperCase().split(/[,;\s]+/);if(codes.includes(id))out.push({si,sh,r,col:sh.ghiIdx})}
-        else if(no===id||cur===id)out.push({si,sh,r,col:sh.ghiIdx});
+        else if((id&&(no===id||cur===id))||(rid&&sh.payId>=0&&String(r.v[sh.payId]??"")===rid))out.push({si,sh,r,col:sh.ghiIdx});
       }
     }
   });
@@ -1490,7 +1492,7 @@ function applyRemindEntry(e){
   return n;
 }
 function remindKey(e){return [e.id,e.tpl,e.date].join("|")}
-let remindBusy=false;
+let remindBusy=false;const remindStat={total:0,done:0,miss:0},remindWarned=new Set();
 function applyRemindLog(extra){
   if(remindBusy||!state.sheets.length||state.stale)return 0;
   remindBusy=true;let total=0;
@@ -1498,16 +1500,21 @@ function applyRemindLog(extra){
     let log=[];try{log=JSON.parse(localStorage.getItem(REMIND_LOG_KEY)||"[]")}catch(_){}
     if(extra)log=log.concat(extra);
     let done={};try{done=JSON.parse(localStorage.getItem(REMIND_APPLIED_KEY)||"{}")}catch(_){}
-    let changed=false;
+    let changed=false,miss=[];
     for(const e of log){
       const k=remindKey(e);if(done[k])continue;
+      if(!remindTargets(e).length){miss.push(e);continue}
       const n=applyRemindEntry(e);
-      if(n){total+=n;done[k]=1;changed=true}
+      total+=n;done[k]=1;changed=true;
     }
+    remindStat.total=log.length;remindStat.done=log.filter(e=>done[remindKey(e)]).length;remindStat.miss=miss.length;
+    const fresh=miss.filter(e=>!remindWarned.has(remindKey(e)));
+    if(fresh.length){fresh.forEach(e=>remindWarned.add(remindKey(e)));
+      toast(`Nhật ký có ${fresh.length} tin chưa khớp phiếu/PO nào trong dashboard (${fresh.slice(0,3).map(e=>e.id||("ID "+e.rid)||"?").join(", ")}). Kiểm tra số chứng từ trong tab Phiếu thanh toán hoặc bấm “Tải lại”.`,true)}
     if(changed){
       try{localStorage.setItem(REMIND_APPLIED_KEY,JSON.stringify(done))}catch(_){}
       const sh=state.sheets[state.active];if(sh&&sh.pay)renderDyn(sh,true);
-      updateChrome();toast(`Đã ghi ${total} lần nhắn vào cột Ghi chú (từ nhật ký tin nhắn). Chưa ghi vào Excel nếu tự lưu đang tắt.`);
+      updateChrome();if(total)toast(`Đã ghi ${total} lần nhắn vào cột Ghi chú (từ nhật ký tin nhắn). Chưa ghi vào Excel nếu tự lưu đang tắt.`);
     }
   }finally{remindBusy=false}
   return total;
@@ -2500,6 +2507,7 @@ function renderMsgs(){
       <div class="sub">${x.wfs?`<span class="chip" style="--c:${colorFor(x.wfs)}">${esc(x.wfs)}</span> `:""}${esc(vend||"")}${x.amt?" · "+fmtN(x.amt):""} ${x.due instanceof Date?" · hạn "+fmtD(x.due):""} · ${esc(x.s.name)}</div>
       <div class="ma">${x.s.pay?`<button class="btn sm" data-mp="${x.i}|${x.r.n}">🔍 Mở phiếu trên Odoo</button><span class="tplrow"><select class="tplsel" data-ms="${x.i}|${x.r.n}" title="Chọn mẫu tin nhắn có sẵn để nhắn kế toán">${REMIND_TPL.map(t=>`<option value="${t.key}" ${t.key===defaultTpl(x.s,x.r)?"selected":""}>${esc(t.label)}</option>`).join("")}</select><button class="btn sm" data-mt="${x.i}|${x.r.n}" title="Sao chép nội dung mẫu đã chọn để dán vào Chatter của phiếu">📋 Sao chép mẫu</button><button class="btn sm" data-md="${x.i}|${x.r.n}" title="Đã gửi tin theo mẫu này: ghi vào cột Ghi chú của phiếu">✅ Đã gửi</button></span><button class="btn sm" data-mc="${x.i}|${x.r.n}" title="${x.chk?"Sao chép tin tag người duyệt. Nhanh hơn: mở phiếu rồi bấm nút 💬 Nhắc duyệt PAY của Tampermonkey":"Sao chép nội dung nhắc để dán vào Chatter của phiếu (gửi tin, tag kế toán)"}">📋 Sao chép ${x.chk?"tin nhắc duyệt":"nhắc KT"}</button>`:`<button class="btn sm" data-mo="${esc(x.r.v[x.s.title])}">🔍 Tìm trên Odoo</button>`}<button class="btn sm" data-mv="${x.i}|${x.r.n}">🎤 Ghi chú</button><button class="btn sm" data-mg="${x.i}|${esc(String(x.r.v[x.s.title]))}">📄 Xem dòng</button><button class="btn sm" data-mx="${esc(x.key)}" title="Ẩn tin này đến hết hôm nay">✕</button></div></div>`}).join("")+(L.length>60?`<div class="note">… và ${L.length-60} đơn nữa. Xem tab “Ưu tiên xử lý”.</div>`:""):`<div class="sub" style="padding:18px 8px">Không có đơn nào trễ hẹn. 🎉</div>`;
   const b=$("#msgbody");
+  b.insertAdjacentHTML("afterbegin",`<div class="note" style="margin:0 0 8px">Nhật ký tin nhắn từ Tampermonkey: <b>${remindStat.total}</b> tin · đã ghi vào Ghi chú: <b>${remindStat.done}</b> · chưa khớp: <b>${remindStat.miss}</b>${remindStat.total?"":". Chưa nhận được tin nào: kiểm tra script v1.4.0 đã cài trong Tampermonkey và dashboard đang mở bằng địa chỉ donniehieu.github.io (không phải file trên máy)."}</div>`);
   b.querySelectorAll("[data-mo]").forEach(x=>x.onclick=()=>openOdoo(x.dataset.mo));
   const payRow=k=>{const [i,n]=k.split("|"),sh=state.sheets[+i];return [sh,sh&&sh.rows.find(r=>r.n===+n)]};
   b.querySelectorAll("[data-mp]").forEach(x=>x.onclick=()=>{const [sh,r]=payRow(x.dataset.mp);if(r)openPay(sh,r)});
