@@ -186,6 +186,9 @@ Vì số PAY **đổi tên** thành chuỗi chứa `BNK` khi được thanh toá
   - Cột **Ghi chú** của tab Phiếu thanh toán luôn hiện (trước đây ẩn khi chưa có dữ liệu).
   - Đã thử dashboard trên dữ liệu thật: ghi đúng ô, chạy lại không trùng, ô chọn mẫu và nút Đã gửi chạy. 🟡 Chưa thử script trên Odoo thật (cách phát hiện "đã gửi" dựa vào class `.o-mail-Message`; có thể phải chỉnh) và chưa thử cầu nối sang dashboard trên GitHub Pages (nếu địa chỉ dashboard không phải donniehieu.github.io thì sửa dòng `@match` trong script).
 
+- ✅ (24/10/2026) **Mở đúng link ở tab Ưu tiên xử lý và hộp nhắc 🔔**: dòng là PO → mở PO trên Odoo như cũ; dòng là Phiếu thanh toán → mở thẳng phiếu (`/odoo/vendor-payments/<ID>`). Đã thử trên dữ liệu thật: PO mở `action-1572/<ID>`, phiếu mở `vendor-payments/<ID>`.
+- ✅ (24/10/2026) **Tab Phiếu thanh toán, cột "PO liên quan"**: mỗi mã PO là một liên kết, bấm vào mở PO trên Odoo (dùng `odoo-ids.json`; PO chưa có ID thì sao chép mã và mở danh sách PO như các tab khác). Bấm đúp đúng vào mã PO không còn mở phiếu; bấm đúp vào chỗ khác của dòng vẫn mở phiếu. Phiếu có nhiều PO thì mỗi PO một liên kết riêng.
+- ✅ (24/10/2026) **Cột Ghi chú ở tab Phiếu thanh toán**: cột này đã có sẵn trong file và trong dashboard nhưng nằm cuối bảng sau các cột dài (Diễn giải, Nhắc KT) nên khó thấy. Đã chuyển lên ngay sau "PO liên quan". Vẫn sửa được bằng bấm đúp. 🟡 Nếu trên máy bạn vẫn không thấy: mở "👁 Chọn cột hiển thị" xem có đang ẩn không, hoặc bản `index.html` trên GitHub Pages chưa được cập nhật (đẩy bản mới lên rồi tải lại bằng Ctrl+F5).
 ## Đã bỏ theo yêu cầu
 - Bot nhắc việc (Telegram/Zalo/email) và tuổi công nợ theo nhà cung cấp.
 

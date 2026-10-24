@@ -577,6 +577,7 @@ function wfDerive(sh,r){
 /* Số ngày làm việc (T2-T6) đã qua kể từ hạn; hạn rơi vào T7/CN thì tính từ thứ Hai kế tiếp */
 function bdLate(due){let d=sod(due);while(d.getDay()===0||d.getDay()===6)d=new Date(d.getFullYear(),d.getMonth(),d.getDate()+1);let n=0;while(d<TODAY){d=new Date(d.getFullYear(),d.getMonth(),d.getDate()+1);if(d.getDay()!==0&&d.getDay()!==6)n++}return n}
 function payUrl(sh,r){const id=r.v[sh.payId],cid=r.v[sh.payCid];if(id==null||id==="")return null;return new URL(ODOO_LIST()).origin+"/odoo/vendor-payments/"+id+(cid?"?cids="+cid:"")}
+const olLink=(sh,i,r,inner)=>sh.pay?`<a class="ol" href="#" data-pay="${i}|${r.n}" title="Mở phiếu thanh toán trên Odoo">${inner}</a>`:`<a class="ol" href="#" data-code="${esc(r.v[sh.title])}" title="Mở Odoo để tìm đơn này">${inner}</a>`;
 function openPay(sh,r){const u=payUrl(sh,r);if(!u){toast("Phiếu này chưa có ID Odoo (cần một lần đồng bộ Odoo)",true);return}window.open(u,"odoo-erp");toast("Đang mở phiếu "+r.v[sh.title]+" trên Odoo…")}
 const dueOf=(sh,r)=>sh.dueIdx!=null?r.v[sh.dueIdx]:null;
 /* Phiếu nhập kho “Đã nhận hết” -> tối thiểu “Cần lập hóa đơn”; “Đã nhận một phần” -> tối thiểu “Chờ nhận hàng” (chỉ nâng các bước đứng trước, không hạ bước đã đi xa hơn) */
@@ -692,6 +693,7 @@ function analyze(raw){
     sh.dueIdx=f(/^hạn thanh toán$/i);sh.sub=f(/^nhà cung cấp$/i);sh.title=f(/^số pay$/i)??sh.title;sh.payPoIdx=f(/^po liên quan$/i);sh.payCurIdx=f(/^số chứng từ hiện tại$/i);sh.payCoIdx=f(/^công ty$/i);sh.payOdooIdx=f(/^trạng thái odoo$/i);sh.ghiIdx=f(/^ghi chú$/i);sh.progIdx=null;sh.blockIdx=sh.payStIdx;
     const m=cols.find(c=>/^số tiền$/i.test(c.name.trim()));if(m)sh.money=m;
     sh.checklist=false;
+    {const gi=cols.findIndex(c=>c.idx===sh.ghiIdx);if(gi>=0&&sh.payPoIdx!=null){const [g]=cols.splice(gi,1);cols.splice(cols.findIndex(c=>c.idx===sh.payPoIdx)+1,0,g)}} // Ghi chú đứng ngay sau “PO liên quan” để thấy ngay, không bị đẩy sang phải sau các cột dài
   }
   sh.ui={filters:{},cf:{},special:null,range:null,search:"",sort:null,shown:100,metric:"count"};
   return sh;
@@ -1673,7 +1675,7 @@ function renderPriority(){
       if(!list.length)html+=`<div class="sub">Không có.</div>`;
       else html+=`<ul class="attn">`+list.slice(0,12).map(x=>{
         const blk=x.wfs||(x.s.blockIdx!=null?x.r.v[x.s.blockIdx]:null);
-        return `<li class="click" data-go="${x.i}" data-q="${esc(String(x.r.v[x.s.title]??""))}"><span class="tag">${esc(x.s.name)}</span><div><a class="ol" href="#" data-code="${esc(x.r.v[x.s.title])}" title="Mở Odoo để tìm đơn này"><b>${esc(x.r.v[x.s.title])}</b></a><div class="sub">${esc(x.s.sub!=null?x.r.v[x.s.sub]:"")}${x.amt?" · "+fmtN(x.amt):""}${x.wfs&&stuckDays(x.s,x.r)>=STUCK()?` · <span style="color:var(--bad)">⏱ ở bước này ${stuckDays(x.s,x.r)} ngày</span>`:""}</div>${blk?`<span class="chip" style="--c:${colorFor(blk)}">${esc(blk)}</span>`:""}</div><span class="late" style="${x.late<=0?"color:var(--brand)":""}">${x.late>0?`trễ ${x.late} ngày`:(x.late<0?`còn ${-x.late} ngày`:"hôm nay")}<div class="sub">${x.due instanceof Date?"hạn "+fmtD(x.due):"chưa có hạn"}</div></span></li>`}).join("")+`</ul>`+(list.length>12?`<div class="note">… và ${list.length-12} dòng nữa. Mở sheet và bấm “Quá hạn” để xem đủ.</div>`:"");
+        return `<li class="click" data-go="${x.i}" data-q="${esc(String(x.r.v[x.s.title]??""))}"><span class="tag">${esc(x.s.name)}</span><div>${olLink(x.s,x.i,x.r,`<b>${esc(x.r.v[x.s.title])}</b>`)}<div class="sub">${esc(x.s.sub!=null?x.r.v[x.s.sub]:"")}${x.amt?" · "+fmtN(x.amt):""}${x.wfs&&stuckDays(x.s,x.r)>=STUCK()?` · <span style="color:var(--bad)">⏱ ở bước này ${stuckDays(x.s,x.r)} ngày</span>`:""}</div>${blk?`<span class="chip" style="--c:${colorFor(blk)}">${esc(blk)}</span>`:""}</div><span class="late" style="${x.late<=0?"color:var(--brand)":""}">${x.late>0?`trễ ${x.late} ngày`:(x.late<0?`còn ${-x.late} ngày`:"hôm nay")}<div class="sub">${x.due instanceof Date?"hạn "+fmtD(x.due):"chưa có hạn"}</div></span></li>`}).join("")+`</ul>`+(list.length>12?`<div class="note">… và ${list.length-12} dòng nữa. Mở sheet và bấm “Quá hạn” để xem đủ.</div>`:"");
       html+=`</div>`;
     }
     html+=`</div>`;
@@ -1966,6 +1968,7 @@ function renderTable(sh,fr){
       else if(typeof v==="number"){cell=fmtN(v)}
       else if(c.type==="cat")cell=`<span class="chip" style="--c:${colorFor(v)}">${esc(v)}</span>`;
       else cell=esc(v);
+      if(v!=null&&sh.pay&&c.idx===sh.payPoIdx)cell=String(v).split(/([,;s]+)/).map(p=>/^[,;s]*$/.test(p)?esc(p):`<a class="ol" href="#" data-code="${esc(p.trim().toUpperCase())}" title="Mở PO ${esc(p.trim())} trên Odoo">${esc(p)}</a>`).join("");
       if(v!=null&&c.idx===sh.title&&/mã đơn|số po|^po$/i.test(c.name))cell=`<a class="ol" href="#" data-code="${esc(v)}" title="Mở Odoo để tìm đơn này">${cell}</a>`;
       if(v!=null&&sh.wf&&/^nhà cung cấp$/i.test(c.name))cell=`<a class="sl" href="#" data-sup="${c.idx}" data-v="${esc(v)}" title="Bấm để lọc các PO của nhà cung cấp này">${cell}</a>`;
       const cls=typeof v==="number"?"num":(c.type==="text"?"txt":"");
@@ -2002,7 +2005,7 @@ function renderTable(sh,fr){
   const cellEdit=td=>{ // tab Phiếu thanh toán: bấm đúp mở phiếu trên Odoo, riêng cột Ghi chú vẫn sửa được
     if(sh.pay){const ci=+td.dataset.c,col=sh.cols.find(c=>c.idx===ci);if(!col||!/^ghi chú$/i.test(col.name.trim())){const r=sh.rows.find(x=>x.n===+td.dataset.r);if(r)openPay(sh,r);return}}
     startEdit(sh,td)};
-  t.querySelectorAll("td[data-c]").forEach(td=>{td.ondblclick=()=>cellEdit(td);if(touch)td.onclick=e=>{if(!td.querySelector("input")&&!e.target.closest("button,.ol,.sl"))cellEdit(td)}});
+  t.querySelectorAll("td[data-c]").forEach(td=>{td.ondblclick=e=>{if(e.target.closest&&e.target.closest(".ol"))return;cellEdit(td)};if(touch)td.onclick=e=>{if(!td.querySelector("input")&&!e.target.closest("button,.ol,.sl"))cellEdit(td)}});
   t.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>deleteRow(si,+b.dataset.del));
   t.querySelectorAll("a.sl").forEach(a=>{a.onclick=e=>{e.preventDefault();e.stopPropagation();u.filters[+a.dataset.sup]=a.dataset.v;u.shown=100;renderDyn(sh);const tb=$("#tbl");if(tb)tb.scrollIntoView({block:"start"});toast("Đang lọc các PO của: "+a.dataset.v)};a.ondblclick=e=>e.stopPropagation()});
   t.querySelectorAll("[data-ck]").forEach(cb=>cb.onchange=()=>{
@@ -2404,7 +2407,9 @@ async function openOdoo(code){
   window.open(base,"odoo-erp");
   toast((copied?`Đã sao chép mã “${code}”. `:`Mã đơn: ${code}. `)+"Chưa có liên kết trực tiếp cho đơn này (cần một lần đồng bộ Odoo để lấy). Trong Odoo hãy dán mã vào ô tìm kiếm và chọn đúng công ty.");
 }
-document.addEventListener("click",e=>{const a=e.target.closest&&e.target.closest(".ol");if(!a)return;e.preventDefault();e.stopPropagation();openOdoo(a.dataset.code)},true);
+document.addEventListener("click",e=>{const a=e.target.closest&&e.target.closest(".ol");if(!a)return;e.preventDefault();e.stopPropagation();
+  if(a.dataset.pay){const [i,n]=a.dataset.pay.split("|"),sh=state.sheets[+i],r=sh&&sh.rows.find(x=>x.n===+n);if(r)openPay(sh,r);return} // phiếu thanh toán -> mở phiếu, PO -> mở PO
+  openOdoo(a.dataset.code)},true);
 
 /* ---- Nhập bằng giọng nói (Web Speech API) ---- */
 const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
@@ -2491,7 +2496,7 @@ function renderMsgs(){
   const lvlC={urgent:"var(--bad)",high:"var(--warn)",soon:"var(--brand)"};
   $("#msgbody").innerHTML=L.length?L.slice(0,60).map(x=>{
     const vend=x.s.sub!=null?x.r.v[x.s.sub]:"";
-    return `<div class="msg" style="--c:${lvlC[x.lvl]}"><div class="mh"><a class="ol" href="#" data-code="${esc(x.r.v[x.s.title])}" title="Mở Odoo để tìm đơn này"><b>${esc(x.r.v[x.s.title])}</b></a><span class="late">${x.chk?"⚠ Kiểm tra · nhờ người duyệt":x.s.pay?"💳 chưa thanh toán · trễ "+x.late+" ngày làm việc":"trễ "+x.late+" ngày"}</span></div>
+    return `<div class="msg" style="--c:${lvlC[x.lvl]}"><div class="mh">${olLink(x.s,x.i,x.r,`<b>${esc(x.r.v[x.s.title])}</b>`)}<span class="late">${x.chk?"⚠ Kiểm tra · nhờ người duyệt":x.s.pay?"💳 chưa thanh toán · trễ "+x.late+" ngày làm việc":"trễ "+x.late+" ngày"}</span></div>
       <div class="sub">${x.wfs?`<span class="chip" style="--c:${colorFor(x.wfs)}">${esc(x.wfs)}</span> `:""}${esc(vend||"")}${x.amt?" · "+fmtN(x.amt):""} ${x.due instanceof Date?" · hạn "+fmtD(x.due):""} · ${esc(x.s.name)}</div>
       <div class="ma">${x.s.pay?`<button class="btn sm" data-mp="${x.i}|${x.r.n}">🔍 Mở phiếu trên Odoo</button><span class="tplrow"><select class="tplsel" data-ms="${x.i}|${x.r.n}" title="Chọn mẫu tin nhắn có sẵn để nhắn kế toán">${REMIND_TPL.map(t=>`<option value="${t.key}" ${t.key===defaultTpl(x.s,x.r)?"selected":""}>${esc(t.label)}</option>`).join("")}</select><button class="btn sm" data-mt="${x.i}|${x.r.n}" title="Sao chép nội dung mẫu đã chọn để dán vào Chatter của phiếu">📋 Sao chép mẫu</button><button class="btn sm" data-md="${x.i}|${x.r.n}" title="Đã gửi tin theo mẫu này: ghi vào cột Ghi chú của phiếu">✅ Đã gửi</button></span><button class="btn sm" data-mc="${x.i}|${x.r.n}" title="${x.chk?"Sao chép tin tag người duyệt. Nhanh hơn: mở phiếu rồi bấm nút 💬 Nhắc duyệt PAY của Tampermonkey":"Sao chép nội dung nhắc để dán vào Chatter của phiếu (gửi tin, tag kế toán)"}">📋 Sao chép ${x.chk?"tin nhắc duyệt":"nhắc KT"}</button>`:`<button class="btn sm" data-mo="${esc(x.r.v[x.s.title])}">🔍 Tìm trên Odoo</button>`}<button class="btn sm" data-mv="${x.i}|${x.r.n}">🎤 Ghi chú</button><button class="btn sm" data-mg="${x.i}|${esc(String(x.r.v[x.s.title]))}">📄 Xem dòng</button><button class="btn sm" data-mx="${esc(x.key)}" title="Ẩn tin này đến hết hôm nay">✕</button></div></div>`}).join("")+(L.length>60?`<div class="note">… và ${L.length-60} đơn nữa. Xem tab “Ưu tiên xử lý”.</div>`:""):`<div class="sub" style="padding:18px 8px">Không có đơn nào trễ hẹn. 🎉</div>`;
   const b=$("#msgbody");
