@@ -25,6 +25,10 @@ body{background:var(--bg);color:var(--ink);font:14px/1.45 "Segoe UI",system-ui,-
 button{font:inherit;color:inherit;cursor:pointer}
 header.top{display:flex;gap:12px;align-items:center;flex-wrap:wrap;padding:14px 20px;background:var(--card);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:20}
 header.top h1{font-size:17px;margin:0;font-weight:700;letter-spacing:-.2px}
+.tgrp{display:flex;flex-direction:column;gap:4px;padding:5px 9px 7px;border:1px solid var(--line);border-radius:12px;background:var(--soft)}
+.tgrp .gl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--mute);line-height:1}
+.tgrp .gb{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.tgrp:not(:has(.btn:not([hidden]))){display:none}
 .grow{flex:1}
 .btn{border:1px solid var(--line);background:var(--card);padding:8px 14px;border-radius:8px;font-weight:600}
 .btn:hover{background:var(--soft)}
@@ -257,18 +261,24 @@ body.rzing,body.rzing *{cursor:col-resize!important;user-select:none!important}
   <label class="auto" title="Tự động lưu sau mỗi lần sửa (khi đã kết nối GitHub hoặc chọn file bằng Chrome/Edge)"><input type="checkbox" id="chkAuto" checked> Tự động lưu</label>
   <label class="auto" title="Khi mở dashboard, tự yêu cầu GitHub lấy dữ liệu mới từ Odoo nếu lần đồng bộ gần nhất đã quá 10 phút"><input type="checkbox" id="chkSync" checked> Tự đồng bộ Odoo</label>
   <span class="grow"></span>
-  <button class="btn sm" id="btnNotify" title="Nhắc việc trễ bằng thông báo của trình duyệt (khi đang mở trang)">🔔 Bật nhắc</button>
-  <button class="btn sm" id="btnImport" hidden title="Gộp file Excel xuất từ Odoo vào dữ liệu nguồn">⬆ Nhập file Odoo</button>
-  <button class="btn sm" id="btnPushOther" hidden title="Đẩy file đang mở từ máy lên GitHub vào thư mục riêng “Dữ liệu Khác”, không ảnh hưởng PO-data">☁ Đẩy lên GitHub</button>
-  <button class="btn sm" id="btnSync" hidden title="Yêu cầu GitHub chạy đồng bộ từ Odoo ngay">🔄 Đồng bộ Odoo</button>
-  <button class="btn sm" id="btnRefresh" hidden>↻ Tải lại</button>
-  <button class="btn sm" id="btnHelper" title="Cài nút Odoo Helper (tự điền thụ hưởng NCC, soạn tin nhắc kế toán trong Odoo)">🔖 Nút Odoo</button>
+  <button class="btn sm" id="btnNotify" title="Nhắc việc trễ bằng thông báo của trình duyệt (khi đang mở trang)">🔔 Bật Thông báo</button>
   <button class="btn sm" id="btnTheme" title="Đổi giao diện sáng/tối">🌓</button>
-  <button class="btn sm" id="btnLast" hidden title="Mở lại file Excel đã chọn lần trước trên máy này (trình duyệt sẽ hỏi cho phép đọc/ghi)">📁 Mở lại file trên máy</button>
-  <button class="btn sm" id="btnPushCloud" hidden title="Đẩy file đang mở lên cloud riêng của bạn (Google Drive qua Apps Script)">☁ Đẩy lên cloud riêng</button>
-  <button class="btn sm" id="btnCloud" title="Lưu và đồng bộ trên cloud riêng (Google Drive/Sheets qua Apps Script)">☁ Cloud riêng</button>
-  <button class="btn sm" id="btnGh">⚙ GitHub</button>
-  <button class="btn primary" id="btnPick">Chọn file Excel</button>
+  <div class="tgrp" id="grpLoad"><span class="gl">Load dữ liệu</span><div class="gb">
+    <button class="btn sm" id="btnGh">⚙ GitHub</button>
+    <button class="btn sm" id="btnCloud" title="Lưu và đồng bộ trên cloud riêng (Google Drive/Sheets qua Apps Script)">☁ Cloud riêng</button>
+    <button class="btn primary" id="btnPick">Chọn file Excel</button>
+    <button class="btn sm" id="btnLast" hidden title="Mở lại file Excel đã chọn lần trước trên máy này (trình duyệt sẽ hỏi cho phép đọc/ghi)">📁 Mở lại file trên máy</button>
+    <button class="btn sm" id="btnPushOther" hidden title="Đẩy file đang mở từ máy lên GitHub vào thư mục riêng “Dữ liệu Khác”, không ảnh hưởng PO-data">☁ Đẩy lên GitHub</button>
+    <button class="btn sm" id="btnPushCloud" hidden title="Đẩy file đang mở lên cloud riêng của bạn (Google Drive qua Apps Script)">☁ Đẩy lên cloud riêng</button>
+  </div></div>
+  <div class="tgrp" id="grpSync"><span class="gl">Đồng bộ Odoo thủ công</span><div class="gb">
+    <button class="btn sm" id="btnSync" hidden title="Yêu cầu GitHub chạy đồng bộ từ Odoo ngay">🔄 Đồng bộ Odoo</button>
+    <button class="btn sm" id="btnRefresh" hidden>↻ Tải lại</button>
+  </div></div>
+  <div class="tgrp" id="grpAuto"><span class="gl">Auto nhập liệu</span><div class="gb">
+    <button class="btn sm" id="btnImport" hidden title="Gộp file Excel xuất từ Odoo vào dữ liệu nguồn">⬆ Nhập file Odoo</button>
+    <button class="btn sm" id="btnHelper" title="Cài nút Odoo Helper (tự điền thụ hưởng NCC, soạn tin nhắc kế toán trong Odoo)">🔖 Nút Odoo</button>
+  </div></div>
   <input type="file" id="fileImp" accept=".xlsx,.xlsm" hidden><input type="file" id="fileRemindLog" accept=".json,application/json" hidden>
   <input type="file" id="file" accept=".xlsx,.xlsm" hidden>
 </header>

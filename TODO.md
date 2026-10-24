@@ -210,6 +210,7 @@ Vì số PAY **đổi tên** thành chuỗi chứa `BNK` khi được thanh toá
   - Đã thử trên dữ liệu thật: tab, tiêu đề, thứ tự cột, bảng tỷ lệ Ghi chú, xuất rồi nhập lại Excel đều đúng, không lỗi console. 🟡 Chưa xem trên điện thoại.
 - ✅ (24/10/2026) **Hiện số BNK ở cột "Số chứng từ" (tab Phiếu thanh toán)**: phiếu đã thanh toán hiện số BNK kèm số PAY ban đầu trong ngoặc, vd. `PH/BNK126102200566 (PAY02939)`; phiếu chưa thanh toán vẫn hiện số PAY. Chỉ đổi cách hiển thị; lọc/sắp xếp vẫn theo số PAY ban đầu.
 - ✅ (25/10/2026) **Bảng tỷ lệ cột Ghi chú (tab Phiếu thanh toán) đổi sang dạng thanh ngang giống Trạng thái TT / Trạng thái Odoo**: bấm một thanh (Đã nhắn <người> / Ghi chú khác / Chưa có ghi chú) để lọc bảng theo nhóm đó, bấm lại hoặc bấm × trên chip để bỏ lọc; các thanh còn lại vẫn hiện đủ để đổi nhóm nhanh. Đã thử trên dữ liệu thật (bấm "Đã nhắn Lê Xuân Giang": 73 → 2 dòng, bỏ lọc: về 73).
+- ✅ (25/10/2026) **Thanh nút trên cùng gom thành 3 khối theo công dụng**: **Load dữ liệu** (⚙ GitHub, ☁ Cloud riêng, Chọn file Excel; kèm 📁 Mở lại file trên máy, ☁ Đẩy lên GitHub, ☁ Đẩy lên cloud riêng khi có), **Đồng bộ Odoo thủ công** (🔄 Đồng bộ Odoo, ↻ Tải lại), **Auto nhập liệu** (⬆ Nhập file Odoo, 🔖 Nút Odoo). Khối nào không có nút nào đang hiện thì tự ẩn. Nút "🔔 Bật nhắc" đổi tên thành "🔔 Bật Thông báo". Đã xem thử trên trình duyệt (màn rộng 1280); 🟡 chưa xem trên điện thoại.
 
 ## Đã bỏ theo yêu cầu
 - Bot nhắc việc (Telegram/Zalo/email) và tuổi công nợ theo nhà cung cấp.
