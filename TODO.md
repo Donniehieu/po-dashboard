@@ -238,6 +238,11 @@ Vì số PAY **đổi tên** thành chuỗi chứa `BNK` khi được thanh toá
   - **Xuất Excel của mọi tab giờ được nén** (trước đây không nén: Netsuite 21 nghìn dòng ra 26 MB, nay 2 MB).
   - Đã thử với file thật: tải và hiển thị đủ 21.100 dòng, tìm "bách liên" ra 37 dòng, ẩn cột, xuất Excel (đã mở lại được bằng openpyxl và bằng bộ đọc của dashboard), nhập file thay toàn bộ, đóng mở lại trang vẫn tải từ bản lưu. 🟡 **Chưa thử qua GitHub thật** (tải file >1 MB bằng API raw và lưu 2 MB lên GitHub): cần bạn đẩy `data/Netsuite_data.xlsx` lên repo po-data rồi bấm thử tab.
   - Việc cần làm: đẩy `data/Netsuite_data.xlsx` (po-data) và `index.html` (po-dashboard) lên GitHub.
+- ✅ (26/10/2026) **Netsuite Data lưu JSON nén thay vì Excel để mở nhanh, hết đơ** (thay cho cách lưu `Netsuite_data.xlsx` ở mục trước):
+  - Trên GitHub lưu `data/netsuite.json.gz` (JSON dạng cột, nén gzip). Đo trên file thật 21.100 dòng: đọc Excel mất 1,3 đến 4,5 giây (làm đứng trang); JSON nén chỉ ~230 KB, mở tab mất **~0,3 giây** (trước ~8 giây). So sánh 24.120 ô sau khi chuyển rồi đọc lại: 0 sai khác, kiểu cột và ngày giữ nguyên.
+  - **⬆ Nhập Excel** vẫn dùng file .xlsx: dashboard đọc một lần, chuyển sang JSON nén và (nếu bạn đồng ý) lưu lên GitHub; **⬇ Xuất Excel/CSV** vẫn như cũ. Nếu repo chỉ có file Excel cũ `Netsuite_data.xlsx` thì lần mở đầu vẫn đọc được từ file đó (chậm một lần), rồi hỏi có chuyển sang JSON không. Sau khi có `netsuite.json.gz` bạn có thể xóa `Netsuite_data.xlsx` trên GitHub.
+  - **Vì sao chưa chuyển các file khác**: mọi tab còn lại nằm trong `PO-data.xlsx` (69 KB), mở trọn trong ~0,2 giây nên chuyển sang JSON không nhanh hơn thấy được. Đồng thời toàn bộ đồng bộ Odoo (`sync_odoo.py`, `pay_sync.py`, `ncc_sync.py`, `bank_sync.py`) và việc dashboard lưu từng ô đều làm việc trên file Excel; chuyển đi phải viết lại cả hai nên rủi ro cao mà lợi ích gần như không có. Cơ chế JSON nén đã viết sẵn dùng chung được cho bất kỳ bộ dữ liệu lớn nào sau này. Nếu `PO-data.xlsx` lớn lên vài nghìn dòng thì phương án là để workflow xuất thêm bản JSON chỉ-đọc cho dashboard đọc nhanh.
+  - 🟡 Chưa thử qua GitHub thật (tải/lưu `netsuite.json.gz`, đường chuyển đổi từ file Excel cũ trên GitHub). Đã thử: nhập file, lưu bản trên trình duyệt, mở lại, nạp lại file chính vẫn còn tab.
 ## Đã bỏ theo yêu cầu
 - Bot nhắc việc (Telegram/Zalo/email) và tuổi công nợ theo nhà cung cấp.
 

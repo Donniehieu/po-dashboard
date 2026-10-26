@@ -256,6 +256,6 @@ Nút 🗑 ở mọi bảng xóa **hẳn dòng** khỏi file Excel khi lưu (các
 Mở phiếu thanh toán Odoo **từ dashboard** (bấm đúp dòng ở tab Phiếu thanh toán). Khi bấm "Tự điền": NCC đã tick "Đã kiểm tra thông tin" ở tab Thông tin thanh toán được ưu tiên; không tick thì dùng dữ liệu đã nạp từ file Excel; file chưa có NCC đó thì dùng dữ liệu tab (thông báo ghi "CHƯA kiểm tra"). Odoo Helper nhớ bản dữ liệu gần nhất nên lần sau mở Odoo trực tiếp vẫn dùng được.
 
 ## Tab "Netsuite Data"
-- Dữ liệu lấy từ file `data/Netsuite_data.xlsx` trong repo dữ liệu (file riêng, không nằm trong PO-data.xlsx vì quá lớn). Bấm tab **📊 Netsuite Data** (cuối thanh tab) để tải lần đầu.
+- Dữ liệu lưu trên GitHub dạng JSON nén `data/netsuite.json.gz` (nhỏ và mở nhanh; không nằm trong PO-data.xlsx vì quá lớn). Bấm tab **📊 Netsuite Data** (cuối thanh tab) để tải lần đầu. Nếu repo mới chỉ có file Excel `Netsuite_data.xlsx`, dashboard đọc file đó rồi hỏi có chuyển sang JSON nén không.
 - Có tìm kiếm, lọc theo cột, ẩn/hiện cột, xuất Excel/CSV theo bộ lọc. Chỉ xem, không sửa từng ô.
-- Cập nhật dữ liệu: bấm **⬆ Nhập Excel**, chọn file Netsuite mới. Toàn bộ dữ liệu cũ bị thay bằng file mới; chọn lưu lên GitHub để mọi máy cùng dùng, hoặc Hủy để chỉ dùng trên máy này.
+- Cập nhật dữ liệu: bấm **⬆ Nhập Excel**, chọn file Netsuite mới. Toàn bộ dữ liệu cũ bị thay bằng file mới (dashboard tự chuyển sang JSON nén); chọn lưu lên GitHub để mọi máy cùng dùng, hoặc Hủy để chỉ dùng trên máy này.

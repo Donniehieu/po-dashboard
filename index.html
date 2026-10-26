@@ -857,10 +857,13 @@ async function loadFromGitHub(silent){
   }catch(e){toast(e.message,true)}
 }
 
-/* ---- Tab Netsuite Data: file riêng (Netsuite_data.xlsx, hàng chục nghìn dòng) nên KHÔNG gộp vào PO-data.xlsx; chỉ xem/lọc/xuất, nhập file mới = thay toàn bộ ---- */
-const NS_NAME="Netsuite Data",NS_FILE="Netsuite_data.xlsx";
+/* ---- Tab Netsuite Data: bộ dữ liệu lớn (hàng chục nghìn dòng) nên KHÔNG gộp vào PO-data.xlsx và KHÔNG lưu dạng Excel trên GitHub:
+   lưu JSON nén dạng cột (netsuite.json.gz, ~0,2 MB, mở trong vài chục mili giây) thay vì đọc file .xlsx (hàng giây, làm đứng trang).
+   Nhập/xuất vẫn bằng .xlsx. Chỉ xem/lọc/xuất; nhập file mới = thay toàn bộ. ---- */
+const NS_NAME="Netsuite Data",NS_JSON="netsuite.json.gz",NS_XLSX="Netsuite_data.xlsx";
 state.nsSheet=null;
-const nsPath=()=>{const p=ghCfg().path,i=p.lastIndexOf("/");return (i>=0?p.slice(0,i+1):"")+NS_FILE};
+const dataDir=()=>{const p=ghCfg().path,i=p.lastIndexOf("/");return i>=0?p.slice(0,i+1):""};
+const nsJsonPath=()=>dataDir()+NS_JSON,nsXlsxPath=()=>dataDir()+NS_XLSX;
 async function ghFetchPath(path,ckey){
   const c=ghCfg(),url=ghUrl(c,"contents/"+path.split("/").map(encodeURIComponent).join("/")+"?ref="+encodeURIComponent(c.branch||"main"));
   const cached=await kvGet(ckey),hd=ghHead(c);if(cached&&cached.etag&&cached.buf)hd["If-None-Match"]=cached.etag;
@@ -881,14 +884,38 @@ async function ghPutPath(path,bytes,msg){
   const r=await fetch(base,{method:"PUT",headers:{...ghHead(c),"Content-Type":"application/json"},body:JSON.stringify(body)});
   if(!r.ok)throw new Error("GitHub trả lỗi "+r.status+" khi ghi file (mã truy cập cần quyền Contents: Read and write)");
 }
-async function nsBuild(buf,meta){ // đọc file, dựng bảng (chưa gắn vào dashboard)
-  const raw=await parseXlsx(buf);const r0=raw.find(x=>x.grid&&x.grid.some(r=>r&&r.some(v=>v!=null)));
-  if(!r0)throw new Error("File không có dữ liệu");
-  r0.name=NS_NAME;const sh=analyze(r0);
+const gzipU8=async u8=>new Uint8Array(await new Response(new Blob([u8]).stream().pipeThrough(new CompressionStream("gzip"))).arrayBuffer());
+const gunzipText=async buf=>await new Response(new Blob([buf]).stream().pipeThrough(new DecompressionStream("gzip"))).text();
+/* bảng -> JSON dạng cột: mỗi cột một mảng giá trị; cột toàn ngày lưu mili giây (k:"d") */
+function nsToJson(sh){
+  const cols=sh.cols.filter(c=>c.type!=="index").map(c=>{
+    const vals=sh.rows.map(r=>r.v[c.idx]),allDate=vals.some(v=>v!=null)&&vals.every(v=>v==null||v instanceof Date);
+    return {n:c.name,k:allDate?"d":undefined,d:vals.map(v=>v==null||v===""?null:v instanceof Date?(allDate?v.getTime():v.toISOString()):v)};
+  });
+  return {v:1,rows:sh.rows.length,cols};
+}
+function nsFromJson(o){ // JSON dạng cột -> dạng lưới như file đọc ra từ Excel (để dùng chung bộ phân tích cột)
+  const cols=o.cols,n=cols.length?cols[0].d.length:0,grid=[cols.map(c=>c.n)];
+  for(let i=0;i<n;i++)grid.push(cols.map(c=>{const v=c.d[i];return v==null?null:(c.k==="d"?new Date(v):v)}));
+  return {name:NS_NAME,path:null,grid,fset:new Set()};
+}
+function nsFinish(raw,meta){
+  raw.name=NS_NAME;const sh=analyze(raw);
   if(!sh.rows.length)throw new Error("Không thấy dòng dữ liệu nào (kiểm tra dòng tiêu đề ở hàng đầu)");
   Object.assign(sh,{ext:true,dueIdx:null,progIdx:null,blockIdx:null,checklist:false,money:null,sub:null,path:null,extMeta:meta||{}});
   sh.baseLast=sh.lastRow;return sh;
 }
+async function nsBuildXlsx(buf,meta){
+  const raw=await parseXlsx(buf);const r0=raw.find(x=>x.grid&&x.grid.some(r=>r&&r.some(v=>v!=null)));
+  if(!r0)throw new Error("File không có dữ liệu");
+  return nsFinish(r0,meta);
+}
+async function nsBuildJson(gz,meta){
+  const o=JSON.parse(await gunzipText(gz));
+  if(!o||o.v!==1||!Array.isArray(o.cols))throw new Error("File JSON Netsuite không đúng định dạng");
+  return nsFinish(nsFromJson(o),meta);
+}
+const nsPack=async sh=>gzipU8(new TextEncoder().encode(JSON.stringify(nsToJson(sh))));
 function nsInstall(sh){
   state.nsSheet=sh;const i=state.sheets.findIndex(s=>s.ext);if(i>=0)state.sheets.splice(i,1);
   state.sheets.push(sh);setStatus(sh);
@@ -898,33 +925,47 @@ async function nsLoad(activate){
   if(nsLoading)return;nsLoading=true;
   try{
     toast("Đang tải Netsuite Data…");
-    const loc=await kvGet("ns:local");let got=null,err="";
-    if(loc&&loc.buf&&loc.pinned)got=loc; // bản nhập tay chưa lưu lên GitHub được ưu tiên
-    if(!got&&ghReady()&&state.src==="github"){try{got=await ghFetchPath(nsPath(),"ns:gh:"+nsPath())}catch(e){err=e.message}}
-    if(!got&&loc&&loc.buf)got=loc;
-    if(!got){toast((err?err+". ":"")+"Chưa có dữ liệu Netsuite. Chọn file Netsuite_data.xlsx để nhập (hoặc đẩy file này vào thư mục data/ của repo dữ liệu trên GitHub).",!!err);state.impTarget="ns";try{$("#fileImp").click()}catch(e){}return}
-    const sh=await nsBuild(got.buf,{src:got.pinned?"nhập tay (chưa lên GitHub)":(got.src||"máy này"),name:got.name});
+    const loc=await kvGet("ns:local"),gh=ghReady()&&state.src==="github";let got=null,err="";
+    if(loc&&loc.gz&&loc.pinned)got={kind:"json",buf:loc.gz,src:"nhập tay (chưa lên GitHub)"}; // bản nhập tay chưa lưu lên GitHub được ưu tiên
+    if(!got&&gh){
+      try{const j=await ghFetchPath(nsJsonPath(),"ns:gh:"+nsJsonPath());if(j)got={kind:"json",buf:j.buf,src:"GitHub"}}catch(e){err=e.message}
+      if(!got&&!err){try{const x=await ghFetchPath(nsXlsxPath(),"ns:ghx:"+nsXlsxPath());if(x)got={kind:"xlsx",buf:x.buf,src:"GitHub (file Excel cũ)"}}catch(e){err=e.message}}
+    }
+    if(!got&&loc&&loc.gz)got={kind:"json",buf:loc.gz,src:"bản lưu trên máy này"};
+    if(!got){toast((err?err+". ":"")+"Chưa có dữ liệu Netsuite. Chọn file Excel Netsuite để nhập (sẽ được chuyển thành JSON nén cho nhanh).",!!err);state.impTarget="ns";try{$("#fileImp").click()}catch(e){}return}
+    const sh=got.kind==="json"?await nsBuildJson(got.buf,{src:got.src}):await nsBuildXlsx(got.buf,{src:got.src});
     nsInstall(sh);
     if(activate)state.active=state.sheets.indexOf(sh);
     renderTabs();render();updateChrome();
-    toast(`Netsuite Data: ${fmtN(sh.rows.length)} dòng${sh.extMeta.src?" · nguồn: "+sh.extMeta.src:""}`);
+    toast(`Netsuite Data: ${fmtN(sh.rows.length)} dòng · nguồn: ${sh.extMeta.src}`);
+    if(got.kind==="xlsx")nsConvertOnce(sh,gh); // lần đầu đọc từ Excel (chậm): đề nghị chuyển sang JSON nén
   }catch(e){console.error(e);toast("Không mở được Netsuite Data: "+e.message,true)}
   finally{nsLoading=false}
 }
+async function nsConvertOnce(sh,gh){
+  try{
+    const gz=await nsPack(sh),kb=Math.round(gz.length/1024);
+    if(gh&&confirm(`Netsuite đang là file Excel nên mở chậm. Chuyển sang JSON nén (${kb} KB) và lưu lên GitHub (${nsJsonPath()}) để lần sau mở gần như tức thì?\n(File Excel cũ trong repo giữ nguyên, bạn có thể xóa sau.)`)){
+      await ghPutPath(nsJsonPath(),gz,`Dashboard: chuyển Netsuite Data sang JSON nén (${sh.rows.length} dòng)`);
+      kvSet("ns:local",null);sh.extMeta.src="GitHub (JSON)";toast(`Đã lưu ${nsJsonPath()} (${kb} KB). Lần sau mở sẽ nhanh.`);
+    }else kvSet("ns:local",{gz,name:"netsuite",pinned:false,ts:Date.now()}); // ít nhất lần sau trên máy này mở nhanh
+  }catch(e){toast("Chưa chuyển được sang JSON: "+e.message,true)}
+}
 async function nsImport(file){
   let buf,sh;
-  try{buf=await file.arrayBuffer();sh=await nsBuild(buf,{src:"nhập tay",name:file.name})}
+  try{buf=await file.arrayBuffer();sh=await nsBuildXlsx(buf,{src:"nhập tay",name:file.name})}
   catch(e){toast("Không nhập được file Netsuite: "+e.message,true);return}
   const old=state.nsSheet?state.nsSheet.rows.length:0;
   if(!confirm(`Nhập “${file.name}”: ${fmtN(sh.rows.length)} dòng, ${sh.cols.filter(c=>c.type!=="index").length} cột.\n${old?`Sẽ THAY TOÀN BỘ ${fmtN(old)} dòng Netsuite đang có.`:"Chưa có dữ liệu Netsuite, sẽ dùng file này."}\nTiếp tục?`))return;
   nsInstall(sh);state.active=state.sheets.indexOf(sh);
-  const mb=(buf.byteLength/1048576).toFixed(1);let up=false;
-  if(ghReady()&&state.src==="github"&&confirm(`Lưu file lên GitHub (${nsPath()}, ${mb} MB) để mọi máy cùng thấy?\nChọn Hủy để chỉ dùng trên trình duyệt này.`)){
-    try{toast("Đang lưu Netsuite lên GitHub…");await ghPutPath(nsPath(),new Uint8Array(buf),`Dashboard: cập nhật Netsuite Data (${sh.rows.length} dòng, ${new Date().toLocaleString("vi-VN")})`);up=true}
+  let gz;try{gz=await nsPack(sh)}catch(e){toast("Không nén được dữ liệu: "+e.message,true);renderTabs();render();return}
+  const kb=Math.round(gz.length/1024);let up=false;
+  if(ghReady()&&state.src==="github"&&confirm(`Lưu lên GitHub dạng JSON nén (${nsJsonPath()}, ${kb} KB) để mọi máy cùng thấy và mở nhanh?\nChọn Hủy để chỉ dùng trên trình duyệt này.`)){
+    try{toast("Đang lưu Netsuite lên GitHub…");await ghPutPath(nsJsonPath(),gz,`Dashboard: cập nhật Netsuite Data (${sh.rows.length} dòng, ${new Date().toLocaleString("vi-VN")})`);up=true}
     catch(e){toast("Chưa lưu được lên GitHub: "+e.message+" (dữ liệu vẫn dùng được trên máy này)",true)}
   }
-  if(up){kvSet("ns:local",null);kvSet("ns:gh:"+nsPath(),null);sh.extMeta.src="GitHub"}
-  else kvSet("ns:local",{buf,name:file.name,pinned:true,ts:Date.now()});
+  if(up){kvSet("ns:local",null);kvSet("ns:gh:"+nsJsonPath(),null);sh.extMeta.src="GitHub (JSON)"}
+  else kvSet("ns:local",{gz,name:file.name,pinned:true,ts:Date.now()});
   renderTabs();render();updateChrome();
   toast(`Đã nhập Netsuite Data: ${fmtN(sh.rows.length)} dòng`+(up?" và lưu lên GitHub":" (chỉ trên trình duyệt này)"));
 }
