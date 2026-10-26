@@ -243,6 +243,12 @@ Vì số PAY **đổi tên** thành chuỗi chứa `BNK` khi được thanh toá
   - **⬆ Nhập Excel** vẫn dùng file .xlsx: dashboard đọc một lần, chuyển sang JSON nén và (nếu bạn đồng ý) lưu lên GitHub; **⬇ Xuất Excel/CSV** vẫn như cũ. Nếu repo chỉ có file Excel cũ `Netsuite_data.xlsx` thì lần mở đầu vẫn đọc được từ file đó (chậm một lần), rồi hỏi có chuyển sang JSON không. Sau khi có `netsuite.json.gz` bạn có thể xóa `Netsuite_data.xlsx` trên GitHub.
   - **Vì sao chưa chuyển các file khác**: mọi tab còn lại nằm trong `PO-data.xlsx` (69 KB), mở trọn trong ~0,2 giây nên chuyển sang JSON không nhanh hơn thấy được. Đồng thời toàn bộ đồng bộ Odoo (`sync_odoo.py`, `pay_sync.py`, `ncc_sync.py`, `bank_sync.py`) và việc dashboard lưu từng ô đều làm việc trên file Excel; chuyển đi phải viết lại cả hai nên rủi ro cao mà lợi ích gần như không có. Cơ chế JSON nén đã viết sẵn dùng chung được cho bất kỳ bộ dữ liệu lớn nào sau này. Nếu `PO-data.xlsx` lớn lên vài nghìn dòng thì phương án là để workflow xuất thêm bản JSON chỉ-đọc cho dashboard đọc nhanh.
   - 🟡 Chưa thử qua GitHub thật (tải/lưu `netsuite.json.gz`, đường chuyển đổi từ file Excel cũ trên GitHub). Đã thử: nhập file, lưu bản trên trình duyệt, mở lại, nạp lại file chính vẫn còn tab.
+- ✅ (26/10/2026) **Netsuite Data: tải một lần, lưu sẵn trên máy, không tải lại mỗi lần mở**:
+  - Sau khi mở file chính, nếu máy đã có bản Netsuite đã lưu thì **nạp ngầm luôn** (tab hiện sẵn số dòng, bấm vào là xem, không còn "Đang tải…"). Bản lưu lấy từ IndexedDB, **không gọi mạng** (đo: ~0,1 giây, 0 lần gọi mạng).
+  - Chỉ gọi GitHub khi chưa có bản lưu (lần đầu), hoặc khi bấm nút mới **"↻ Làm mới từ GitHub"** trên đầu bảng (dùng khi máy khác đã cập nhật). Dữ liệu ít đổi nên mặc định không tự kiểm tra.
+  - Để máy này không bị cũ mãi: tối đa **1 lần/ngày** dashboard hỏi GitHub âm thầm (ETag, không đổi thì không tải lại gì); có bản mới thì thay ngầm và báo một dòng. Hết hạn bản lưu không làm tab chậm đi.
+  - Bản nhập tay chưa lên GitHub vẫn được ưu tiên; bấm "Làm mới từ GitHub" sẽ hỏi xác nhận trước khi thay bản nhập tay đó.
+  - 🟡 Đã thử trên dữ liệu thật ở trình duyệt cục bộ (bản nhập tay và bản GitHub giả lập trong bộ nhớ); chưa thử qua GitHub thật.
 ## Đã bỏ theo yêu cầu
 - Bot nhắc việc (Telegram/Zalo/email) và tuổi công nợ theo nhà cung cấp.
 

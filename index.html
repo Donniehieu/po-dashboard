@@ -868,13 +868,13 @@ async function ghFetchPath(path,ckey){
   const c=ghCfg(),url=ghUrl(c,"contents/"+path.split("/").map(encodeURIComponent).join("/")+"?ref="+encodeURIComponent(c.branch||"main"));
   const cached=await kvGet(ckey),hd=ghHead(c);if(cached&&cached.etag&&cached.buf)hd["If-None-Match"]=cached.etag;
   const r=await fetch(url,{headers:hd,cache:"no-store"});
-  if(r.status===304&&cached&&cached.buf)return cached;
+  if(r.status===304&&cached&&cached.buf){cached.ts=Date.now();kvSet(ckey,cached);return cached}
   if(r.status===404)return null;
   if(!r.ok)throw new Error(r.status===401?"Mã truy cập GitHub không đúng hoặc đã hết hạn":"GitHub trả lỗi "+r.status);
   const j=await r.json();let buf;
   if(j.content&&j.encoding==="base64")buf=b64ToBuf(j.content);
   else buf=await (await fetch(url,{headers:{...ghHead(c),Accept:"application/vnd.github.raw+json"},cache:"no-store"})).arrayBuffer(); // file trên 1 MB: lấy bản thô
-  const o={etag:r.headers.get("ETag"),buf,sha:j.sha,name:j.name,src:"GitHub"};kvSet(ckey,o);return o;
+  const o={etag:r.headers.get("ETag"),buf,sha:j.sha,name:j.name,src:"GitHub",ts:Date.now()};kvSet(ckey,o);return o;
 }
 async function ghPutPath(path,bytes,msg){
   const c=ghCfg(),base=ghUrl(c,"contents/"+path.split("/").map(encodeURIComponent).join("/"));
@@ -921,26 +921,54 @@ function nsInstall(sh){
   state.sheets.push(sh);setStatus(sh);
 }
 let nsLoading=false;
-async function nsLoad(activate){
-  if(nsLoading)return;nsLoading=true;
+const nsKeyGh=()=>"ns:gh:"+nsJsonPath();
+/* Mở tab Netsuite: ưu tiên bản ĐÃ LƯU trên máy (không gọi mạng, không chờ). Chỉ tải từ GitHub khi chưa có bản lưu hoặc bấm “↻ Làm mới từ GitHub”. */
+async function nsLoad(activate,opts){
+  opts=opts||{};if(nsLoading)return;nsLoading=true;
   try{
-    toast("Đang tải Netsuite Data…");
     const loc=await kvGet("ns:local"),gh=ghReady()&&state.src==="github";let got=null,err="";
-    if(loc&&loc.gz&&loc.pinned)got={kind:"json",buf:loc.gz,src:"nhập tay (chưa lên GitHub)"}; // bản nhập tay chưa lưu lên GitHub được ưu tiên
+    if(opts.refresh&&loc&&loc.pinned&&!confirm("Bản Netsuite nhập tay chưa lưu lên GitHub sẽ bị thay bằng bản trên GitHub. Tiếp tục?")){return}
+    if(!opts.refresh&&loc&&loc.gz&&loc.pinned)got={kind:"json",buf:loc.gz,src:"nhập tay (chưa lên GitHub)",ts:loc.ts};
+    if(!got&&!opts.refresh){const c=await kvGet(nsKeyGh());if(c&&c.buf)got={kind:"json",buf:c.buf,src:"bản đã lưu trên máy (từ GitHub)",ts:c.ts}}
     if(!got&&gh){
-      try{const j=await ghFetchPath(nsJsonPath(),"ns:gh:"+nsJsonPath());if(j)got={kind:"json",buf:j.buf,src:"GitHub"}}catch(e){err=e.message}
-      if(!got&&!err){try{const x=await ghFetchPath(nsXlsxPath(),"ns:ghx:"+nsXlsxPath());if(x)got={kind:"xlsx",buf:x.buf,src:"GitHub (file Excel cũ)"}}catch(e){err=e.message}}
+      toast("Đang tải Netsuite Data từ GitHub…");
+      try{const j=await ghFetchPath(nsJsonPath(),nsKeyGh());if(j)got={kind:"json",buf:j.buf,src:"GitHub",ts:j.ts}}catch(e){err=e.message}
+      if(!got&&!err){try{const x=await ghFetchPath(nsXlsxPath(),"ns:ghx:"+nsXlsxPath());if(x)got={kind:"xlsx",buf:x.buf,src:"GitHub (file Excel cũ)",ts:x.ts}}catch(e){err=e.message}}
     }
-    if(!got&&loc&&loc.gz)got={kind:"json",buf:loc.gz,src:"bản lưu trên máy này"};
+    if(!got&&loc&&loc.gz)got={kind:"json",buf:loc.gz,src:"bản lưu trên máy này",ts:loc.ts};
     if(!got){toast((err?err+". ":"")+"Chưa có dữ liệu Netsuite. Chọn file Excel Netsuite để nhập (sẽ được chuyển thành JSON nén cho nhanh).",!!err);state.impTarget="ns";try{$("#fileImp").click()}catch(e){}return}
-    const sh=got.kind==="json"?await nsBuildJson(got.buf,{src:got.src}):await nsBuildXlsx(got.buf,{src:got.src});
+    const sh=got.kind==="json"?await nsBuildJson(got.buf,{src:got.src,ts:got.ts}):await nsBuildXlsx(got.buf,{src:got.src,ts:got.ts});
     nsInstall(sh);
+    if(opts.refresh&&loc&&loc.pinned)kvSet("ns:local",null);
     if(activate)state.active=state.sheets.indexOf(sh);
     renderTabs();render();updateChrome();
-    toast(`Netsuite Data: ${fmtN(sh.rows.length)} dòng · nguồn: ${sh.extMeta.src}`);
+    toast(`Netsuite Data: ${fmtN(sh.rows.length)} dòng · ${sh.extMeta.src}${sh.extMeta.ts?" · lưu lúc "+new Date(sh.extMeta.ts).toLocaleString("vi-VN"):""}`);
     if(got.kind==="xlsx")nsConvertOnce(sh,gh); // lần đầu đọc từ Excel (chậm): đề nghị chuyển sang JSON nén
   }catch(e){console.error(e);toast("Không mở được Netsuite Data: "+e.message,true)}
   finally{nsLoading=false}
+}
+/* Sau khi mở file chính: nếu đã có bản lưu trên máy thì nạp ngầm luôn (tab hiện sẵn, bấm vào là xem, không phải chờ) */
+async function nsPreload(){
+  if(state.nsSheet||nsLoading)return;
+  const loc=await kvGet("ns:local");let got=null;
+  if(loc&&loc.gz&&loc.pinned)got={buf:loc.gz,src:"nhập tay (chưa lên GitHub)",ts:loc.ts};
+  if(!got&&ghReady()){const c=await kvGet(nsKeyGh());if(c&&c.buf)got={buf:c.buf,src:"bản đã lưu trên máy (từ GitHub)",ts:c.ts,gh:true}}
+  if(!got&&loc&&loc.gz)got={buf:loc.gz,src:"bản lưu trên máy này",ts:loc.ts};
+  if(!got)return;
+  nsLoading=true;
+  try{const sh=await nsBuildJson(got.buf,{src:got.src,ts:got.ts});if(!state.nsSheet){nsInstall(sh);renderTabs()}}
+  catch(e){console.warn("Netsuite preload:",e);return}
+  finally{nsLoading=false}
+  if(got.gh&&state.src==="github"&&(!got.ts||Date.now()-got.ts>864e5))nsSilentCheck(); // tối đa 1 lần/ngày, im lặng
+}
+async function nsSilentCheck(){ // hỏi GitHub có bản mới không (ETag: không đổi thì không tải lại); có bản mới thì thay ngầm
+  try{
+    const prev=await kvGet(nsKeyGh()),j=await ghFetchPath(nsJsonPath(),nsKeyGh());
+    if(!j||!prev||j.sha===prev.sha)return;
+    const sh=await nsBuildJson(j.buf,{src:"GitHub",ts:j.ts});nsInstall(sh);
+    const wasActive=state.active===state.sheets.indexOf(sh);renderTabs();if(wasActive)render();
+    toast("Netsuite Data trên GitHub vừa có bản mới và đã được cập nhật.");
+  }catch(e){console.warn("Netsuite check:",e)}
 }
 async function nsConvertOnce(sh,gh){
   try{
@@ -980,6 +1008,7 @@ async function loadBuffer(buf,name,opts={}){
     state.history=mergeHist(state.histQ,store.get(histKey())||[]);
     state.sheets=raw.map(analyze).filter(sh=>!HIDE_SHEETS.has(String(sh.name).toLowerCase().replace(/\s+/g," ").trim())); // sheet ẩn khỏi dashboard (vẫn còn nguyên trong file Excel)
     if(state.nsSheet)state.sheets.push(state.nsSheet); // tab Netsuite Data (file riêng) luôn nằm cuối danh sách sheet
+    else setTimeout(()=>{nsPreload().catch(()=>{})},600); // có bản đã lưu trên máy thì nạp ngầm, bấm tab là xem ngay
     state.sheets.forEach(s=>{s.baseLast=s.lastRow;setStatus(s)});
     state.active="overview";
     $("#fname").textContent=name+(state.src==="github"?"  ·  GitHub":state.src==="cloud"?"  ·  Cloud riêng":"");
@@ -2220,7 +2249,7 @@ function renderTable(sh,fr){
   const sugN=sh.wf?sh.rows.filter(r=>sugDone(sh,r)).length:0;
   const sugBar=sugN?`<div class="bulk" style="border-color:var(--ok);background:color-mix(in srgb,var(--ok) 10%,var(--card))">💡 <b>${sugN} PO</b> Odoo báo đã nhận hết hàng và đã xuất hóa đơn, chưa đặt Hoàn thành.<span class="grow"></span><button class="btn sm" data-sugall>Đặt Hoàn thành tất cả</button></div>`:"";
   let h=hint+sugBar+bulkBar(sh)+`<h2 class="sec">Chi tiết (${fmtN(rows.length)} dòng) <small class="sub" style="font-weight:500">· ${matchMedia("(pointer:coarse)").matches?"chạm":"bấm đúp"} vào ô để sửa · bấm ▾ ở tiêu đề để lọc · kéo mép phải tiêu đề để chỉnh độ rộng cột</small></h2>
-    <div class="tblbar">${sh.ext?"":`<button class="btn" data-t="add">＋ Thêm dòng</button><button class="btn" data-t="deln" ${selSet.size?"":"disabled"}>🗑 Xóa dòng đã chọn${selSet.size?" ("+selSet.size+")":""}</button>`}<button class="btn" data-t="imp" title="${sh.ext?"Thay TOÀN BỘ dữ liệu Netsuite bằng file Excel mới (hỏi xác nhận, có thể lưu lên GitHub)":"Nhập dữ liệu từ file Excel vào bảng này (khớp theo tên cột; có cột mã/tên thì cập nhật dòng trùng, dòng chưa có thì thêm mới)"}">⬆ Nhập Excel</button><button class="btn" data-t="xlsx">⬇ Xuất Excel (đang lọc)</button><button class="btn" data-t="csv">⬇ Xuất CSV</button><span class="grow"></span><button class="btn sm" data-t="cols" title="Chọn cột muốn hiện/ẩn trong bảng này (không xóa dữ liệu)">👁 Chọn cột hiển thị${hid.size?" (đang ẩn "+hid.size+")":""}</button><button class="btn sm" data-t="rzreset" title="Trả độ rộng các cột về mặc định">↔ Đặt lại độ rộng cột</button></div>
+    <div class="tblbar">${sh.ext?"":`<button class="btn" data-t="add">＋ Thêm dòng</button><button class="btn" data-t="deln" ${selSet.size?"":"disabled"}>🗑 Xóa dòng đã chọn${selSet.size?" ("+selSet.size+")":""}</button>`}${sh.ext?`<button class="btn" data-t="nsref" title="Dữ liệu Netsuite được lưu sẵn trên máy này, không tự tải lại. Bấm để lấy bản mới nhất từ GitHub (khi máy khác đã cập nhật). Nguồn hiện tại: ${esc(sh.extMeta.src||"")}${sh.extMeta.ts?", lưu lúc "+new Date(sh.extMeta.ts).toLocaleString("vi-VN"):""}">↻ Làm mới từ GitHub</button>`:""}<button class="btn" data-t="imp" title="${sh.ext?"Thay TOÀN BỘ dữ liệu Netsuite bằng file Excel mới (hỏi xác nhận, có thể lưu lên GitHub)":"Nhập dữ liệu từ file Excel vào bảng này (khớp theo tên cột; có cột mã/tên thì cập nhật dòng trùng, dòng chưa có thì thêm mới)"}">⬆ Nhập Excel</button><button class="btn" data-t="xlsx">⬇ Xuất Excel (đang lọc)</button><button class="btn" data-t="csv">⬇ Xuất CSV</button><span class="grow"></span><button class="btn sm" data-t="cols" title="Chọn cột muốn hiện/ẩn trong bảng này (không xóa dữ liệu)">👁 Chọn cột hiển thị${hid.size?" (đang ẩn "+hid.size+")":""}</button><button class="btn sm" data-t="rzreset" title="Trả độ rộng các cột về mặc định">↔ Đặt lại độ rộng cột</button></div>
     ${hid.size?`<div class="hidbar">Cột đang ẩn: ${sh.cols.filter(c=>hid.has(c.idx)).map(c=>`<button class="btn sm" data-showcol="${c.idx}" title="Hiện lại cột này">＋ ${esc(c.type==="flag"?"TT trước":colLabel(c))}</button>`).join("")}<button class="btn sm" data-showcol="all">Hiện tất cả</button></div>`:""}
     <div class="tablewrap ${sh.wf?"cards":""}"><table class="${sh.wf?"cardtbl":""}"><thead><tr>${sh.checklist?"<th></th>":""}<th class="flag"><input type="checkbox" data-selall title="Chọn tất cả dòng đang hiện"></th><th title="Số thứ tự các dòng đang hiển thị (tự đánh lại 1, 2, 3… theo bộ lọc/tìm kiếm/sắp xếp hiện tại)">STT</th>`+
     cols.map(c=>{const on=u.cf[c.idx]?" on":"";const lab=c.type==="flag"?"TT trước":colLabel(c);return `<th data-s="${c.idx}" class="${c.type==="flag"?"flag":""}" title="${c.type==="flag"?"Tick = PO thanh toán trước (luồng có Chờ làm TT / Đã gửi UNC)":""}">${esc(lab)}${u.sort&&u.sort.i===c.idx?(u.sort.dir>0?" ▲":" ▼"):""}<button class="fb${on}" data-f="${c.idx}" title="Lọc cột này">▾</button></th>`}).join("")+`<th></th></tr></thead><tbody>`;
@@ -2261,6 +2290,7 @@ function renderTable(sh,fr){
     if(k==="add")addRow(si);
     else if(k==="deln")deleteRows(si,[...selSet]);
     else if(k==="imp"){state.impTarget=si;$("#fileImp").click()}
+    else if(k==="nsref")nsLoad(false,{refresh:true});
     else if(k==="xlsx")exportXlsx(sh);
     else if(k==="csv")exportCsv(sh);
     else if(k==="cols")colMenu(sh,t.querySelector('[data-t=cols]'));
