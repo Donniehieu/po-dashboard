@@ -857,6 +857,78 @@ async function loadFromGitHub(silent){
   }catch(e){toast(e.message,true)}
 }
 
+/* ---- Tab Netsuite Data: file riêng (Netsuite_data.xlsx, hàng chục nghìn dòng) nên KHÔNG gộp vào PO-data.xlsx; chỉ xem/lọc/xuất, nhập file mới = thay toàn bộ ---- */
+const NS_NAME="Netsuite Data",NS_FILE="Netsuite_data.xlsx";
+state.nsSheet=null;
+const nsPath=()=>{const p=ghCfg().path,i=p.lastIndexOf("/");return (i>=0?p.slice(0,i+1):"")+NS_FILE};
+async function ghFetchPath(path,ckey){
+  const c=ghCfg(),url=ghUrl(c,"contents/"+path.split("/").map(encodeURIComponent).join("/")+"?ref="+encodeURIComponent(c.branch||"main"));
+  const cached=await kvGet(ckey),hd=ghHead(c);if(cached&&cached.etag&&cached.buf)hd["If-None-Match"]=cached.etag;
+  const r=await fetch(url,{headers:hd,cache:"no-store"});
+  if(r.status===304&&cached&&cached.buf)return cached;
+  if(r.status===404)return null;
+  if(!r.ok)throw new Error(r.status===401?"Mã truy cập GitHub không đúng hoặc đã hết hạn":"GitHub trả lỗi "+r.status);
+  const j=await r.json();let buf;
+  if(j.content&&j.encoding==="base64")buf=b64ToBuf(j.content);
+  else buf=await (await fetch(url,{headers:{...ghHead(c),Accept:"application/vnd.github.raw+json"},cache:"no-store"})).arrayBuffer(); // file trên 1 MB: lấy bản thô
+  const o={etag:r.headers.get("ETag"),buf,sha:j.sha,name:j.name,src:"GitHub"};kvSet(ckey,o);return o;
+}
+async function ghPutPath(path,bytes,msg){
+  const c=ghCfg(),base=ghUrl(c,"contents/"+path.split("/").map(encodeURIComponent).join("/"));
+  let sha;const g=await fetch(base+"?ref="+encodeURIComponent(c.branch||"main"),{headers:ghHead(c),cache:"no-store"});
+  if(g.ok)sha=(await g.json()).sha;else if(g.status!==404)throw new Error("GitHub trả lỗi "+g.status+" khi kiểm tra file");
+  const body={message:msg,content:bufToB64(bytes),branch:c.branch||"main"};if(sha)body.sha=sha;
+  const r=await fetch(base,{method:"PUT",headers:{...ghHead(c),"Content-Type":"application/json"},body:JSON.stringify(body)});
+  if(!r.ok)throw new Error("GitHub trả lỗi "+r.status+" khi ghi file (mã truy cập cần quyền Contents: Read and write)");
+}
+async function nsBuild(buf,meta){ // đọc file, dựng bảng (chưa gắn vào dashboard)
+  const raw=await parseXlsx(buf);const r0=raw.find(x=>x.grid&&x.grid.some(r=>r&&r.some(v=>v!=null)));
+  if(!r0)throw new Error("File không có dữ liệu");
+  r0.name=NS_NAME;const sh=analyze(r0);
+  if(!sh.rows.length)throw new Error("Không thấy dòng dữ liệu nào (kiểm tra dòng tiêu đề ở hàng đầu)");
+  Object.assign(sh,{ext:true,dueIdx:null,progIdx:null,blockIdx:null,checklist:false,money:null,sub:null,path:null,extMeta:meta||{}});
+  sh.baseLast=sh.lastRow;return sh;
+}
+function nsInstall(sh){
+  state.nsSheet=sh;const i=state.sheets.findIndex(s=>s.ext);if(i>=0)state.sheets.splice(i,1);
+  state.sheets.push(sh);setStatus(sh);
+}
+let nsLoading=false;
+async function nsLoad(activate){
+  if(nsLoading)return;nsLoading=true;
+  try{
+    toast("Đang tải Netsuite Data…");
+    const loc=await kvGet("ns:local");let got=null,err="";
+    if(loc&&loc.buf&&loc.pinned)got=loc; // bản nhập tay chưa lưu lên GitHub được ưu tiên
+    if(!got&&ghReady()&&state.src==="github"){try{got=await ghFetchPath(nsPath(),"ns:gh:"+nsPath())}catch(e){err=e.message}}
+    if(!got&&loc&&loc.buf)got=loc;
+    if(!got){toast((err?err+". ":"")+"Chưa có dữ liệu Netsuite. Chọn file Netsuite_data.xlsx để nhập (hoặc đẩy file này vào thư mục data/ của repo dữ liệu trên GitHub).",!!err);state.impTarget="ns";try{$("#fileImp").click()}catch(e){}return}
+    const sh=await nsBuild(got.buf,{src:got.pinned?"nhập tay (chưa lên GitHub)":(got.src||"máy này"),name:got.name});
+    nsInstall(sh);
+    if(activate)state.active=state.sheets.indexOf(sh);
+    renderTabs();render();updateChrome();
+    toast(`Netsuite Data: ${fmtN(sh.rows.length)} dòng${sh.extMeta.src?" · nguồn: "+sh.extMeta.src:""}`);
+  }catch(e){console.error(e);toast("Không mở được Netsuite Data: "+e.message,true)}
+  finally{nsLoading=false}
+}
+async function nsImport(file){
+  let buf,sh;
+  try{buf=await file.arrayBuffer();sh=await nsBuild(buf,{src:"nhập tay",name:file.name})}
+  catch(e){toast("Không nhập được file Netsuite: "+e.message,true);return}
+  const old=state.nsSheet?state.nsSheet.rows.length:0;
+  if(!confirm(`Nhập “${file.name}”: ${fmtN(sh.rows.length)} dòng, ${sh.cols.filter(c=>c.type!=="index").length} cột.\n${old?`Sẽ THAY TOÀN BỘ ${fmtN(old)} dòng Netsuite đang có.`:"Chưa có dữ liệu Netsuite, sẽ dùng file này."}\nTiếp tục?`))return;
+  nsInstall(sh);state.active=state.sheets.indexOf(sh);
+  const mb=(buf.byteLength/1048576).toFixed(1);let up=false;
+  if(ghReady()&&state.src==="github"&&confirm(`Lưu file lên GitHub (${nsPath()}, ${mb} MB) để mọi máy cùng thấy?\nChọn Hủy để chỉ dùng trên trình duyệt này.`)){
+    try{toast("Đang lưu Netsuite lên GitHub…");await ghPutPath(nsPath(),new Uint8Array(buf),`Dashboard: cập nhật Netsuite Data (${sh.rows.length} dòng, ${new Date().toLocaleString("vi-VN")})`);up=true}
+    catch(e){toast("Chưa lưu được lên GitHub: "+e.message+" (dữ liệu vẫn dùng được trên máy này)",true)}
+  }
+  if(up){kvSet("ns:local",null);kvSet("ns:gh:"+nsPath(),null);sh.extMeta.src="GitHub"}
+  else kvSet("ns:local",{buf,name:file.name,pinned:true,ts:Date.now()});
+  renderTabs();render();updateChrome();
+  toast(`Đã nhập Netsuite Data: ${fmtN(sh.rows.length)} dòng`+(up?" và lưu lên GitHub":" (chỉ trên trình duyệt này)"));
+}
+
 /* ---- Nạp file ---- */
 const HIDE_SHEETS=new Set(["thông báo duyệt giá","nhà cung cấp dây đai"]);
 async function loadBuffer(buf,name,opts={}){
@@ -866,6 +938,7 @@ async function loadBuffer(buf,name,opts={}){
     state.buf=buf;state.fileName=name;state.src=opts.src||"local";state.pending.clear();state.pendingDel.clear();state.saveErr=null;state.fileMtime=opts.mtime||null;
     state.history=mergeHist(state.histQ,store.get(histKey())||[]);
     state.sheets=raw.map(analyze).filter(sh=>!HIDE_SHEETS.has(String(sh.name).toLowerCase().replace(/\s+/g," ").trim())); // sheet ẩn khỏi dashboard (vẫn còn nguyên trong file Excel)
+    if(state.nsSheet)state.sheets.push(state.nsSheet); // tab Netsuite Data (file riêng) luôn nằm cuối danh sách sheet
     state.sheets.forEach(s=>{s.baseLast=s.lastRow;setStatus(s)});
     state.active="overview";
     $("#fname").textContent=name+(state.src==="github"?"  ·  GitHub":state.src==="cloud"?"  ·  Cloud riêng":"");
@@ -1326,6 +1399,7 @@ function fillHistory(){
 }
 
 function startEdit(sh,td){
+  if(sh.ext){toast("Dữ liệu Netsuite chỉ để xem, lọc và xuất. Muốn cập nhật hãy dùng ⬆ Nhập Excel (thay toàn bộ bằng file mới).",true);return}
   const n=+td.dataset.r,ci=+td.dataset.c,si=state.sheets.indexOf(sh);
   const col=sh.cols.find(c=>c.idx===ci),r=sh.rows.find(x=>x.n===n);if(!col||!r)return;
   if(sh.fset.has(n+":"+ci)){toast("Ô này là công thức trong Excel nên không sửa từ dashboard",true);return}
@@ -1394,6 +1468,7 @@ function parseAnyDate(v){
 $("#btnImport").onclick=()=>{state.impTarget=null;$("#fileImp").click()};
 $("#fileImp").onchange=async e=>{const f=e.target.files[0];e.target.value="";const tg=state.impTarget;state.impTarget=null;if(f)try{await importOdoo(f,tg)}catch(err){console.error(err);toast("Không nhập được: "+err.message,true)}};
 async function importOdoo(file,forceSi){
+  if(forceSi==="ns"||(forceSi!=null&&state.sheets[forceSi]&&state.sheets[forceSi].ext))return nsImport(file);
   if(!state.sheets.length){toast("Hãy mở file Excel nguồn trước",true);return}
   const forced=forceSi!=null&&state.sheets[forceSi];
   const all=(await parseXlsx(await file.arrayBuffer())).map(analyze).filter(s=>!s.empty);
@@ -1863,12 +1938,13 @@ function renderTabs(){
   const t=$("#tabs");t.hidden=false;
   const pc=collectItems().length,on=k=>state.active===k?"on":"";
   // Thứ tự: Tổng quan, Ưu tiên, CV theo ngày, Nhà cung cấp, Công nợ NCC, Công nợ Ms Thủy, Công nợ Hiếu, PO, Phiếu thanh toán, Bảng kê TT, (sheet khác), Lịch sử
-  const rankSheet=sh=>{const n=norm(sh.name);return /^cv theo ngày/.test(n)?3:IS_DS(sh.name)?5:/^công nợ ms thủy/.test(n)?6:/^công nợ hiếu/.test(n)?7:sh.wf?8:sh.pay?9:/^bảng kê tt vận chuyển/.test(n)?10:/^bảng kê tt đơn hàng/.test(n)?11:12};
+  const rankSheet=sh=>{const n=norm(sh.name);return sh.ext?13:/^cv theo ngày/.test(n)?3:IS_DS(sh.name)?5:/^công nợ ms thủy/.test(n)?6:/^công nợ hiếu/.test(n)?7:sh.wf?8:sh.pay?9:/^bảng kê tt vận chuyển/.test(n)?10:/^bảng kê tt đơn hàng/.test(n)?11:12};
   const items=[{r:0,h:`<button data-i="overview" class="${on("overview")}">Tổng quan</button>`},{r:1,h:`<button data-i="priority" class="${on("priority")}">⚠ Ưu tiên xử lý<span class="n">${pc}</span></button>`},{r:20,h:`<button data-i="history" class="${on("history")}">🕘 Lịch sử</button>`}];
   if(state.sheets.some(s=>s.wf))items.push({r:4,h:`<button data-i="suppliers" class="${on("suppliers")}">🏭 Nhà cung cấp</button>`});
   state.sheets.forEach((s,i)=>items.push({r:rankSheet(s),h:`<button data-i="${i}" class="${on(i)}">${esc(s.name)}<span class="n">${s.rows.length}</span></button>`}));
+  if(!state.nsSheet&&state.sheets.length)items.push({r:13,h:`<button data-i="nsload" title="Dữ liệu từ NetSuite (file riêng Netsuite_data.xlsx, tải khi bấm lần đầu)">📊 Netsuite Data</button>`});
   t.innerHTML=items.map((x,k)=>({...x,k})).sort((a,b)=>a.r-b.r||a.k-b.k).map(x=>x.h).join("");
-  t.querySelectorAll("button").forEach(b=>b.onclick=()=>{const v=b.dataset.i;state.active=(v==="overview"||v==="priority"||v==="history"||v==="suppliers")?v:+v;renderTabs();render();scrollTo(0,0)});
+  t.querySelectorAll("button").forEach(b=>b.onclick=()=>{const v=b.dataset.i;if(v==="nsload"){nsLoad(true);return}state.active=(v==="overview"||v==="priority"||v==="history"||v==="suppliers")?v:+v;renderTabs();render();scrollTo(0,0)});
 }
 function render(){state.active==="overview"?renderOverview():state.active==="priority"?renderPriority():state.active==="history"?renderHistory():state.active==="suppliers"?renderSuppliers():renderSheet(state.sheets[state.active])}
 
@@ -1884,7 +1960,7 @@ function sheetStats(sh){
 function kpi(label,val,sub,cls="",id=""){return `<div class="card kpi ${cls} ${id?"click":""}" ${id?`data-k="${id}"`:""}><div class="l">${esc(label)}</div><div class="v">${val}</div><div class="s">${sub||""}</div></div>`}
 
 function renderOverview(){
-  const sheets=state.sheets;const st=sheets.map(sheetStats);
+  const sheets=state.sheets.filter(s=>!s.ext);const st=sheets.map(sheetStats); // Netsuite Data (luôn ở cuối) không tính vào tổng quan
   const totRows=st.reduce((a,s)=>a+s.rows,0),totOd=st.reduce((a,s)=>a+s.overdue,0),totSoon=st.reduce((a,s)=>a+s.soon,0);
   let html=`<div class="grid kpis">
     ${kpi("Số sheet",sheets.length,"trong file "+esc(state.fileName))}
@@ -2103,7 +2179,7 @@ function renderTable(sh,fr){
   const sugN=sh.wf?sh.rows.filter(r=>sugDone(sh,r)).length:0;
   const sugBar=sugN?`<div class="bulk" style="border-color:var(--ok);background:color-mix(in srgb,var(--ok) 10%,var(--card))">💡 <b>${sugN} PO</b> Odoo báo đã nhận hết hàng và đã xuất hóa đơn, chưa đặt Hoàn thành.<span class="grow"></span><button class="btn sm" data-sugall>Đặt Hoàn thành tất cả</button></div>`:"";
   let h=hint+sugBar+bulkBar(sh)+`<h2 class="sec">Chi tiết (${fmtN(rows.length)} dòng) <small class="sub" style="font-weight:500">· ${matchMedia("(pointer:coarse)").matches?"chạm":"bấm đúp"} vào ô để sửa · bấm ▾ ở tiêu đề để lọc · kéo mép phải tiêu đề để chỉnh độ rộng cột</small></h2>
-    <div class="tblbar"><button class="btn" data-t="add">＋ Thêm dòng</button><button class="btn" data-t="deln" ${selSet.size?"":"disabled"}>🗑 Xóa dòng đã chọn${selSet.size?" ("+selSet.size+")":""}</button><button class="btn" data-t="imp" title="Nhập dữ liệu từ file Excel vào bảng này (khớp theo tên cột; có cột mã/tên thì cập nhật dòng trùng, dòng chưa có thì thêm mới)">⬆ Nhập Excel</button><button class="btn" data-t="xlsx">⬇ Xuất Excel (đang lọc)</button><button class="btn" data-t="csv">⬇ Xuất CSV</button><span class="grow"></span><button class="btn sm" data-t="cols" title="Chọn cột muốn hiện/ẩn trong bảng này (không xóa dữ liệu)">👁 Chọn cột hiển thị${hid.size?" (đang ẩn "+hid.size+")":""}</button><button class="btn sm" data-t="rzreset" title="Trả độ rộng các cột về mặc định">↔ Đặt lại độ rộng cột</button></div>
+    <div class="tblbar">${sh.ext?"":`<button class="btn" data-t="add">＋ Thêm dòng</button><button class="btn" data-t="deln" ${selSet.size?"":"disabled"}>🗑 Xóa dòng đã chọn${selSet.size?" ("+selSet.size+")":""}</button>`}<button class="btn" data-t="imp" title="${sh.ext?"Thay TOÀN BỘ dữ liệu Netsuite bằng file Excel mới (hỏi xác nhận, có thể lưu lên GitHub)":"Nhập dữ liệu từ file Excel vào bảng này (khớp theo tên cột; có cột mã/tên thì cập nhật dòng trùng, dòng chưa có thì thêm mới)"}">⬆ Nhập Excel</button><button class="btn" data-t="xlsx">⬇ Xuất Excel (đang lọc)</button><button class="btn" data-t="csv">⬇ Xuất CSV</button><span class="grow"></span><button class="btn sm" data-t="cols" title="Chọn cột muốn hiện/ẩn trong bảng này (không xóa dữ liệu)">👁 Chọn cột hiển thị${hid.size?" (đang ẩn "+hid.size+")":""}</button><button class="btn sm" data-t="rzreset" title="Trả độ rộng các cột về mặc định">↔ Đặt lại độ rộng cột</button></div>
     ${hid.size?`<div class="hidbar">Cột đang ẩn: ${sh.cols.filter(c=>hid.has(c.idx)).map(c=>`<button class="btn sm" data-showcol="${c.idx}" title="Hiện lại cột này">＋ ${esc(c.type==="flag"?"TT trước":colLabel(c))}</button>`).join("")}<button class="btn sm" data-showcol="all">Hiện tất cả</button></div>`:""}
     <div class="tablewrap ${sh.wf?"cards":""}"><table class="${sh.wf?"cardtbl":""}"><thead><tr>${sh.checklist?"<th></th>":""}<th class="flag"><input type="checkbox" data-selall title="Chọn tất cả dòng đang hiện"></th><th title="Số thứ tự các dòng đang hiển thị (tự đánh lại 1, 2, 3… theo bộ lọc/tìm kiếm/sắp xếp hiện tại)">STT</th>`+
     cols.map(c=>{const on=u.cf[c.idx]?" on":"";const lab=c.type==="flag"?"TT trước":colLabel(c);return `<th data-s="${c.idx}" class="${c.type==="flag"?"flag":""}" title="${c.type==="flag"?"Tick = PO thanh toán trước (luồng có Chờ làm TT / Đã gửi UNC)":""}">${esc(lab)}${u.sort&&u.sort.i===c.idx?(u.sort.dir>0?" ▲":" ▼"):""}<button class="fb${on}" data-f="${c.idx}" title="Lọc cột này">▾</button></th>`}).join("")+`<th></th></tr></thead><tbody>`;
@@ -2135,7 +2211,7 @@ function renderTable(sh,fr){
       const cls=typeof v==="number"?"num":(c.type==="text"?"txt":"");
       const edited=state.pending.has(pkey(si,r.n,c.idx));
       h+=`<td class="${cls} ${edited?"ed":""} ${c.idx===sh.title||c.idx===sh.sub?"wide":""}" data-l="${esc(colLabel(c))}" data-r="${r.n}" data-c="${c.idx}" ${c.type==="text"&&v?`title="${esc(v)}"`:""}>${cell}</td>`}
-    h+=`<td><button class="rowdel" data-del="${r.n}" title="Xóa dòng này">🗑</button></td></tr>`;
+    h+=sh.ext?`<td></td></tr>`:`<td><button class="rowdel" data-del="${r.n}" title="Xóa dòng này">🗑</button></td></tr>`;
   }
   h+=`</tbody></table></div>`;
   if(rows.length>u.shown)h+=`<div class="more"><button class="btn" id="more">Hiện thêm (còn ${rows.length-u.shown} dòng)</button></div>`;
@@ -2435,6 +2511,23 @@ function applyView(sh,v){
   u.search=v.search||"";u.special=v.special||null;u.sort=v.sort||null;u.range=null;u.shown=100;
 }
 /* xuất .xlsx (đang lọc) */
+async function makeZipDeflated(files){
+  if(typeof CompressionStream==="undefined")return makeZipStored(files);
+  const enc=new TextEncoder(),parts=[],cds=[];let pos=0;
+  for(const [name,txt] of files){
+    const nb=enc.encode(name),raw=enc.encode(txt),crc=crc32(raw);let data=raw,method=0;
+    try{const z=new Uint8Array(await new Response(new Blob([raw]).stream().pipeThrough(new CompressionStream("deflate-raw"))).arrayBuffer());if(z.length<raw.length){data=z;method=8}}catch(e){}
+    const lh=new Uint8Array(30+nb.length),l=new DataView(lh.buffer);
+    l.setUint32(0,0x04034b50,true);l.setUint16(4,20,true);l.setUint16(6,0x0800,true);l.setUint16(8,method,true);l.setUint32(14,crc,true);l.setUint32(18,data.length,true);l.setUint32(22,raw.length,true);l.setUint16(26,nb.length,true);lh.set(nb,30);
+    const cd=new Uint8Array(46+nb.length),c=new DataView(cd.buffer);
+    c.setUint32(0,0x02014b50,true);c.setUint16(4,20,true);c.setUint16(6,20,true);c.setUint16(8,0x0800,true);c.setUint16(10,method,true);c.setUint32(16,crc,true);c.setUint32(20,data.length,true);c.setUint32(24,raw.length,true);c.setUint16(28,nb.length,true);c.setUint32(42,pos,true);cd.set(nb,46);
+    parts.push(lh,data);pos+=lh.length+data.length;cds.push(cd);
+  }
+  let sz=0;for(const c of cds){parts.push(c);sz+=c.length}
+  const eo=new Uint8Array(22),d=new DataView(eo.buffer);
+  d.setUint32(0,0x06054b50,true);d.setUint16(8,cds.length,true);d.setUint16(10,cds.length,true);d.setUint32(12,sz,true);d.setUint32(16,pos,true);parts.push(eo);
+  return new Blob(parts,{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
+}
 function makeZipStored(files){
   const enc=new TextEncoder(),parts=[],cds=[];let pos=0;
   for(const [name,txt] of files){
@@ -2456,7 +2549,7 @@ function exportXlsx(sh){
   downloadXlsx(sh.name,cols.map(c=>colLabel(c)),fr.map(r=>cols.map(c=>cellVal(sh,r,c.idx))),sh.name.replace(/[^\w\- ]+/g,"_")+"_loc.xlsx");
 }
 /* ghi bảng (tiêu đề + ma trận giá trị) ra file .xlsx có định dạng ngày, dòng đầu cố định và bộ lọc tự động */
-function downloadXlsx(sheetName,headers,matrix,fname){
+async function downloadXlsx(sheetName,headers,matrix,fname){
   const rowsX=[`<row r="1">`+headers.map((h,j)=>`<c r="${colLetter(j)}1" t="inlineStr" s="2"><is><t>${xe(h)}</t></is></c>`).join("")+`</row>`];
   matrix.forEach((r,i)=>{
     const n=i+2;
@@ -2477,7 +2570,7 @@ function downloadXlsx(sheetName,headers,matrix,fname){
    ["xl/_rels/workbook.xml.rels",H+'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>'],
    ["xl/styles.xml",H+`<styleSheet ${NS}><numFmts count="1"><numFmt numFmtId="164" formatCode="dd/mm/yyyy"/></numFmts><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="3"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/></cellXfs></styleSheet>`],
    ["xl/worksheets/sheet1.xml",H+`<worksheet ${NS}><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><sheetData>${rowsX.join("")}</sheetData><autoFilter ref="A1:${colLetter(headers.length-1)}${matrix.length+1}"/></worksheet>`]];
-  const a=document.createElement("a");a.href=URL.createObjectURL(makeZipStored(files));
+  const a=document.createElement("a");a.href=URL.createObjectURL(await makeZipDeflated(files)); // nén deflate khi trình duyệt hỗ trợ (bảng lớn như Netsuite Data nhỏ đi ~10 lần)
   a.download=fname;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000);
 }
 /* nhà cung cấp: gom từ tab PO (tự cập nhật theo PO), đối chiếu Phân loại với tab Công nợ NCC */
