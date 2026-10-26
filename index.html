@@ -659,14 +659,16 @@ function analyze(raw){
   const isDs=IS_DS(raw.name);
   const isPaySheet=/^phiếu thanh toán$/i.test(String(raw.name||"").trim());
   const hIdx=re=>hdr.findIndex(h=>re.test(String(h||"").trim()));
-  const payId=isPaySheet?hIdx(/^id odoo$/i):-1,payCid=isPaySheet?hIdx(/^mã công ty$/i):-1;
-  const forced=n=>(hasKey&&FORCE_RE.test(n.trim()))||(isDs&&/^ngày điều chỉnh$/i.test(n.trim()))||(isPaySheet&&/^ghi chú$/i.test(n.trim()));
+  const isBank=/^thông tin thanh toán$/i.test(String(raw.name||"").trim()); // tab Thông tin thanh toán của NCC
+  const payId=isPaySheet?hIdx(/^id odoo$/i):-1,payCid=isPaySheet?hIdx(/^mã công ty$/i):-1,bankId=isBank?hIdx(/^id odoo$/i):-1;
+  const forced=n=>(hasKey&&FORCE_RE.test(n.trim()))||(isDs&&/^ngày điều chỉnh$/i.test(n.trim()))||(isPaySheet&&/^ghi chú$/i.test(n.trim()))||(isBank&&/^(note|đã kiểm tra( thông tin)?)$/i.test(n.trim()));
   for(let c=0;c<maxC;c++){
     const name=(hdr[c]!=null?String(hdr[c]):"");
     const vals=rows.map(r=>r.v[c]).filter(x=>x!=null);
     if(!name&&!vals.length)continue;
     if(hasKey&&/^ngày cam kết giao$/i.test(name.trim()))continue; // đã bỏ cột này khỏi tab PO
     if(isPaySheet&&(c===payId||c===payCid))continue; // cột kỹ thuật (dùng để mở phiếu trên Odoo), không hiển thị
+    if(isBank&&c===bankId)continue; // ID liên hệ trên Odoo (script đồng bộ dùng), không hiển thị
     if(!vals.length&&!forced(name))continue;
     const nD=vals.filter(x=>x instanceof Date).length,nN=vals.filter(x=>typeof x==="number").length;
     const strs=vals.filter(x=>typeof x==="string");
@@ -698,6 +700,10 @@ function analyze(raw){
     c.type="date";c.txtDate=true;
     for(const r of rows){const v=r.v[c.idx];if(typeof v==="string"){const d=parseAnyDate(v);r.v[c.idx]=d instanceof Date?d:null}}
   }
+  if(isBank)for(const c of cols){ // số tài khoản lưu dạng số trong Excel vẫn phải hiện như chữ (không dấu phân cách nghìn)
+    if(c.type==="num"||c.type==="date")c.type="text";
+    for(const r of rows){const v=r.v[c.idx];if(typeof v==="number")r.v[c.idx]=String(v);else if(v instanceof Date)r.v[c.idx]=fmtD(v)}
+  }
   if(wfNote){wfNote.type="cat";wfNote.distinct=Math.max(wfNote.distinct,2)}
   if(wfPay)wfPay.type="flag";
   const sh={name:raw.name,cols,rows,hdrRow:hr+1,empty:rows.length===0,path:raw.path,fset:raw.fset||new Set(),lastRow:g.length,grid:g,maxC,blank,blank0:blank.slice()};
@@ -727,6 +733,11 @@ function analyze(raw){
     const f=re=>{const c=cols.find(c=>re.test(c.name.trim()));return c?c.idx:null};
     sh.stIdx=f(/^trạng thái quy trình$/i);sh.rcIdx=f(/^trạng thái phiếu nhập kho$/i);sh.ivIdx=f(/^trạng thái hóa đơn$/i);sh.chgIdx=f(/^ngày đổi trạng thái$/i);
     sh.progIdx=sh.noteIdx;sh.blockIdx=null;
+  }
+  if(isBank){ // tab Thông tin thanh toán: bảng tra cứu, không có hạn/tiến độ; cột “Đã kiểm tra” là ô tick người dùng chọn
+    const f=re=>{const c=cols.find(c=>re.test(c.name.trim()));return c?c.idx:null};
+    sh.bank=true;sh.chkIdx=f(/^đã kiểm tra( thông tin)?$/i);sh.bankNoteIdx=f(/^note$/i);sh.title=f(/^tên ncc$/i)??sh.title;
+    sh.sub=null;sh.checklist=false;sh.progIdx=null;sh.blockIdx=null;sh.dueIdx=null;sh.money=null;
   }
   if(isPaySheet){ // tab Phiếu thanh toán: quá hạn = chưa thanh toán và đã qua >=1 ngày làm việc (T2-T6) kể từ ngày lập
     const f=re=>{const c=cols.find(c=>re.test(c.name.trim()));return c?c.idx:null};
@@ -866,7 +877,7 @@ async function loadBuffer(buf,name,opts={}){
     $("#btnPushOther").hidden=!(ghReady()&&state.src==="local");
     renderTabs();render();updateChrome();notifyDaily();
     try{applyRemindLog()}catch(e){console.error(e)}
-    const a1=nccAddMissing(),a2=nccEnforceAll(true);
+    const a1=nccAddMissing()+bankAddMissing(),a2=nccEnforceAll(true);
     if(a1||a2){renderTabs();render();updateChrome();if(a2)toast(`Đã tự động cập nhật “TT trước” cho ${a2} PO theo Phân loại NCC (cột này chỉ do hệ thống tick).`)}
     if(state.src==="github"&&ghReady())loadRemoteHistory();
     odooStart();loadOdooIds();
@@ -1406,7 +1417,7 @@ async function importOdoo(file,forceSi){
     if(!confirm(`File có ${imp.rows.length} dòng nhưng không có cột khóa để đối chiếu. Thêm toàn bộ ${imp.rows.length} dòng vào cuối bảng “${sh.name}”?`))return;
     state.via="nhập Excel";let add0=0;
     try{for(const ir of imp.rows){if(!map.some(m=>ir.v[m.s.idx]!=null))continue;const r=addRow(si,true);add0++;
-      for(const m of map){let v=ir.v[m.s.idx];if(m.t.type==="date")v=parseAnyDate(v);if(m.t.type==="num"&&typeof v==="string"){const x=Number(v.replace(/\./g,"").replace(",","."));if(!isNaN(x))v=x}if(v!=null)setCell(si,r,m.t.idx,v)}}}finally{state.via="dashboard"}
+      for(const m of map){let v=ir.v[m.s.idx];if(sh.bank&&typeof v==="number")v=String(v); /* số tài khoản luôn là chữ */ if(m.t.type==="date")v=parseAnyDate(v);if(m.t.type==="num"&&typeof v==="string"){const x=Number(v.replace(/\./g,"").replace(",","."));if(!isNaN(x))v=x}if(v!=null)setCell(si,r,m.t.idx,v)}}}finally{state.via="dashboard"}
     sh.ui.shown=Math.max(sh.ui.shown,sh.rows.length);setStatus(sh);state.active=si;renderTabs();render();updateChrome();
     toast(`Đã thêm ${add0} dòng vào “${sh.name}”. Chưa ghi — bấm “Lưu vào Excel”.`);return}
   const byKey=new Map(sh.rows.map(r=>[String(r.v[sh.title]??"").trim(),r]));
@@ -1420,7 +1431,7 @@ async function importOdoo(file,forceSi){
     let ch=false;
     for(const m of map){
       let v=ir.v[m.s.idx];
-      if(m.t.type==="date")v=parseAnyDate(v);
+      if(sh.bank&&typeof v==="number")v=String(v); /* số tài khoản luôn là chữ */ if(m.t.type==="date")v=parseAnyDate(v);
       if(m.t.type==="num"&&typeof v==="string"){const x=Number(v.replace(/\./g,"").replace(",","."));if(!isNaN(x))v=x}
       if(v==null&&!isNew)continue; // Odoo để trống thì giữ nguyên dữ liệu đang có
       if(setCell(si,r,m.t.idx,v))ch=true;
@@ -1428,7 +1439,7 @@ async function importOdoo(file,forceSi){
     if(isNew)add++;else if(ch)upd++;
   }}finally{state.via="dashboard"}
   sh.ui.shown=Math.max(sh.ui.shown,100);setStatus(sh);
-  nccAddMissing();nccEnforceAll(true);
+  nccAddMissing();bankAddMissing();nccEnforceAll(true);
   state.active=si;renderTabs();render();updateChrome();
   toast(`Nhập từ “${imp.name}” vào sheet “${sh.name}”: ${upd} dòng cập nhật, ${add} dòng mới. Chưa ghi — bấm “Lưu vào Excel”.`);
 }
@@ -1655,6 +1666,20 @@ function nccSheets(){
   return{dsSi,poSi,ds,po,nc,tc,gc,dc,sc};
 }
 const nccIsOrder=v=>NCC.fold(v).trim()==="don hang";
+function bankAddMissing(){ // NCC có ở tab PO mà chưa có ở Thông tin thanh toán -> thêm dòng mới (script đồng bộ sẽ gắn ID Odoo và điền ngân hàng/số tài khoản nếu Odoo có)
+  const B=state.sheets.find(x=>x.bank),P=state.sheets.find(x=>x.wf);if(!B||!P||state.stale)return 0;
+  const sc=P.cols.find(c=>/^nhà cung cấp$/i.test(c.name.trim())),bn=B.cols.find(c=>c.idx===B.title);if(!sc||!bn)return 0;
+  const items=B.rows.filter(r=>r.v[bn.idx]!=null&&String(r.v[bn.idx]).trim()).map(r=>({name:String(r.v[bn.idx]).trim()}));
+  const seen=new Set(),add=[];
+  for(const r of P.rows){const n=r.v[sc.idx];if(n==null||!String(n).trim())continue;const nm=String(n).trim(),k=NCC.fold(nm);if(seen.has(k))continue;seen.add(k);
+    const f=NCC.find(nm,items);if(!f.hits.length){add.push(nm);items.push({name:nm})}}
+  if(!add.length)return 0;
+  const bi=state.sheets.indexOf(B);nccBusy=true;state.via="đồng bộ NCC";
+  try{for(const nm of add){const r=addRow(bi,true);setCell(bi,r,bn.idx,nm)}}finally{nccBusy=false;state.via="dashboard"}
+  B.ui.shown=Math.max(B.ui.shown,B.rows.length);setStatus(B);
+  toast(`Đã thêm ${add.length} NCC mới vào tab Thông tin thanh toán (ngân hàng/số tài khoản sẽ tự lấy từ Odoo ở lần đồng bộ kế tiếp nếu Odoo có, nếu không hãy nhập tay).`);
+  return add.length;
+}
 function nccAddMissing(){ // NCC có ở tab PO mà chưa có ở Công nợ NCC -> thêm dòng mới (Note để trống)
   const S=nccSheets();if(!S||state.stale)return 0;
   const items=S.ds.rows.filter(r=>r.v[S.nc.idx]!=null&&String(r.v[S.nc.idx]).trim()).map(r=>({name:String(r.v[S.nc.idx]).trim()}));
@@ -2087,12 +2112,13 @@ function renderTable(sh,fr){
         const sd=stuckDays(sh,r),stk=!r.done&&sd!=null&&sd>=STUCK()?`<span class="stk" title="Đã ở bước này ${sd} ngày (từ ${fmtD(r.v[sh.chgIdx])})">⏱ ${sd} ngày</span>`:"";
         const sg=sugDone(sh,r)?`<button class="sug" data-sug="${r.n}" title="Odoo báo đã nhận hết hàng và đã xuất hóa đơn. Bấm để đặt Hoàn thành">💡 Hoàn thành?</button>`:"";
         h+=`<td class="wfnote ${edited?"ed":""}" data-l="Trạng thái (Note)" data-r="${r.n}" data-c="${c.idx}"><span class="stp"><button data-stp="${r.n}|-1" title="Lùi một bước" ${i>0||(i<0)?"":"disabled"}>◀</button><button class="nx" data-stp="${r.n}|1" title="${nx?"Chuyển sang: "+esc(nx):(i<0?"Trạng thái tự nhập: bấm để về bước đầu":"Đã ở bước cuối")}" ${nx||i<0?"":"disabled"}>▶</button></span><span class="chip" style="--c:${colorFor(r.wf)}" ${raw?"":`title="${r.raised?"Tự nâng theo trạng thái Odoo ("+esc(r.v[sh.rcIdx])+(sh.stIdx!=null&&r.v[sh.stIdx]?" / "+esc(r.v[sh.stIdx]):"")+")":"Tự gán theo trạng thái Odoo vì cột Note đang trống"}"`}>${esc(r.wf)}${raw?"":" *"}</span>${stk}${payBadges(sh,r)}${sg}</td>`;continue}
+      if(sh.bank&&c.idx===sh.chkIdx){h+=`<td class="flag" data-l="${esc(c.name)}"><input type="checkbox" data-chk="${r.n}" ${v!=null&&String(v).trim()!==""?"checked":""} aria-label="Đã kiểm tra thông tin" title="Tick khi đã kiểm tra thông tin thanh toán của NCC này"></td>`;continue}
       if(v==null)cell="";
       else if(v instanceof Date)cell=fmtD(v);
       else if(typeof v==="number"){cell=fmtN(v)}
       else if(c.type==="cat")cell=`<span class="chip" style="--c:${colorFor(v)}">${esc(v)}</span>`;
       else cell=esc(v);
-      if(v!=null&&sh.pay&&c.idx===sh.payPoIdx)cell=String(v).split(/([,;s]+)/).map(p=>/^[,;s]*$/.test(p)?esc(p):`<a class="ol" href="#" data-code="${esc(p.trim().toUpperCase())}" title="Mở PO ${esc(p.trim())} trên Odoo">${esc(p)}</a>`).join("");
+      if(v!=null&&sh.pay&&c.idx===sh.payPoIdx)cell=String(v).split(/([,;\s]+)/).map(p=>/^[,;\s]*$/.test(p)?esc(p):`<a class="ol" href="#" data-code="${esc(p.trim().toUpperCase())}" title="Mở PO ${esc(p.trim())} trên Odoo">${esc(p)}</a>`).join("");
       if(sh.pay&&c.idx===sh.title&&v!=null&&sh.payCurIdx!=null){const cur=String(r.v[sh.payCurIdx]??"").trim();if(/bnk/i.test(cur)&&cur!==String(v))cell=`${esc(cur)} <span class="sub" title="Số PAY ban đầu">(${esc(v)})</span>`} // phiếu đã thanh toán: hiện số BNK, kèm số PAY ban đầu trong ngoặc
       if(v!=null&&c.idx===sh.title&&/mã đơn|số po|^po$/i.test(c.name))cell=`<a class="ol" href="#" data-code="${esc(v)}" title="Mở Odoo để tìm đơn này">${cell}</a>`;
       if(v!=null&&sh.wf&&/^nhà cung cấp$/i.test(c.name))cell=`<a class="sl" href="#" data-sup="${c.idx}" data-v="${esc(v)}" title="Bấm để lọc các PO của nhà cung cấp này">${cell}</a>`;
@@ -2133,6 +2159,7 @@ function renderTable(sh,fr){
   t.querySelectorAll("td[data-c]").forEach(td=>{td.ondblclick=e=>{if(e.target.closest&&e.target.closest(".ol"))return;cellEdit(td)};if(touch)td.onclick=e=>{if(!td.querySelector("input")&&!e.target.closest("button,.ol,.sl"))cellEdit(td)}});
   t.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>deleteRow(si,+b.dataset.del));
   t.querySelectorAll("a.sl").forEach(a=>{a.onclick=e=>{e.preventDefault();e.stopPropagation();u.filters[+a.dataset.sup]=a.dataset.v;u.shown=100;renderDyn(sh);const tb=$("#tbl");if(tb)tb.scrollIntoView({block:"start"});toast("Đang lọc các PO của: "+a.dataset.v)};a.ondblclick=e=>e.stopPropagation()});
+  t.querySelectorAll("[data-chk]").forEach(cb=>cb.onchange=()=>{const r=sh.rows.find(x=>x.n===+cb.dataset.chk);if(!r)return;state.via="dashboard";setCell(si,r,sh.chkIdx,cb.checked?"Có":null);renderDyn(sh);updateChrome()});
   t.querySelectorAll("[data-ck]").forEach(cb=>cb.onchange=()=>{
     const n=+cb.dataset.ck,r=sh.rows.find(x=>x.n===n);
     if(sh.doneColIdx!=null){state.via="dashboard";setCell(si,r,sh.doneColIdx,cb.checked?"Đã xong "+fmtDS(TODAY):null)}

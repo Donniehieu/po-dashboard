@@ -245,3 +245,9 @@ Khi PAY thành BNK, PO **trả trước** (cột TT trước được tick) đan
 
 ## Xóa dòng
 Nút 🗑 ở mọi bảng xóa **hẳn dòng** khỏi file Excel khi lưu (các dòng dưới dồn lên) và đánh lại cột STT từ 1 đến hết. Dòng đã xóa có thể khôi phục trong tab Lịch sử (thành dòng mới ở cuối bảng). Riêng sheet có công thức/ô gộp/liên kết (vd. Bảng kê TT, Thông báo duyệt giá) chỉ xóa dữ liệu của dòng, không dồn dòng.
+
+## Tab "Thông tin thanh toán" (ngân hàng, số tài khoản NCC)
+- Tab hiện khi file Excel có sheet "Thông tin thanh toán" (script đồng bộ Odoo tự tạo ở lần chạy đầu, nạp sẵn từ `data/NCC-thong-tin-thu-huong-MAU.xlsx`).
+- Tick ô **Đã kiểm tra thông tin** khi bạn đã đối chiếu xong; dòng đã tick không bị script đụng tới.
+- NCC mới xuất hiện ở tab PO sẽ tự có thêm một dòng. Script tự lấy Ngân hàng và Số tài khoản từ liên hệ Odoo (tab Kế toán) vào ô còn trống, số tài khoản được chèn dấu "." sau ký tự thứ 5 nếu chưa có dấu "."; cột **Note** báo "Đã lấy từ Odoo…" hoặc "Odoo chưa có… - cần nhập tay". Không bao giờ ghi đè ô bạn đã nhập.
+- Nhập/xuất: nút ⬆ Nhập Excel (khớp theo tên cột, dòng trùng Tên NCC được cập nhật) và ⬇ Xuất Excel/CSV ở thanh trên đầu bảng.
