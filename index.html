@@ -47,7 +47,7 @@ header.top h1{font-size:17px;margin:0;font-weight:700;letter-spacing:-.2px}
 .btn.primary{background:var(--brand);border-color:var(--brand);color:#fff}
 .btn.primary:hover{filter:brightness(1.08);background:var(--brand)}
 .fname{color:var(--mute);font-size:13px;max-width:36ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-nav.tabs{display:flex;gap:6px;overflow-x:auto;padding:10px 20px 0;background:var(--card);border-bottom:1px solid var(--line)}
+nav.tabs{display:flex;gap:6px;overflow-x:auto;padding:10px 20px 0;background:var(--card);border-bottom:1px solid var(--line);position:sticky;top:var(--hdrh,0px);z-index:19}
 nav.tabs button{border:0;background:none;padding:9px 12px;border-bottom:3px solid transparent;color:var(--mute);font-weight:600;white-space:nowrap}
 nav.tabs button.on{color:var(--brand);border-bottom-color:var(--brand)}
 nav.tabs .n{background:var(--soft);border-radius:10px;padding:1px 7px;font-size:11px;margin-left:6px;color:var(--mute)}
@@ -295,6 +295,7 @@ body.rzing,body.rzing *{cursor:col-resize!important;user-select:none!important}
   <input type="file" id="file" accept=".xlsx,.xlsm" hidden>
 </header>
 <nav class="tabs" id="tabs" hidden></nav>
+<script>(function(){var h=document.querySelector("header.top");if(!h)return;var set=function(){document.documentElement.style.setProperty("--hdrh",(getComputedStyle(h).position==="sticky"?h.offsetHeight:0)+"px")};set();if(window.ResizeObserver)new ResizeObserver(set).observe(h);addEventListener("resize",set)})();</script>
 <div id="banner" hidden></div>
 <div id="odooBar" hidden></div>
 <main id="main">
@@ -597,7 +598,7 @@ function wfDerive(sh,r){
 function bdLate(due){let d=sod(due);while(d.getDay()===0||d.getDay()===6)d=new Date(d.getFullYear(),d.getMonth(),d.getDate()+1);let n=0;while(d<TODAY){d=new Date(d.getFullYear(),d.getMonth(),d.getDate()+1);if(d.getDay()!==0&&d.getDay()!==6)n++}return n}
 function payUrl(sh,r){const id=r.v[sh.payId],cid=r.v[sh.payCid];if(id==null||id==="")return null;return new URL(ODOO_LIST()).origin+"/odoo/vendor-payments/"+id+(cid?"?cids="+cid:"")}
 const olLink=(sh,i,r,inner)=>sh.pay?`<a class="ol" href="#" data-pay="${i}|${r.n}" title="Mở phiếu thanh toán trên Odoo">${inner}</a>`:`<a class="ol" href="#" data-code="${esc(r.v[sh.title])}" title="Mở Odoo để tìm đơn này">${inner}</a>`;
-function openPay(sh,r){const u=payUrl(sh,r);if(!u){toast("Phiếu này chưa có ID Odoo (cần một lần đồng bộ Odoo)",true);return}window.open(u,"odoo-erp");toast("Đang mở phiếu "+r.v[sh.title]+" trên Odoo…")}
+function openPay(sh,r){const u=payUrl(sh,r);if(!u){toast("Phiếu này chưa có ID Odoo (cần một lần đồng bộ Odoo)",true);return}openErp(u);toast("Đang mở phiếu "+r.v[sh.title]+" trên Odoo…")}
 const dueOf=(sh,r)=>sh.dueIdx!=null?r.v[sh.dueIdx]:null;
 /* Phiếu nhập kho “Đã nhận hết” -> tối thiểu “Cần lập hóa đơn”; “Đã nhận một phần” -> tối thiểu “Chờ nhận hàng” (chỉ nâng các bước đứng trước, không hạ bước đã đi xa hơn) */
 const WF_FLOOR=[
@@ -1730,17 +1731,25 @@ function applyRemindLog(extra){
   }finally{remindBusy=false}
   return total;
 }
+/* Dữ liệu tab Thông tin thanh toán gửi cho Odoo Helper (tự điền thụ hưởng) */
+function bankItems(){
+  const B=state.sheets.find(x=>x.bank);if(!B)return [];
+  const g=re=>{const c=B.cols.find(c=>re.test(c.name.trim()));return c?c.idx:null};
+  const iN=B.title,iA=g(/^số tài khoản$/i),iH=g(/^tên người thụ hưởng$/i),iB=g(/^ngân hàng thụ hưởng$/i),iC=B.chkIdx;
+  const t=v=>v==null?"":String(v).trim();
+  return B.rows.filter(r=>t(r.v[iN])).map(r=>({name:t(r.v[iN]),acc:iA==null?"":t(r.v[iA]),holder:iH==null?"":t(r.v[iH]),bank:iB==null?"":t(r.v[iB]),checked:iC!=null&&t(r.v[iC])!==""}));
+}
+/* Mở/điều hướng tab Odoo rồi đẩy dữ liệu tab Thông tin thanh toán sang ngay (nhiều lần vì trang Odoo cần vài giây để nạp Odoo Helper). Cách này chạy cả khi tab Odoo đã mở từ trước (không có window.opener). */
+function openErp(url){
+  const w=window.open(url,"odoo-erp");
+  if(w){const send=()=>{try{if(!w.closed){const items=bankItems();if(items.length)w.postMessage({qlcv:"bank-data",items,t:Date.now()},"https://erp.dekko.com.vn")}}catch(e){}};[1500,4000,8000,15000].forEach(ms=>setTimeout(send,ms))}
+  return w;
+}
 /* Odoo Helper chạy trong tab Odoo (mở từ dashboard) gửi nhật ký tin đã gửi về đây bằng postMessage */
 addEventListener("message",e=>{
   if(e.origin!=="https://erp.dekko.com.vn")return;
   if(e.data&&e.data.qlcv==="bank-req"&&e.source){ // Odoo Helper xin dữ liệu tab Thông tin thanh toán để tự điền thụ hưởng
-    try{
-      const B=state.sheets.find(x=>x.bank);const g=re=>{const c=B&&B.cols.find(c=>re.test(c.name.trim()));return c?c.idx:null};
-      const iN=B&&B.title,iA=g(/^số tài khoản$/i),iH=g(/^tên người thụ hưởng$/i),iB=g(/^ngân hàng thụ hưởng$/i),iC=B&&B.chkIdx;
-      const t=v=>v==null?"":String(v).trim();
-      const items=B?B.rows.filter(r=>t(r.v[iN])).map(r=>({name:t(r.v[iN]),acc:iA==null?"":t(r.v[iA]),holder:iH==null?"":t(r.v[iH]),bank:iB==null?"":t(r.v[iB]),checked:iC!=null&&t(r.v[iC])!==""})):[];
-      e.source.postMessage({qlcv:"bank-data",items,t:Date.now()},e.origin);
-    }catch(err){console.error(err)}
+    try{e.source.postMessage({qlcv:"bank-data",items:bankItems(),t:Date.now()},e.origin)}catch(err){console.error(err)}
     return;
   }
   const d=e.data;if(!d||d.qlcv!=="remindlog"||!Array.isArray(d.log))return;
@@ -2727,10 +2736,10 @@ async function loadOdooIds(){
 async function openOdoo(code){
   code=String(code||"").trim();
   const base=ODOO_LIST().replace(/\/+$/,""),m=odooIds&&odooIds[code];
-  if(m){window.open(`${base}/${m.id}?cids=${m.cid}`,"odoo-erp");toast("Đang mở đơn "+code+" trên Odoo…");return}
+  if(m){openErp(`${base}/${m.id}?cids=${m.cid}`);toast("Đang mở đơn "+code+" trên Odoo…");return}
   let copied=false;
   try{await navigator.clipboard.writeText(code);copied=true}catch(e){}
-  window.open(base,"odoo-erp");
+  openErp(base);
   toast((copied?`Đã sao chép mã “${code}”. `:`Mã đơn: ${code}. `)+"Chưa có liên kết trực tiếp cho đơn này (cần một lần đồng bộ Odoo để lấy). Trong Odoo hãy dán mã vào ô tìm kiếm và chọn đúng công ty.");
 }
 document.addEventListener("click",e=>{const a=e.target.closest&&e.target.closest(".ol");if(!a)return;e.preventDefault();e.stopPropagation();

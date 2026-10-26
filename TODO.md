@@ -249,6 +249,11 @@ Vì số PAY **đổi tên** thành chuỗi chứa `BNK` khi được thanh toá
   - Để máy này không bị cũ mãi: tối đa **1 lần/ngày** dashboard hỏi GitHub âm thầm (ETag, không đổi thì không tải lại gì); có bản mới thì thay ngầm và báo một dòng. Hết hạn bản lưu không làm tab chậm đi.
   - Bản nhập tay chưa lên GitHub vẫn được ưu tiên; bấm "Làm mới từ GitHub" sẽ hỏi xác nhận trước khi thay bản nhập tay đó.
   - 🟡 Đã thử trên dữ liệu thật ở trình duyệt cục bộ (bản nhập tay và bản GitHub giả lập trong bộ nhớ); chưa thử qua GitHub thật.
+- ✅ (26/10/2026) **Sửa: tự điền thụ hưởng không dùng dữ liệu tab Thông tin thanh toán** (odoo-helper.js + dashboard). Kiểm tra trên trang Odoo thật (chỉ đọc): dữ liệu tab ĐÃ sang được Odoo (44 NCC có số tài khoản, 1 đã kiểm tra) nhưng khi NCC có ở cả hai nơi mà dòng tab chưa tick "Đã kiểm tra" thì luật cũ luôn chọn file Excel đã nạp, nên trông như tab bị bỏ qua. Đã sửa:
+  - **Mặc định ưu tiên tab Thông tin thanh toán** (dòng đã tick "Đã kiểm tra" trong tab được ưu tiên hơn, nhưng dòng chưa tick vẫn dùng, thông báo ghi rõ "CHƯA kiểm tra"); không có NCC trong tab mới dùng file Excel đã nạp. Thêm ô tick trong khung helper **"Lấy dữ liệu từ file Excel đã nạp"**: tick thì ưu tiên file, không tick (mặc định) thì ưu tiên tab.
+  - **Dữ liệu sang Odoo chắc chắn hơn**: trước đây chỉ sang được khi tab Odoo có window.opener (tab Odoo mở sẵn từ trước, hoặc mở bằng cách khác thì mất). Nay dashboard chủ động đẩy dữ liệu sang tab Odoo ngay sau khi mở (4 lần trong 15 giây), helper nhận theo nguồn (chỉ từ trang github.io) không cần opener; danh sách rỗng không còn ghi đè bản đã nhận; khung helper hiện thời điểm cập nhật dữ liệu tab ("cập nhật hh:mm dd-mm").
+  - Đã thử với trang Odoo giả KHÔNG có opener + dashboard thật: dữ liệu sang đủ 51 dòng; mặc định dùng tab; tick "lấy từ file" thì dùng file; NCC không có trong tab thì dùng file. 🟡 Chưa thử bấm "Tự điền" trên Odoo thật (tránh sửa phiếu thật). Muốn dữ liệu tab mới nhất ở Odoo: mở phiếu từ dashboard (bấm đúp dòng ở tab Phiếu thanh toán).
+- ✅ (26/10/2026) **Thanh tab luôn dính ở trên cùng** khi kéo thanh cuộn dọc (dưới thanh đầu trang trên máy tính; trên điện thoại dính sát mép trên). Đã thử ở độ rộng 1200 px, cuộn 1.429 px: thanh đầu trang ở y=0, thanh tab ngay dưới và bấm được.
 ## Đã bỏ theo yêu cầu
 - Bot nhắc việc (Telegram/Zalo/email) và tuổi công nợ theo nhà cung cấp.
 

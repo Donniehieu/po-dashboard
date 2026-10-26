@@ -335,8 +335,9 @@
   /* Xin dữ liệu tab "Thông tin thanh toán" từ tab dashboard đã mở trang Odoo này (window.opener), lưu lại để lần sau mở Odoo trực tiếp vẫn dùng được bản gần nhất */
   if (location.hostname === "erp.dekko.com.vn") addEventListener("message", (e) => {
     const d = e.data;
-    if (!d || d.qlcv !== "bank-data" || !window.opener || e.source !== window.opener || !Array.isArray(d.items)) return;
+    if (!d || d.qlcv !== "bank-data" || !Array.isArray(d.items) || !/^https:\/\/[a-z0-9-]+\.github\.io$/i.test(e.origin)) return; // chỉ nhận từ trang dashboard (GitHub Pages), không phụ thuộc window.opener
     const items = d.items.filter((x) => x && x.name).map((x) => ({ name: String(x.name).trim(), acc: String(x.acc || "").trim(), holder: String(x.holder || "").trim(), bank: String(x.bank || "").trim(), checked: !!x.checked }));
+    if (!items.length) return; // dashboard chưa có tab Thông tin thanh toán: không xóa bản đã nhận trước đó
     st.set(BANK_KEY, { updated: new Date().toISOString(), items });
     if (ui) refreshCount();
   });
@@ -371,19 +372,18 @@
       const name = partnerName();
       if (!name) return msg("Chưa chọn Nhà cung cấp/Đối tác trong phiếu. Hãy chọn NCC rồi bấm lại (hoặc chọn tay bên dưới).", true);
       const distinct = (a) => new Set(a.map((h) => h.acc)).size;
-      const fb = findSupplier(name, bank), ff = findSupplier(name, db.items);
-      const tabOk = fb.hits.filter((h) => h.checked), how2 = (f) => (f.how === "exact" ? "khớp tên" : "khớp gần đúng");
-      // 1) tab Thông tin thanh toán đã tick "Đã kiểm tra" -> ưu tiên cao nhất
-      if (tabOk.length) {
-        if (distinct(tabOk) > 1) { fillPicker(tabOk); return msg("“" + name + "” khớp nhiều dòng đã kiểm tra khác tài khoản trong tab Thông tin thanh toán – hãy chọn đúng trong danh sách.", true); }
-        item = tabOk[0]; how = "tab Thông tin thanh toán (đã kiểm tra), " + how2(fb);
-      } else if (ff.hits.length) { // 2) không tick -> lấy dữ liệu đã nạp từ file Excel
-        if (distinct(ff.hits) > 1) { fillPicker(ff.hits); return msg("“" + name + "” khớp nhiều NCC khác tài khoản – hãy chọn đúng trong danh sách.", true); }
-        item = ff.hits[0]; how = "file Excel đã nạp, " + how2(ff);
-      } else if (fb.hits.length) { // 3) file chưa nạp NCC này -> dùng tab Thông tin thanh toán dù chưa tick
-        if (distinct(fb.hits) > 1) { fillPicker(fb.hits); return msg("“" + name + "” khớp nhiều dòng khác tài khoản trong tab Thông tin thanh toán – hãy chọn đúng trong danh sách.", true); }
-        item = fb.hits[0]; how = "tab Thông tin thanh toán (CHƯA kiểm tra), " + how2(fb);
-      } else { fillPicker([...bank, ...db.items]); return msg("Không tìm thấy “" + name + "” trong DB Excel và tab Thông tin thanh toán. Chọn tay NCC trong danh sách hoặc thêm vào Excel.", true); }
+      const fb = findSupplier(name, bank), ff = findSupplier(name, db.items), how2 = (f) => (f.how === "exact" ? "khớp tên" : "khớp gần đúng");
+      const tabOk = fb.hits.filter((h) => h.checked), tabHits = tabOk.length ? tabOk : fb.hits; // trong tab, dòng đã tick "Đã kiểm tra" được ưu tiên
+      const useFile = !!cfg().fromFile; // ô tick "Lấy dữ liệu từ file Excel đã nạp": mặc định KHÔNG tick = ưu tiên tab Thông tin thanh toán
+      const order = useFile ? [["file", ff.hits, ff], ["tab", tabHits, fb]] : [["tab", tabHits, fb], ["file", ff.hits, ff]];
+      for (const [kind, hits, f] of order) {
+        if (!hits.length) continue;
+        if (distinct(hits) > 1) { fillPicker(hits); return msg("“" + name + "” khớp nhiều dòng khác tài khoản trong " + (kind === "tab" ? "tab Thông tin thanh toán" : "file Excel đã nạp") + " – hãy chọn đúng trong danh sách.", true); }
+        item = hits[0];
+        how = kind === "tab" ? "tab Thông tin thanh toán (" + (item.checked ? "đã kiểm tra" : "CHƯA kiểm tra") + "), " + how2(f) : "file Excel đã nạp" + (useFile ? "" : ", tab Thông tin thanh toán không có NCC này") + ", " + how2(f);
+        break;
+      }
+      if (!item) { fillPicker([...bank, ...db.items]); return msg("Không tìm thấy “" + name + "” trong tab Thông tin thanh toán và file Excel đã nạp. Chọn tay NCC trong danh sách hoặc thêm vào tab/Excel.", true); }
     }
     const c = cfg();
     const r1 = await fillText(SEL.acc, item.acc, c.overwrite), r2 = await fillText(SEL.holder, item.holder, c.overwrite), r3 = await fillBank(SEL.bank, item.bank, c.overwrite);
@@ -395,8 +395,9 @@
     ui.pick._items = items; ui.pick.style.display = "block";
   }
   function refreshCount() {
-    const n = loadDb().items.length, b = loadBank().items.filter((x) => x.acc), k = b.filter((x) => x.checked).length;
-    ui.count.textContent = (n ? `${n} NCC trong DB Excel` : "DB Excel trống") + (b.length ? ` · ${b.length} NCC từ tab Thông tin thanh toán (${k} đã kiểm tra)` : " · chưa nhận dữ liệu tab Thông tin thanh toán (mở Odoo từ dashboard)");
+    const n = loadDb().items.length, bk = loadBank(), b = bk.items.filter((x) => x.acc), k = b.filter((x) => x.checked).length;
+    const when = bk.updated ? " – cập nhật " + new Date(bk.updated).toLocaleString("vi-VN", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" }) : "";
+    ui.count.textContent = (n ? `${n} NCC trong DB Excel` : "DB Excel trống") + (b.length ? ` · ${b.length} NCC từ tab Thông tin thanh toán (${k} đã kiểm tra)${when}` : " · chưa nhận dữ liệu tab Thông tin thanh toán (mở Odoo từ dashboard)");
   }
   function build() {
     if (ui || !document.body) return;
@@ -418,6 +419,7 @@
 <select class="pick"></select>
 <div class="r"><button data-a="tpl">⬇ File Excel mẫu</button><button data-a="up">⬆ Nạp Excel</button></div>
 <div class="r"><button data-a="exp">⬇ Xuất DB ra Excel</button><button data-a="clr">🗑 Xóa DB</button></div>
+<label><input type="checkbox" class="ff" title="Mặc định (không tick): lấy từ tab Thông tin thanh toán trước, không có mới dùng file Excel đã nạp"> Lấy dữ liệu từ file Excel đã nạp (không tick = ưu tiên tab Thông tin thanh toán)</label>
 <label><input type="checkbox" class="ov"> Ghi đè cả ô đã có dữ liệu</label>
 <label><input type="checkbox" class="au"> Tự điền ngay khi mở phiếu</label>
 <label><input type="checkbox" class="as"> Nhắc duyệt: tự bấm Gửi (mặc định chỉ gõ sẵn)</label>
@@ -427,6 +429,7 @@
     document.body.appendChild(box);
     ui = { box, status: box.querySelector(".s"), count: box.querySelector(".cnt"), pick: box.querySelector(".pick"), file: box.querySelector('input[type=file]') };
     const c = cfg(); box.querySelector(".ov").checked = c.overwrite; box.querySelector(".au").checked = c.auto;
+    box.querySelector(".ff").checked = !!c.fromFile; box.querySelector(".ff").onchange = (e) => st.set(CFG_KEY, { ...cfg(), fromFile: e.target.checked });
     box.querySelector(".ov").onchange = (e) => st.set(CFG_KEY, { ...cfg(), overwrite: e.target.checked });
     box.querySelector(".au").onchange = (e) => st.set(CFG_KEY, { ...cfg(), auto: e.target.checked });
     box.querySelector(".as").checked = !!c.autosend; box.querySelector(".as").onchange = (e) => st.set(CFG_KEY, { ...cfg(), autosend: e.target.checked });
@@ -465,7 +468,7 @@
   function syncMode() { // trang PO: chỉ hiện nút nhắc KT; trang phiếu thanh toán: hiện đủ
     if (!ui) return;
     const pay = isPayPage();
-    ui.box.querySelectorAll('[data-a="fill"],[data-a="remind"],[data-a="tpl"],[data-a="up"],[data-a="exp"],[data-a="clr"],.ov,.au').forEach((e) => { const t = e.closest("label,.r") || e; t.style.display = pay ? "" : "none"; });
+    ui.box.querySelectorAll('[data-a="fill"],[data-a="remind"],[data-a="tpl"],[data-a="up"],[data-a="exp"],[data-a="clr"],.ov,.au,.ff').forEach((e) => { const t = e.closest("label,.r") || e; t.style.display = pay ? "" : "none"; });
     ui.box.querySelector('[data-a="invoice"]').style.display = pay ? "none" : "";
     if (!pay) ui.pick.style.display = "none";
   }
