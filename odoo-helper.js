@@ -8,7 +8,12 @@
   window.__qlcvHelper = { hint: () => hintNote() };
   const DB_KEY = "ncc_bank_db_v1", CFG_KEY = "ncc_bank_cfg_v1";
   const PATH_RE = /\/odoo\/(vendor-payments|action-\d+|purchase)\//; // phiếu thanh toán NCC hoặc đơn mua (PO)
-  const isPayPage = () => /\/odoo\/vendor-payments\//.test(location.pathname);
+  // Phiếu thanh toán: mở trực tiếp (/odoo/vendor-payments/…) hoặc từ PO bằng nút “Trả trước” (/odoo/action-…/<PO>/account.payment/<id>)
+  const isPayRecord = () => /\/odoo\/vendor-payments\//.test(location.pathname) || /\/account\.payment\/(\d+|new)/.test(location.pathname);
+  const isPayPage = isPayRecord;
+  // Có đủ 3 ô thụ hưởng đang hiện trên màn hình (phiếu thanh toán, hộp thoại, hay tab “Thông tin thụ hưởng” của PO) thì hiện phần tự điền
+  function hasBenef() { const v = (e) => !!e && (e.offsetParent !== null || e.getClientRects().length > 0); return v($(SEL.acc)) && v($(SEL.holder)) && v($(SEL.bank)); }
+  const canFill = () => isPayRecord() || hasBenef();
   const SEL = {
     acc: '[id^="x_beneficiary_account_number"], [name="x_beneficiary_account_number"] input',
     holder: '[id^="x_beneficiary_name"], [name="x_beneficiary_name"] input',
@@ -238,7 +243,7 @@
     const no = $('[name="name"] input, [name="name"], input[id^="name"]');
     let id = no ? String(no.value || no.textContent || "").trim() : "";
     if (!id) { const bc = $(".o_breadcrumb .active, .o_last_breadcrumb_item"); if (bc) id = bc.textContent.trim(); } // dự phòng khi Odoo đổi cấu trúc ô số chứng từ
-    const m = location.pathname.match(/\/(?:vendor-payments|purchase|action-\d+)\/(\d+)/), rid = m ? m[1] : ""; // ID bản ghi trong địa chỉ trang: dashboard dùng để khớp khi không đọc được số chứng từ
+    const m = location.pathname.match(/account\.payment\/(\d+)/) || location.pathname.match(/\/(?:vendor-payments|purchase|action-\d+)\/(\d+)/), rid = m ? m[1] : ""; // ID bản ghi trong địa chỉ trang: dashboard dùng để khớp khi không đọc được số chứng từ
     return { id, rid, kind: isPayPage() ? (/BNK/i.test(id) ? "BNK" : "PAY") : "PO" };
   }
   const pad = (n) => String(n).padStart(2, "0");
@@ -467,10 +472,11 @@
   }
   function syncMode() { // trang PO: chỉ hiện nút nhắc KT; trang phiếu thanh toán: hiện đủ
     if (!ui) return;
-    const pay = isPayPage();
-    ui.box.querySelectorAll('[data-a="fill"],[data-a="remind"],[data-a="tpl"],[data-a="up"],[data-a="exp"],[data-a="clr"],.ov,.au,.ff').forEach((e) => { const t = e.closest("label,.r") || e; t.style.display = pay ? "" : "none"; });
-    ui.box.querySelector('[data-a="invoice"]').style.display = pay ? "none" : "";
-    if (!pay) ui.pick.style.display = "none";
+    const rec = isPayRecord(), fill = canFill(); // hiện đúng công cụ của màn hình đang mở
+    ui.box.querySelectorAll('[data-a="fill"],[data-a="tpl"],[data-a="up"],[data-a="exp"],[data-a="clr"],.ov,.au,.ff').forEach((e) => { const t = e.closest("label,.r") || e; t.style.display = fill ? "" : "none"; });
+    ui.box.querySelectorAll('[data-a="remind"]').forEach((e) => { const t = e.closest("label,.r") || e; t.style.display = rec ? "" : "none"; });
+    ui.box.querySelector('[data-a="invoice"]').style.display = rec ? "none" : "";
+    if (!fill) ui.pick.style.display = "none";
   }
   let lastKey = "";
   function tick() {
@@ -478,7 +484,7 @@
     sendToOpener(); requestBank();
     if (!PATH_RE.test(location.pathname + location.hash)) { if (ui) { ui.box.remove(); ui = null; } lastKey = ""; return; }
     build(); syncMode();
-    if (!ui || !isPayPage() || !cfg().auto) return;
+    if (!ui || !canFill() || !cfg().auto) return;
     const name = partnerName(); if (!name || !$(SEL.acc) || !$(SEL.holder) || !$(SEL.bank)) return;
     const key = location.pathname + "|" + name; if (key === lastKey) return; lastKey = key; runFill();
   }
