@@ -1588,6 +1588,16 @@ function applyRemindLog(extra){
 /* Odoo Helper chạy trong tab Odoo (mở từ dashboard) gửi nhật ký tin đã gửi về đây bằng postMessage */
 addEventListener("message",e=>{
   if(e.origin!=="https://erp.dekko.com.vn")return;
+  if(e.data&&e.data.qlcv==="bank-req"&&e.source){ // Odoo Helper xin dữ liệu tab Thông tin thanh toán để tự điền thụ hưởng
+    try{
+      const B=state.sheets.find(x=>x.bank);const g=re=>{const c=B&&B.cols.find(c=>re.test(c.name.trim()));return c?c.idx:null};
+      const iN=B&&B.title,iA=g(/^số tài khoản$/i),iH=g(/^tên người thụ hưởng$/i),iB=g(/^ngân hàng thụ hưởng$/i),iC=B&&B.chkIdx;
+      const t=v=>v==null?"":String(v).trim();
+      const items=B?B.rows.filter(r=>t(r.v[iN])).map(r=>({name:t(r.v[iN]),acc:iA==null?"":t(r.v[iA]),holder:iH==null?"":t(r.v[iH]),bank:iB==null?"":t(r.v[iB]),checked:iC!=null&&t(r.v[iC])!==""})):[];
+      e.source.postMessage({qlcv:"bank-data",items,t:Date.now()},e.origin);
+    }catch(err){console.error(err)}
+    return;
+  }
   const d=e.data;if(!d||d.qlcv!=="remindlog"||!Array.isArray(d.log))return;
   try{
     let cur=[];try{cur=JSON.parse(localStorage.getItem(REMIND_LOG_KEY)||"[]")}catch(_){}

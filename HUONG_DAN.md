@@ -251,3 +251,6 @@ Nút 🗑 ở mọi bảng xóa **hẳn dòng** khỏi file Excel khi lưu (các
 - Tick ô **Đã kiểm tra thông tin** khi bạn đã đối chiếu xong; dòng đã tick không bị script đụng tới.
 - NCC mới xuất hiện ở tab PO sẽ tự có thêm một dòng. Script tự lấy Ngân hàng và Số tài khoản từ liên hệ Odoo (tab Kế toán) vào ô còn trống, số tài khoản được chèn dấu "." sau ký tự thứ 5 nếu chưa có dấu "."; cột **Note** báo "Đã lấy từ Odoo…" hoặc "Odoo chưa có… - cần nhập tay". Không bao giờ ghi đè ô bạn đã nhập.
 - Nhập/xuất: nút ⬆ Nhập Excel (khớp theo tên cột, dòng trùng Tên NCC được cập nhật) và ⬇ Xuất Excel/CSV ở thanh trên đầu bảng.
+
+### Tự điền thụ hưởng lấy dữ liệu từ tab Thông tin thanh toán
+Mở phiếu thanh toán Odoo **từ dashboard** (bấm đúp dòng ở tab Phiếu thanh toán). Khi bấm "Tự điền": NCC đã tick "Đã kiểm tra thông tin" ở tab Thông tin thanh toán được ưu tiên; không tick thì dùng dữ liệu đã nạp từ file Excel; file chưa có NCC đó thì dùng dữ liệu tab (thông báo ghi "CHƯA kiểm tra"). Odoo Helper nhớ bản dữ liệu gần nhất nên lần sau mở Odoo trực tiếp vẫn dùng được.

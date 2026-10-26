@@ -23,6 +23,9 @@
   };
   const loadDb = () => st.get(DB_KEY, { version: 1, updated: null, items: [] });
   const saveDb = (items) => st.set(DB_KEY, { version: 1, updated: new Date().toISOString(), items });
+  /* Dữ liệu tab "Thông tin thanh toán" của dashboard (ngân hàng, số tài khoản; checked = đã tick "Đã kiểm tra thông tin") */
+  const BANK_KEY = "qlcv_bankinfo_v1";
+  const loadBank = () => st.get(BANK_KEY, { updated: null, items: [] });
   const cfg = () => ({ auto: false, overwrite: false, ...st.get(CFG_KEY, {}) });
 
   /* ---------- chuẩn hóa tên để so khớp ---------- */
@@ -329,6 +332,18 @@
   }
   /* Chạy trên trang dashboard: chuyển nhật ký sang localStorage của dashboard để nó tự điền cột Ghi chú */
   function bridge() { try { localStorage.setItem("qlcv:remindlog", JSON.stringify(st.get(LOG_KEY, []))); } catch (e) {} }
+  /* Xin dữ liệu tab "Thông tin thanh toán" từ tab dashboard đã mở trang Odoo này (window.opener), lưu lại để lần sau mở Odoo trực tiếp vẫn dùng được bản gần nhất */
+  if (location.hostname === "erp.dekko.com.vn") addEventListener("message", (e) => {
+    const d = e.data;
+    if (!d || d.qlcv !== "bank-data" || !window.opener || e.source !== window.opener || !Array.isArray(d.items)) return;
+    const items = d.items.filter((x) => x && x.name).map((x) => ({ name: String(x.name).trim(), acc: String(x.acc || "").trim(), holder: String(x.holder || "").trim(), bank: String(x.bank || "").trim(), checked: !!x.checked }));
+    st.set(BANK_KEY, { updated: new Date().toISOString(), items });
+    if (ui) refreshCount();
+  });
+  let lastReq = 0;
+  function requestBank() {
+    try { if (!window.opener || window.opener.closed || Date.now() - lastReq < 60000) return; lastReq = Date.now(); window.opener.postMessage({ qlcv: "bank-req" }, "*"); } catch (e) {}
+  }
   /* Bản chạy bằng nút bookmark: gửi nhật ký sang tab dashboard đã mở trang Odoo này (window.opener) mỗi khi nhật ký đổi */
   let lastSent = "";
   function sendToOpener() {
@@ -349,16 +364,26 @@
   let ui = null, picked = null;
   function msg(t, bad) { if (ui) { ui.status.textContent = t; ui.status.style.color = bad ? "#c62828" : "#2e7d32"; } }
   async function runFill(manualItem) {
-    const db = loadDb();
-    if (!db.items.length) return msg("Chưa có dữ liệu NCC – bấm “Nạp Excel” trước.", true);
+    const db = loadDb(), bank = loadBank().items.filter((x) => x.acc);
+    if (!db.items.length && !bank.length) return msg("Chưa có dữ liệu NCC – bấm “Nạp Excel” hoặc mở Odoo từ dashboard (tab Thông tin thanh toán).", true);
     let item = manualItem || null, how = "chọn tay";
     if (!item) {
       const name = partnerName();
       if (!name) return msg("Chưa chọn Nhà cung cấp/Đối tác trong phiếu. Hãy chọn NCC rồi bấm lại (hoặc chọn tay bên dưới).", true);
-      const f = findSupplier(name, db.items);
-      if (f.hits.length > 1 && new Set(f.hits.map((h) => h.acc)).size > 1) { fillPicker(f.hits); return msg("“" + name + "” khớp nhiều NCC khác tài khoản – hãy chọn đúng trong danh sách.", true); }
-      if (!f.hits.length) { fillPicker(db.items); return msg("Không tìm thấy “" + name + "” trong DB. Chọn tay NCC trong danh sách hoặc thêm vào Excel.", true); }
-      item = f.hits[0]; how = f.how === "exact" ? "khớp tên" : "khớp gần đúng";
+      const distinct = (a) => new Set(a.map((h) => h.acc)).size;
+      const fb = findSupplier(name, bank), ff = findSupplier(name, db.items);
+      const tabOk = fb.hits.filter((h) => h.checked), how2 = (f) => (f.how === "exact" ? "khớp tên" : "khớp gần đúng");
+      // 1) tab Thông tin thanh toán đã tick "Đã kiểm tra" -> ưu tiên cao nhất
+      if (tabOk.length) {
+        if (distinct(tabOk) > 1) { fillPicker(tabOk); return msg("“" + name + "” khớp nhiều dòng đã kiểm tra khác tài khoản trong tab Thông tin thanh toán – hãy chọn đúng trong danh sách.", true); }
+        item = tabOk[0]; how = "tab Thông tin thanh toán (đã kiểm tra), " + how2(fb);
+      } else if (ff.hits.length) { // 2) không tick -> lấy dữ liệu đã nạp từ file Excel
+        if (distinct(ff.hits) > 1) { fillPicker(ff.hits); return msg("“" + name + "” khớp nhiều NCC khác tài khoản – hãy chọn đúng trong danh sách.", true); }
+        item = ff.hits[0]; how = "file Excel đã nạp, " + how2(ff);
+      } else if (fb.hits.length) { // 3) file chưa nạp NCC này -> dùng tab Thông tin thanh toán dù chưa tick
+        if (distinct(fb.hits) > 1) { fillPicker(fb.hits); return msg("“" + name + "” khớp nhiều dòng khác tài khoản trong tab Thông tin thanh toán – hãy chọn đúng trong danh sách.", true); }
+        item = fb.hits[0]; how = "tab Thông tin thanh toán (CHƯA kiểm tra), " + how2(fb);
+      } else { fillPicker([...bank, ...db.items]); return msg("Không tìm thấy “" + name + "” trong DB Excel và tab Thông tin thanh toán. Chọn tay NCC trong danh sách hoặc thêm vào Excel.", true); }
     }
     const c = cfg();
     const r1 = await fillText(SEL.acc, item.acc, c.overwrite), r2 = await fillText(SEL.holder, item.holder, c.overwrite), r3 = await fillBank(SEL.bank, item.bank, c.overwrite);
@@ -369,7 +394,10 @@
     ui.pick.innerHTML = '<option value="">— chọn NCC —</option>' + items.map((it, i) => `<option value="${i}">${xe(it.name)}</option>`).join("");
     ui.pick._items = items; ui.pick.style.display = "block";
   }
-  function refreshCount() { const n = loadDb().items.length; ui.count.textContent = n ? `${n} NCC trong DB` : "DB trống"; }
+  function refreshCount() {
+    const n = loadDb().items.length, b = loadBank().items.filter((x) => x.acc), k = b.filter((x) => x.checked).length;
+    ui.count.textContent = (n ? `${n} NCC trong DB Excel` : "DB Excel trống") + (b.length ? ` · ${b.length} NCC từ tab Thông tin thanh toán (${k} đã kiểm tra)` : " · chưa nhận dữ liệu tab Thông tin thanh toán (mở Odoo từ dashboard)");
+  }
   function build() {
     if (ui || !document.body) return;
     const css = document.createElement("style");
@@ -444,7 +472,7 @@
   let lastKey = "";
   function tick() {
     if (location.hostname !== "erp.dekko.com.vn") { bridge(); return; }
-    sendToOpener();
+    sendToOpener(); requestBank();
     if (!PATH_RE.test(location.pathname + location.hash)) { if (ui) { ui.box.remove(); ui = null; } lastKey = ""; return; }
     build(); syncMode();
     if (!ui || !isPayPage() || !cfg().auto) return;
