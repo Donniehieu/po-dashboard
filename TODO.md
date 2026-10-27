@@ -258,6 +258,8 @@ Vì số PAY **đổi tên** thành chuỗi chứa `BNK` khi được thanh toá
   - Phần **tự điền (Tự điền, ô tick, nạp/xuất Excel…)** hiện bất cứ khi nào màn hình có đủ 3 ô thụ hưởng đang hiện (phiếu mở trực tiếp, phiếu Trả trước từ PO, hộp thoại, hay tab "Thông tin thụ hưởng" của PO), và cả khi địa chỉ có `account.payment`; **tự điền ngay khi mở phiếu** (nếu đã bật) cũng theo quy tắc này.
   - **Nhắc duyệt PAY** chỉ hiện ở phiếu thanh toán; **Nhắc KT xác nhận hóa đơn** chỉ hiện ở trang PO. Nhật ký nhắn ghi đúng ID phiếu (`account.payment/<id>`) thay vì ID của PO khi mở phiếu từ PO.
   - Đã thử với trang Odoo giả có đúng 3 địa chỉ/tình huống (phiếu Trả trước từ PO, trang PO thường, PO có hộp thoại thụ hưởng): hiện/ẩn đúng, tự điền được số tài khoản. 🟡 Chưa bấm Tự điền trên phiếu Trả trước thật.
+- ✅ (27/10/2026) **Nút liên kết nhanh "🛒 Mua hàng thông minh"** ở thanh đầu trang (cạnh Pomodoro), mở https://mua-hang-thong-minh.purchasing-online.workers.dev/ trong tab mới (`target=_blank`, `rel=noopener noreferrer`). Chỉ là liên kết, không gửi dữ liệu nào của dashboard sang trang đó. 🟡 Chưa mở thử trang đích (không kiểm tra nội dung trang).
+
 ## Đã bỏ theo yêu cầu
 - Bot nhắc việc (Telegram/Zalo/email) và tuổi công nợ theo nhà cung cấp.
 

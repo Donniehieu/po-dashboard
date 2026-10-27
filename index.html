@@ -44,6 +44,7 @@ header.top h1{font-size:17px;margin:0;font-weight:700;letter-spacing:-.2px}
 .grow{flex:1}
 .btn{border:1px solid var(--line);background:var(--card);padding:8px 14px;border-radius:8px;font-weight:600}
 .btn:hover{background:var(--soft)}
+a.btn{display:inline-block;white-space:nowrap;text-decoration:none;color:inherit;font:inherit;font-weight:600;line-height:1.2}
 .btn.primary{background:var(--brand);border-color:var(--brand);color:#fff}
 .btn.primary:hover{filter:brightness(1.08);background:var(--brand)}
 .fname{color:var(--mute);font-size:13px;max-width:36ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -273,6 +274,7 @@ body.rzing,body.rzing *{cursor:col-resize!important;user-select:none!important}
   <label class="auto" title="Tự động lưu sau mỗi lần sửa (khi đã kết nối GitHub hoặc chọn file bằng Chrome/Edge)"><input type="checkbox" id="chkAuto" checked> Tự động lưu</label>
   <label class="auto" title="Khi mở dashboard, tự yêu cầu GitHub lấy dữ liệu mới từ Odoo nếu lần đồng bộ gần nhất đã quá 10 phút"><input type="checkbox" id="chkSync" checked> Tự đồng bộ Odoo</label>
   <span class="grow"></span>
+  <a class="btn sm" id="lnkBuy" href="https://mua-hang-thong-minh.purchasing-online.workers.dev/" target="_blank" rel="noopener noreferrer" title="Mở trang Mua hàng thông minh trong tab mới">🛒 Mua hàng thông minh</a>
   <button class="btn sm" id="btnNotify" title="Nhắc việc trễ bằng thông báo của trình duyệt (khi đang mở trang)">🔔 Bật Thông báo</button>
   <button class="btn sm" id="btnTheme" title="Đổi giao diện sáng/tối">🌓</button>
   <div class="tgrp" id="grpLoad"><button type="button" class="gt" aria-expanded="false" aria-haspopup="true">Load dữ liệu <i>▾</i></button><div class="gb" role="group" aria-label="Load dữ liệu"><div class="gh"><b>Load dữ liệu</b><button type="button" class="gx" aria-label="Đóng">✕</button></div><div class="gl2">
