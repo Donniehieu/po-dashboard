@@ -582,8 +582,8 @@ function colorFor(v){
   let h=0;for(const ch of String(v))h=(h*31+ch.charCodeAt(0))>>>0;return PALETTE[h%PALETTE.length];
 }
 /* ---- Quy trình PO (cột Note) ---- */
-const WF_DEBT=["Chờ báo giá","Chờ gửi duyệt PO","Chờ duyệt PO","Chờ gửi NCC","Đã gửi NCC","Chờ nhận hàng","Cần lập hóa đơn","Chờ KT xác nhận công nợ","Hoàn thành"];
-const WF_PRE=["Chờ báo giá","Chờ gửi duyệt PO","Chờ duyệt PO","Chờ gửi NCC","Đã gửi NCC","Chờ làm TT","Đã gửi UNC","Chờ nhận hàng","Cần lập hóa đơn","Chờ KT xác nhận công nợ","Hoàn thành"];
+const WF_DEBT=["Chờ báo giá","Chờ gửi duyệt PO","Chờ duyệt PO","Chờ gửi NCC","Đã gửi NCC","Chờ nhận hàng","Cần lập hóa đơn","Chờ KT xác nhận công nợ","Chờ làm TT","Chờ gửi UNC","Đã gửi UNC","Hoàn thành"];
+const WF_PRE=["Chờ báo giá","Chờ gửi duyệt PO","Chờ duyệt PO","Chờ gửi NCC","Đã gửi NCC","Chờ làm TT","Chờ gửi UNC","Đã gửi UNC","Chờ nhận hàng","Cần lập hóa đơn","Chờ KT xác nhận công nợ","Hoàn thành"];
 const WF_ALL=WF_PRE,WF_DONE="Hoàn thành";
 const IS_DS=n=>/^(ds ncc|công nợ ncc)$/i.test(String(n||"").normalize("NFC").replace(/\s+/g," ").trim()); // tab danh sách NCC: tên mới “Công nợ NCC”, vẫn nhận tên cũ “DS NCC”
 const wfn=x=>String(x??"").normalize("NFC").toLowerCase().replace(/\s+/g," ").trim();
@@ -606,11 +606,17 @@ const dueOf=(sh,r)=>sh.dueIdx!=null?r.v[sh.dueIdx]:null;
 const WF_FLOOR=[
   {rc:"đã nhận hết",min:"Cần lập hóa đơn"},
   {rc:"đã nhận một phần",min:"Chờ nhận hàng"},
-  {rc:"chưa nhận",st:["đơn mua hàng","đã phê duyệt"],min:"Chờ gửi NCC"} // đơn đã xác nhận nhưng hàng chưa về -> tối thiểu “Chờ gửi NCC”
+  {rc:"chưa nhận",st:["đơn mua hàng","đã phê duyệt"],min:"Chờ gửi NCC"}, // đơn đã xác nhận nhưng hàng chưa về -> tối thiểu “Chờ gửi NCC”
+  {rc:"đã nhận hết",iv:["đã xuất hóa đơn"],flow:"debt",min:"Chờ làm TT"} // đơn CÔNG NỢ đã nhận hết và đã xuất hóa đơn -> tới bước làm thanh toán (đơn trả trước thì không)
 ];
 function wfFloorOf(sh,r){
-  const rc=sh.rcIdx!=null?wfn(r.v[sh.rcIdx]):"",st=sh.stIdx!=null?wfn(r.v[sh.stIdx]):"";
-  const f=WF_FLOOR.find(x=>x.rc===rc&&(!x.st||x.st.includes(st)));return f?f.min:null;
+  const rc=sh.rcIdx!=null?wfn(r.v[sh.rcIdx]):"",st=sh.stIdx!=null?wfn(r.v[sh.stIdx]):"",iv=sh.ivIdx!=null?wfn(r.v[sh.ivIdx]):"";
+  const seq=seqOf(sh,r),pre=seq===WF_PRE;let best=null; // chọn mốc cao nhất trong số các luật đang áp dụng
+  for(const x of WF_FLOOR){
+    if(x.rc!==rc||(x.st&&!x.st.includes(st))||(x.iv&&!x.iv.includes(iv))||(x.flow==="debt"&&pre)||seq.indexOf(x.min)<0)continue;
+    if(best==null||seq.indexOf(x.min)>seq.indexOf(best))best=x.min;
+  }
+  return best;
 }
 function wfFloor(sh,r,wf){
   const m=wfFloorOf(sh,r);if(!m)return wf;
@@ -2540,6 +2546,7 @@ const STUCK=()=>+store.get("qlcv:stuck")||5;
 const stuckDays=(sh,r)=>sh.chgIdx!=null&&r.v[sh.chgIdx] instanceof Date?Math.round((TODAY-sod(r.v[sh.chgIdx]))/DAY):null;
 function sugDone(sh,r){ // Odoo báo đã nhận hết VÀ đã xuất hóa đơn -> gợi ý Hoàn thành
   if(r.done||sh.rcIdx==null||sh.ivIdx==null)return false;
+  if(sh.payIdx==null||!isPay(r.v[sh.payIdx]))return false; // đơn công nợ: đã nhận hết + xuất hóa đơn thì sang “Chờ làm TT”, chỉ Hoàn thành khi có BNK
   const rc=wfn(r.v[sh.rcIdx]),iv=wfn(r.v[sh.ivIdx]);
   const got=/^(đã nhận|nhận hết|nhận đủ|nhận toàn bộ)/.test(rc)&&!/(một phần|chưa)/.test(rc);
   const inv=/(đã (xuất|lập|ghi).*hóa đơn|hóa đơn đầy đủ|fully billed)/.test(iv)&&!/(chưa|một phần|nháp)/.test(iv);
@@ -2548,7 +2555,7 @@ function sugDone(sh,r){ // Odoo báo đã nhận hết VÀ đã xuất hóa đơ
 function setWf(si,r,status){
   const sh=state.sheets[si];state.via="dashboard";
   const fl=wfFloor(sh,r,status);
-  if(fl!==status){toast(`${r.v[sh.title]}: không thể về “${status}” vì Odoo báo ${r.v[sh.rcIdx]}${sh.stIdx!=null&&r.v[sh.stIdx]?" / "+r.v[sh.stIdx]:""} → tối thiểu phải là “${fl}”.`,true);return false}
+  if(fl!==status){toast(`${r.v[sh.title]}: không thể về “${status}” vì Odoo báo ${r.v[sh.rcIdx]}${sh.stIdx!=null&&r.v[sh.stIdx]?" / "+r.v[sh.stIdx]:""}${fl==="Chờ làm TT"&&sh.ivIdx!=null?" / "+r.v[sh.ivIdx]:""} → tối thiểu phải là “${fl}”.`,true);return false}
   const ch=setCell(si,r,sh.noteIdx,status);
   if(ch&&sh.chgIdx!=null)setCell(si,r,sh.chgIdx,new Date(TODAY)); // ghi ngày đổi trạng thái
   return ch;

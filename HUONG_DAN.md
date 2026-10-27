@@ -114,7 +114,7 @@ Giới hạn: không phải tức thời (trễ tối đa ~15 phút); ngoài gi�
 
 ## Quy trình trạng thái PO (cột Note), bộ lọc, ưu tiên mới
 
-- **Cột “TT trước”** (đầu bảng PO) là ô **chỉ xem, không tick tay được**: do code tự đặt theo Phân loại của NCC ở tab DS NCC. Có tick = PO thanh toán trước (11 bước, có Chờ làm TT / Đã gửi UNC); không tick = thanh toán công nợ (9 bước). Muốn đổi, hãy sửa Phân loại của NCC ở tab DS NCC.
+- **Cột “TT trước”** (đầu bảng PO) là ô **chỉ xem, không tick tay được**: do code tự đặt theo Phân loại của NCC ở tab DS NCC. Có tick = PO thanh toán trước (12 bước, có Chờ làm TT / Chờ gửi UNC / Đã gửi UNC); không tick = thanh toán công nợ (12 bước, có Chờ làm TT, Chờ gửi UNC, Đã gửi UNC trước Hoàn thành: Odoo báo đã nhận hết + đã xuất hóa đơn thì tự sang Chờ làm TT; có PAY đã thanh toán (BNK) khi đang ở Chờ làm TT thì tự sang Hoàn thành; BNK đến sớm hơn thì PO tự nâng lên Chờ gửi UNC, cả đơn trả trước lẫn công nợ). Muốn đổi, hãy sửa Phân loại của NCC ở tab DS NCC.
 - **Nút ◀ ▶ cạnh Note**: lùi/tiến một bước theo luồng, ghi thẳng vào cột Note. Vẫn có thể bấm đúp để gõ trạng thái khác; trạng thái tự nhập nằm ngoài luồng (bấm ▶ sẽ về bước đầu).
 - **Note trống**: lấy theo Odoo khi đồng bộ (Dự thảo + chưa có phiếu nhập → Chờ báo giá; Đã phê duyệt + Chưa nhận → Chờ gửi NCC; còn lại → Chờ báo giá). Note đã có thì luôn giữ nguyên.
 - **Bộ lọc**: bấm ▾ ở tiêu đề cột; có thể chọn “chứa/không chứa/bằng/…”, 2 điều kiện nối VÀ/HOẶC và danh sách giá trị; nhiều cột lọc cùng lúc.
