@@ -8,20 +8,19 @@ Hệ thống **không tự gửi**: bạn kiểm tra đúng người nhận rồ
 
 ## Chuẩn bị (làm một lần)
 
-### Bước 1. Cập nhật script Tampermonkey (bắt buộc, vì phải thêm quyền cho Zalo Web)
-Bạn đã có script "Odoo Helper" trong Tampermonkey. Cần thay bằng bản mới 2.1.0:
+### Bước 1. Cài script Tampermonkey bản 2.1.1 (làm một lần, từ lần sau tự cập nhật)
+Cách nhanh nhất, bằng liên kết cài đặt:
 
-1. Trên trình duyệt (Chrome/Edge), bấm biểu tượng **Tampermonkey** → **Bảng điều khiển (Dashboard)**.
-2. Trong danh sách, bấm vào tên script **Odoo Helper …** để mở trình soạn thảo.
-3. Bấm vào vùng mã, nhấn **Ctrl+A** (chọn hết) rồi **Delete** để xóa mã cũ.
-4. Mở file `D:\PO\Quan_ly_cv\po-data\odoo-autofill-nhan-thanh-toan.user.js` bằng Notepad, nhấn **Ctrl+A**, **Ctrl+C**.
-5. Quay lại Tampermonkey, nhấn **Ctrl+V** để dán, rồi nhấn **Ctrl+S** (hoặc menu *Tệp → Lưu*).
-6. Kiểm tra dòng đầu của mã có `@version 2.1.0` và có các dòng `@match` cho `erp.dekko.com.vn`, `chat.zalo.me`, `zalo.me`.
-7. Trong Dashboard của Tampermonkey, công tắc của script phải ở trạng thái **Bật**.
+1. Mở liên kết này trên trình duyệt đang dùng cho Odoo: **https://donniehieu.github.io/po-dashboard/odoo-helper.user.js**
+2. Tampermonkey hiện trang cài đặt → bấm **Cài đặt** (hoặc **Cập nhật / Cài đặt lại** nếu đã có).
+3. Vào Tampermonkey → **Bảng điều khiển** (Dashboard): nếu còn **hai** script Odoo Helper (bản cũ tên "Odoo Helper (mồi tải bản mới nhất từ dashboard)" và bản mới "Odoo Helper + Zalo …") thì **xóa hoặc tắt bản cũ**, chỉ để bản mới bật.
+4. Kiểm tra bản mới có `@version 2.1.1`, có `@match` cho `erp.dekko.com.vn`, `chat.zalo.me`, `zalo.me`, và công tắc đang **Bật**.
+
+Bản này có `@updateURL`: Tampermonkey tự kiểm tra và cập nhật chính script (mặc định mỗi ngày; muốn ngay thì bấm *Tìm bản cập nhật* ở Dashboard). Phần chạy trên Odoo tự lấy mã mới từ dashboard mỗi **5 phút**.
+
+Cách dự phòng nếu liên kết không mở trang cài đặt: Tampermonkey → Dashboard → mở script → xóa mã cũ → dán toàn bộ nội dung file `D:POQuan_ly_cvpo-dataodoo-autofill-nhan-thanh-toan.user.js` → **Ctrl+S**.
 
 Nếu Chrome báo script không chạy: vào `chrome://extensions` → Tampermonkey → bật **Cho phép script người dùng (Allow user scripts)** (hoặc bật *Chế độ cho nhà phát triển* ở góc phải trên, tùy phiên bản Chrome).
-
-> Chỉ lần này cần cập nhật tay. Phần chạy trên Odoo vẫn tự lấy bản mới từ dashboard như trước.
 
 ### Bước 2. Đăng nhập Zalo Web trên cùng trình duyệt
 1. Mở https://chat.zalo.me/ rồi đăng nhập bằng **mã QR** (quét bằng Zalo trên điện thoại của bạn).
@@ -56,7 +55,7 @@ Lần đầu bấm nút, trình duyệt có thể chặn cửa sổ Zalo. Bấm 
 | Bấm nút mà hiện hộp cài đặt | Chưa có Thủ kho cho đầu số của phiếu này. Nhập ở hộp rồi Lưu, bấm lại nút. |
 | Tab Zalo mở nhưng không tự điền, khung góc trái ghi "đang chờ" | Chưa mở cuộc trò chuyện với Thủ kho. Mở cuộc trò chuyện, tin sẽ tự điền (chờ tối đa 10 phút). |
 | Khung đỏ "Không điền tự động được" | Tin đã nằm trong bộ nhớ tạm: bấm vào ô chat rồi **Ctrl+V**. |
-| Không có khung nhỏ nào ở trang Zalo | Script chưa chạy trên Zalo: kiểm tra Bước 1 (đã lưu bản 2.1.0, có `@match` của `chat.zalo.me`, công tắc bật). Trên trang Zalo, biểu tượng Tampermonkey phải có số **1**. |
+| Không có khung nhỏ nào ở trang Zalo | Script chưa chạy trên Zalo: kiểm tra Bước 1 (đã cài bản 2.1.1, có `@match` của `chat.zalo.me`, công tắc bật). Trên trang Zalo, biểu tượng Tampermonkey phải có số **1**. |
 | Zalo mở sai người / báo không tìm thấy | Số điện thoại chưa đăng ký Zalo hoặc người đó chặn tìm theo số. Dùng liên kết `zalo.me` của họ thay cho số. |
 | Mỗi lần bấm lại mở thêm tab | Bình thường nếu tab Zalo cũ đã đóng; nếu còn mở, tab cũ được dùng lại. |
 
