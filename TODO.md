@@ -310,6 +310,8 @@ Vì số PAY **đổi tên** thành chuỗi chứa `BNK` khi được thanh toá
 
 - ✅ (28/10/2026) **Tài khoản Thủ kho khóa tìm kiếm bằng số điện thoại**: không dùng được `zalo.me/<số>`. Cách xử lý (helper): ghi Thủ kho bằng **tên** (để trống ô số/liên kết) rồi dùng **chat cũ**. Ở chế độ **ứng dụng Zalo**, nếu chỉ có tên thì helper **chỉ sao chép tin** (không mở trang nào) và nhắc: mở ứng dụng Zalo → bấm chat cũ với người đó → bấm ô chat → Ctrl+V → Enter. Ở chế độ **Zalo Web** vẫn dùng khung góc trái dưới với nút "✍ Điền vào cuộc trò chuyện đang mở". Có thể dùng thêm **liên kết cá nhân** `https://zalo.me/<tên Zalo>` nếu họ chia sẻ liên kết đó (Zalo → Cá nhân → mã QR/liên kết). Đã thử với trang giả: chỉ tên + ứng dụng không mở tab, chỉ sao chép; có số + ứng dụng vẫn mở `zalo.me/<số>`.
 
+- ✅ (28/10/2026) **Sửa: không hiện nút "💬 Nhắn Zalo thủ kho" ở phiếu `…/action-1572/2605/action-322/33497`**: kiểm tra trên Odoo thật, số phiếu hiển thị là **`KDS/IN/00666 - 1`** (phiếu nối tiếp/giao một phần có đuôi " - 1"), còn nhận diện phiếu kho chỉ chấp nhận dạng `KDQ/IN/00398` nên bỏ sót. Đã cho phép thêm đuôi " - <số>"; số phiếu trong tin nhắn giữ nguyên cả đuôi (vd. KDS/IN/00666 - 1). Đã thử trang giả có đúng tên này: nút hiện, tin sao chép đúng. Helper trên Odoo tự cập nhật sau khi đẩy lên GitHub (Ctrl+F5 trang Odoo).
+
 ## Đã bỏ theo yêu cầu
 - Bot nhắc việc (Telegram/Zalo/email) và tuổi công nợ theo nhà cung cấp.
 
