@@ -7,7 +7,7 @@
   if (window.__qlcvHelper) { const b = document.getElementById("nccaf"); if (b) { b.style.display = ""; b.classList.remove("min"); } else window.__qlcvHelper.hint(); return; }
   window.__qlcvHelper = { hint: () => hintNote() };
   const DB_KEY = "ncc_bank_db_v1", CFG_KEY = "ncc_bank_cfg_v1";
-  const PATH_RE = /\/odoo\/(vendor-payments|action-\d+|purchase)\//; // phiếu thanh toán NCC hoặc đơn mua (PO)
+  const PATH_RE = /\/odoo\/(vendor-payments|vendor-bills|action-\d+|purchase)\//; // phiếu thanh toán NCC hoặc đơn mua (PO)
   // Phiếu thanh toán: mở trực tiếp (/odoo/vendor-payments/…) hoặc từ PO bằng nút “Trả trước” (/odoo/action-…/<PO>/account.payment/<id>)
   const isPayRecord = () => /\/odoo\/vendor-payments\//.test(location.pathname) || /\/account\.payment\/(\d+|new)/.test(location.pathname);
   const isPayPage = isPayRecord;
@@ -290,7 +290,85 @@
     document.addEventListener("click", (e) => { if (e.target.closest && e.target.closest(".o-mail-Composer-send")) onSend(); }, true);
     document.addEventListener("keydown", (e) => { if (e.key === "Enter" && e.target.closest && e.target.closest(".o-mail-Composer")) onSend(); }, true);
   }
-  if (location.hostname === "erp.dekko.com.vn") hookSend();
+  /* ---------- Sau khi bấm “Gửi” (gửi đề nghị thanh toán): hỏi có in “Đề nghị thanh toán” không ----------
+     Áp dụng cho phiếu thanh toán ở mọi đường dẫn (công nợ: /odoo/vendor-bills/…/account.payment/…, trả trước: /odoo/action-…/<PO>/account.payment/…,
+     chi khác: /odoo/vendor-payments/…). Nếu đồng ý: bấm ⚙ → “In Đề nghị thanh toán” (có chờ giữa các bước để không trượt/bấm dồn),
+     đợi bản xem trước PDF nạp xong rồi bấm nút In của trình xem PDF. Hộp thoại in của trình duyệt để người dùng tự xác nhận, căn chỉnh. */
+  const PRINT_ITEM = "In Đề nghị thanh toán", HOLD = 700;
+  let printing = false, askTimer = 0;
+  const isShown = (e) => !!e && (e.offsetParent !== null || e.getClientRects().length > 0);
+  function sendBtn() { // nút “Gửi” trên thanh trạng thái của phiếu (không phải nút Gửi tin trong luồng trao đổi)
+    return [...document.querySelectorAll(".o_form_statusbar button.btn-primary")].find((b) => b.textContent.trim() === "Gửi" && !b.closest(".o-mail-Chatter,.o-mail-Composer") && isShown(b)) || null;
+  }
+  const stateText = () => ((document.querySelector(".o_form_statusbar .o_arrow_button_current") || {}).textContent || "").trim();
+  function hookSendRequest() {
+    document.addEventListener("click", (e) => {
+      if (!isPayRecord() || cfg().askPrint === false) return;
+      const b = e.target.closest && e.target.closest(".o_form_statusbar button.btn-primary");
+      if (!b || b.closest(".o-mail-Chatter,.o-mail-Composer") || b.textContent.trim() !== "Gửi") return;
+      watchSendRequest(stateText(), docInfo().id);
+    }, true);
+  }
+  function watchSendRequest(state0, id) { // chờ lệnh Gửi thành công (nút Gửi biến mất hoặc bước trạng thái đổi); lỗi/hủy thì không hỏi
+    clearInterval(askTimer);
+    const t0 = Date.now();
+    askTimer = setInterval(() => {
+      if (Date.now() - t0 > 40000) { clearInterval(askTimer); return; }
+      if (document.querySelector(".o_error_dialog, .o_notification.border-danger")) { clearInterval(askTimer); return; } // lỗi khi gửi
+      if (document.querySelector(".modal:not(#nccpr-modal)") && Date.now() - t0 < 38000) return; // đang có hộp xác nhận của Odoo: chờ người dùng
+      if (Date.now() - t0 < 1200) return;
+      if (!sendBtn() || (stateText() && stateText() !== state0)) { clearInterval(askTimer); askPrint(id); }
+    }, 400);
+  }
+  function askPrint(id) {
+    if (document.getElementById("nccpr-modal") || printing) return;
+    const box = document.createElement("div");
+    box.id = "nccpr-modal";
+    box.style.cssText = "position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;font:14px/1.45 system-ui,Segoe UI,sans-serif";
+    box.innerHTML = '<div style="background:#fff;color:#222;border-radius:12px;padding:20px 22px;width:min(440px,92vw);box-shadow:0 10px 40px rgba(0,0,0,.35)">' +
+      '<div style="font-size:16px;font-weight:700;margin-bottom:6px">✅ Đã gửi đề nghị thanh toán' + (id ? " " + xe(id) : "") + '</div>' +
+      '<div style="margin-bottom:12px">Bạn có muốn <b>in Đề nghị thanh toán</b> ngay không?<br><small style="color:#666">Sẽ bấm ⚙ → “' + PRINT_ITEM + '”, chờ bản xem trước nạp xong rồi mở hộp thoại in. Bạn tự xác nhận và căn chỉnh trong hộp thoại in.</small></div>' +
+      '<div class="pst" style="min-height:18px;font-size:12px;margin-bottom:8px"></div>' +
+      '<div style="display:flex;gap:8px;justify-content:flex-end"><button class="no" style="padding:8px 14px;border:1px solid #888;border-radius:8px;background:#f5f5f5;cursor:pointer;font:inherit">Không in</button>' +
+      '<button class="yes" style="padding:8px 16px;border:0;border-radius:8px;background:#1565c0;color:#fff;cursor:pointer;font:inherit;font-weight:700">🖨 In đề nghị</button></div></div>';
+    document.body.appendChild(box);
+    const st = box.querySelector(".pst"), yes = box.querySelector(".yes"), no = box.querySelector(".no");
+    const say = (t, bad) => { st.textContent = t; st.style.color = bad ? "#c62828" : "#2e7d32"; };
+    const close = () => box.remove();
+    no.onclick = close;
+    box.addEventListener("keydown", (e) => { if (e.key === "Escape") close(); });
+    yes.onclick = async () => {
+      if (printing) return; // chống bấm dồn
+      printing = true; yes.disabled = no.disabled = true; yes.style.opacity = no.style.opacity = ".6";
+      try { await runPrintFlow(say); box.remove(); }
+      catch (err) { say("Chưa in tự động được: " + err.message + " Hãy bấm tay ⚙ → “" + PRINT_ITEM + "”.", true); no.disabled = false; no.textContent = "Đóng"; }
+      finally { setTimeout(() => { printing = false; }, 4000); } // khoảng nghỉ sau mỗi lần in để tránh bấm lặp
+    };
+    yes.focus();
+  }
+  async function runPrintFlow(say) {
+    say("Chuẩn bị mở menu ⚙…"); await sleep(HOLD);
+    const cog = document.querySelector(".o_control_panel .fa-cog");
+    const tog = cog && (cog.closest("button") || cog.parentElement);
+    if (!tog) throw new Error("không thấy biểu tượng ⚙.");
+    if (!tog.classList.contains("show")) tog.click();
+    const item = await waitFor(() => [...document.querySelectorAll(".o-dropdown--menu .dropdown-item, .dropdown-menu .dropdown-item")].find((e) => isShown(e) && e.textContent.trim() === PRINT_ITEM), 5000);
+    if (!item) throw new Error("không thấy mục “" + PRINT_ITEM + "” trong menu ⚙.");
+    say("Đã mở menu, giữ một chút rồi bấm “" + PRINT_ITEM + "”…"); await sleep(HOLD + 300);
+    if (!item.isConnected || item.textContent.trim() !== PRINT_ITEM) throw new Error("menu thay đổi, không bấm để tránh nhầm mục.");
+    item.click();
+    say("Đang tạo bản xem trước…");
+    const frame = await waitFor(() => document.querySelector(".dynamic-word-report-preview-iframe"), 15000);
+    if (!frame) throw new Error("không thấy bản xem trước Đề nghị thanh toán.");
+    const ready = await waitFor(() => { try { const a = frame.contentWindow.PDFViewerApplication; return a && a.pdfDocument && a.pagesCount > 0 && frame.contentDocument.querySelector("#printButton"); } catch (e) { return null; } }, 20000);
+    if (!ready) throw new Error("bản xem trước chưa nạp xong.");
+    say("Bản xem trước đã sẵn sàng, giữ một chút rồi bấm In…"); await sleep(HOLD + 300);
+    const pb = frame.contentDocument.querySelector("#printButton");
+    if (!pb || pb.disabled) throw new Error("nút In của trình xem PDF chưa dùng được.");
+    pb.click();
+    msg("Đã mở hộp thoại in Đề nghị thanh toán: hãy kiểm tra, căn chỉnh rồi xác nhận in.");
+  }
+  if (location.hostname === "erp.dekko.com.vn") { hookSend(); hookSendRequest(); }
   async function typeMessage(tpl) {
     const doc = docInfo();
     let box = $(COMPOSER);
@@ -428,6 +506,7 @@
 <label><input type="checkbox" class="ov"> Ghi đè cả ô đã có dữ liệu</label>
 <label><input type="checkbox" class="au"> Tự điền ngay khi mở phiếu</label>
 <label><input type="checkbox" class="as"> Nhắc duyệt: tự bấm Gửi (mặc định chỉ gõ sẵn)</label>
+<label><input type="checkbox" class="ap"> Sau khi bấm Gửi đề nghị thanh toán: hỏi có in Đề nghị thanh toán</label>
 <div class="r"><button data-a="log" title="Xuất nhật ký các tin đã gửi (số PAY/BNK/PO, nội dung, ngày)">⬇ Xuất nhật ký nhắn</button></div><small class="lg"></small>
 <div class="s"></div><small>Nạp được file .xlsx (mẫu) hoặc .json (bản cũ). Nạp lại sẽ cập nhật theo tên NCC.</small>
 <input type="file" accept=".xlsx,.json" style="display:none"></div>`;
@@ -437,6 +516,7 @@
     box.querySelector(".ff").checked = !!c.fromFile; box.querySelector(".ff").onchange = (e) => st.set(CFG_KEY, { ...cfg(), fromFile: e.target.checked });
     box.querySelector(".ov").onchange = (e) => st.set(CFG_KEY, { ...cfg(), overwrite: e.target.checked });
     box.querySelector(".au").onchange = (e) => st.set(CFG_KEY, { ...cfg(), auto: e.target.checked });
+    box.querySelector(".ap").checked = c.askPrint !== false; box.querySelector(".ap").onchange = (e) => st.set(CFG_KEY, { ...cfg(), askPrint: e.target.checked });
     box.querySelector(".as").checked = !!c.autosend; box.querySelector(".as").onchange = (e) => st.set(CFG_KEY, { ...cfg(), autosend: e.target.checked });
     box.querySelector(".h").onclick = () => box.classList.toggle("min");
     ui.pick.onchange = () => { const it = ui.pick._items[+ui.pick.value]; if (it) runFill(it); };
