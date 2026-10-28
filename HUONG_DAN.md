@@ -260,3 +260,6 @@ Mở phiếu thanh toán Odoo **từ dashboard** (bấm đúp dòng ở tab Phi�
 - Có tìm kiếm, lọc theo cột, ẩn/hiện cột, xuất Excel/CSV theo bộ lọc. Chỉ xem, không sửa từng ô.
 - Cập nhật dữ liệu: bấm **⬆ Nhập Excel**, chọn file Netsuite mới. Toàn bộ dữ liệu cũ bị thay bằng file mới (dashboard tự chuyển sang JSON nén); chọn lưu lên GitHub để mọi máy cùng dùng, hoặc Hủy để chỉ dùng trên máy này.
 - Netsuite Data được lưu sẵn trên máy và nạp ngầm khi mở dashboard, không tải lại từ GitHub mỗi lần. Muốn lấy bản mới nhất ngay (khi máy khác vừa cập nhật) bấm **↻ Làm mới từ GitHub** ở đầu bảng; ngoài ra dashboard tự kiểm tra âm thầm tối đa một lần mỗi ngày.
+
+## Nhắn Zalo cho Thủ kho từ phiếu kho trên Odoo
+Xem hướng dẫn cài đặt và sử dụng từng bước trong **HUONG_DAN_ZALO.md** (cần cập nhật script Tampermonkey lên 2.1.0 một lần).
