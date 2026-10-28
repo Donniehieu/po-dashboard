@@ -322,6 +322,12 @@ body.rzing,body.rzing *{cursor:col-resize!important;user-select:none!important}
   <label>Mã truy cập (fine-grained token: Contents + Actions = Read &amp; write, chỉ cho repo dữ liệu)</label><input id="ghToken" type="password" placeholder="github_pat_…" autocomplete="off">
   <div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap"><button class="btn primary" id="ghSave">Lưu &amp; tải dữ liệu</button><button class="btn" id="ghForget">Xoá mã truy cập</button><button class="btn" id="ghClose">Đóng</button></div>
 </dialog>
+<dialog id="dlgDel">
+  <h3 id="delTitle">⚠ Dữ liệu đã bị xóa/hủy trên Odoo</h3>
+  <p class="sub">Các PO / phiếu thanh toán sau không còn hiệu lực trên Odoo. Dòng PO đã được xóa khỏi tab PO; phiếu thanh toán được giữ lại với trạng thái tương ứng.</p>
+  <ul id="delList" style="max-height:50vh;overflow:auto;list-style:none;margin:0;padding:0"></ul>
+  <div style="display:flex;gap:8px;margin-top:14px"><span class="grow"></span><button class="btn primary" id="delOk">Đã hiểu</button></div>
+</dialog>
 <dialog id="dlgCloud">
   <h3>Cloud riêng (Google Drive / Google Sheets)</h3>
   <p class="sub">Dữ liệu lưu trong Google Drive <b>của chính bạn</b> qua một Google Apps Script bạn tự tạo (file mẫu: <code>cloud/apps-script.gs</code>, xem <code>HUONG_DAN.md</code>). Không qua GitHub và không qua máy chủ nào khác. File lưu dạng .xlsx, mở bằng Google Sheets được.</p>
@@ -1011,6 +1017,52 @@ async function nsImport(file){
   toast(`Đã nhập Netsuite Data: ${fmtN(sh.rows.length)} dòng`+(up?" và lưu lên GitHub":" (chỉ trên trình duyệt này)"));
 }
 
+/* ---- Thông báo (popup) khi PO / phiếu thanh toán (PAY) bị xóa hoặc hủy trên Odoo ----
+   PO: lấy từ data/deleted-log.json (script đồng bộ ghi mỗi khi xóa PO không còn / đã hủy trên Odoo).
+   PAY: các dòng ở tab Phiếu thanh toán có Trạng thái TT = "Đã hủy" hoặc "⚠ Không còn trên Odoo".
+   Mỗi thiết bị chỉ báo một lần cho mỗi sự kiện (nhớ trong trình duyệt); lần đầu chạy chỉ báo PO bị xóa trong 24 giờ gần nhất. */
+const DEL_SEEN="qlcv:delseen";
+let delChecking=false;
+const parseVN=s=>{const t=Date.parse(String(s||"").replace(" ","T")+":00+07:00");return isNaN(t)?0:t};
+async function checkRemovals(){
+  if(delChecking||$("#dlgDel").open||!state.sheets.length)return;delChecking=true; // đang hiện hộp báo thì chờ (đóng xong sẽ kiểm tra lại)
+  try{
+    const raw=store.get(DEL_SEEN),first=raw==null,seen=new Set(raw||[]),found=[];
+    if(state.src==="github"&&ghReady()){ // PO bị xóa/hủy: nhật ký của script đồng bộ
+      try{
+        const c=ghCfg(),i=c.path.lastIndexOf("/"),p=(i>=0?c.path.slice(0,i+1):"")+"deleted-log.json";
+        const g=await ghFetchPath(p,"dl:"+p);
+        if(g){let log=[];try{log=JSON.parse(new TextDecoder().decode(new Uint8Array(g.buf)))}catch(e){}
+          for(const e of Array.isArray(log)?log:[]){
+            const k="po|"+e.time+"|"+e.key;if(seen.has(k))continue;
+            const d=e.data||{};
+            found.push({k,kind:"PO",key:e.key,sup:d["Nhà cung cấp"]||"",amount:d["Tổng"],note:d["Note"]||"",when:e.time,why:"đã bị xóa hoặc hủy trên Odoo (dòng đã được xóa khỏi tab PO)",silent:first&&Date.now()-parseVN(e.time)>864e5});
+          }}
+      }catch(e){console.warn("deleted-log:",e.message)}
+    }
+    const psi=state.sheets.findIndex(s=>s.pay),ps=state.sheets[psi]; // PAY bị hủy / không còn trên Odoo
+    if(ps&&ps.payStIdx!=null)for(const r of ps.rows){
+      const st=wfn(r.v[ps.payStIdx]);if(st!=="đã hủy"&&!st.startsWith("⚠ không còn"))continue;
+      const id=ps.payId>=0&&r.v[ps.payId]!=null?r.v[ps.payId]:r.v[ps.title],k="pay|"+id+"|"+st;if(seen.has(k))continue;
+      found.push({k,kind:"PAY",key:String(r.v[ps.title]??""),si:psi,sup:ps.sub!=null?r.v[ps.sub]||"":"",amount:ps.money?r.v[ps.money.idx]:null,note:"",when:"",why:st==="đã hủy"?"đã bị hủy trên Odoo":"không còn trên Odoo (đã bị xóa)",silent:first});
+    }
+    if(!found.length)return;
+    const show=found.filter(x=>!x.silent);
+    store.set(DEL_SEEN,[...seen,...found.map(x=>x.k)].slice(-800));
+    if(show.length)showRemovals(show);
+  }catch(e){console.warn("checkRemovals:",e)}
+  finally{delChecking=false}
+}
+function showRemovals(list){
+  const d=$("#dlgDel");
+  $("#delList").innerHTML=list.map(x=>`<li style="padding:9px 0;border-bottom:1px solid var(--line)"><span class="tag">${x.kind}</span> <b>${x.kind==="PAY"?`<a class="hl" href="#" data-delgo="${x.si}|${esc(x.key)}" title="Xem phiếu này ở tab Phiếu thanh toán">${esc(x.key)}</a>`:esc(x.key)}</b> — ${esc(x.why)}<div class="sub">${esc(x.sup||"")}${x.amount?" · "+fmtN(x.amount):""}${x.when?" · lúc "+esc(x.when):""}${x.note?" · Note cuối: "+esc(x.note):""}</div></li>`).join("");
+  $("#delTitle").textContent=`⚠ ${list.length} mục đã bị xóa/hủy trên Odoo`;
+  $("#delList").querySelectorAll("[data-delgo]").forEach(a=>a.onclick=ev=>{ev.preventDefault();const [si,key]=a.dataset.delgo.split("|");d.close();goSheet(+si,{search:key.toLowerCase()})});
+  $("#delOk").onclick=()=>d.close();
+  d.onclose=()=>{setTimeout(()=>{checkRemovals().catch(()=>{})},400)}; // còn mục mới thì báo tiếp
+  if(!d.open)d.showModal();
+}
+
 /* ---- Nạp file ---- */
 const HIDE_SHEETS=new Set(["thông báo duyệt giá","nhà cung cấp dây đai"]);
 async function loadBuffer(buf,name,opts={}){
@@ -1037,6 +1089,7 @@ async function loadBuffer(buf,name,opts={}){
     if(a1||a2){renderTabs();render();updateChrome();if(a2)toast(`Đã tự động cập nhật “TT trước” cho ${a2} PO theo Phân loại NCC (cột này chỉ do hệ thống tick).`)}
     if(state.src==="github"&&ghReady())loadRemoteHistory();
     odooStart();loadOdooIds();
+    setTimeout(()=>{checkRemovals().catch(()=>{})},900); // PO/PAY bị xóa hoặc hủy trên Odoo -> popup
   }catch(e){
     console.error(e);
     if(err){err.hidden=false;err.textContent="Không đọc được file: "+e.message}

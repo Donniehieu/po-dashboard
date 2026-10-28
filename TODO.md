@@ -272,6 +272,13 @@ Vì số PAY **đổi tên** thành chuỗi chứa `BNK` khi được thanh toá
 
 - ✅ (28/10/2026) **Tab Lịch sử: bấm số PO ở cột "Bản ghi" → nhảy sang tab PO đúng PO đó**: số PO hiện dạng liên kết gạch chân; bấm vào mở tab PO đã lọc sẵn đúng PO (tự đặt ô tìm kiếm). Chỉ thành liên kết khi PO còn có ở tab PO (PO đã xóa, tên NCC, số PAY… hiển thị chữ thường như cũ). Đã thử trên dữ liệu thật: bấm mã PO trong lịch sử → tab PO hiện đúng 1 dòng; dòng NCC và PO đã xóa không thành liên kết.
 
+- ✅ (28/10/2026) **Popup thông báo khi PO / PAY bị xóa hoặc hủy trên Odoo**:
+  - **PO**: lấy từ `data/deleted-log.json` (script đồng bộ ghi mỗi khi một PO không còn trên Odoo hoặc đã hủy và bị xóa khỏi tab PO). **PAY**: các dòng ở tab Phiếu thanh toán có Trạng thái TT = "Đã hủy" hoặc "⚠ Không còn trên Odoo".
+  - Hộp thoại nêu loại, mã, nhà cung cấp, số tiền, thời điểm và Note cuối của PO; bấm mã PAY để xem phiếu ở tab Phiếu thanh toán. Kiểm tra mỗi lần mở dashboard và mỗi lần dữ liệu được tải lại do đồng bộ Odoo (nên đang mở dashboard mà PO bị xóa vẫn thấy popup ở lần đồng bộ kế tiếp).
+  - **Mỗi thiết bị chỉ báo một lần cho mỗi sự kiện** (nhớ trong trình duyệt). Lần đầu chạy trên một thiết bị chỉ báo PO bị xóa trong 24 giờ gần nhất, các PAY đã hủy từ trước được ghi nhận âm thầm để không báo dồn.
+  - Chỉ báo PO khi dashboard đang kết nối GitHub (cần đọc nhật ký); PAY báo ở mọi chế độ. Xóa/hủy do chính bạn thao tác trong dashboard không báo (đã có ở tab Lịch sử).
+  - Đã thử trên dữ liệu thật + nhật ký giả: lần đầu chỉ hiện PO mới xóa; mở lại không báo lại; PO mới bị xóa hoặc PAY mới bị hủy thì báo; bấm mã PAY nhảy đúng phiếu. 🟡 Chưa thử với nhật ký xóa thật trên GitHub.
+
 ## Đã bỏ theo yêu cầu
 - Bot nhắc việc (Telegram/Zalo/email) và tuổi công nợ theo nhà cung cấp.
 
