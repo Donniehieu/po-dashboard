@@ -312,6 +312,8 @@ Vì số PAY **đổi tên** thành chuỗi chứa `BNK` khi được thanh toá
 
 - ✅ (28/10/2026) **Sửa: không hiện nút "💬 Nhắn Zalo thủ kho" ở phiếu `…/action-1572/2605/action-322/33497`**: kiểm tra trên Odoo thật, số phiếu hiển thị là **`KDS/IN/00666 - 1`** (phiếu nối tiếp/giao một phần có đuôi " - 1"), còn nhận diện phiếu kho chỉ chấp nhận dạng `KDQ/IN/00398` nên bỏ sót. Đã cho phép thêm đuôi " - <số>"; số phiếu trong tin nhắn giữ nguyên cả đuôi (vd. KDS/IN/00666 - 1). Đã thử trang giả có đúng tên này: nút hiện, tin sao chép đúng. Helper trên Odoo tự cập nhật sau khi đẩy lên GitHub (Ctrl+F5 trang Odoo).
 
+- ✅ (28/10/2026) **Sửa tiếp: không hiện nút Nhắn Zalo thủ kho ở phiếu `…/action-1572/2259/action-322/29710`**: số phiếu là **`KR&D/IN/00033`** (kho R&D), đầu số có ký tự `&` nên cách nhận diện cũ (chỉ chữ và số) bỏ sót. Đã nới: đầu số/loại là bất kỳ ký tự nào không phải khoảng trắng hoặc `/`, vẫn yêu cầu dạng `…/…/<số>` kèm đuôi " - <số>" tùy chọn và các trường loại điều chuyển, kho đích của phiếu kho (số PAY/BNK, PO không bị nhận nhầm). Trong hộp ⚙ nhập đầu số đúng là **`KR&D`** cho kho này. Đã thử: `KDQ/IN/00398`, `KDS/IN/00666 - 1`, `KR&D/IN/00033` hiện nút; `PAY…`, `…/BNK…`, mã PO không hiện.
+
 ## Đã bỏ theo yêu cầu
 - Bot nhắc việc (Telegram/Zalo/email) và tuổi công nợ theo nhà cung cấp.
 

@@ -298,7 +298,7 @@
   const loadZalo = () => { const z = st.get(ZALO_KEY, null); return z && Array.isArray(z.keepers) ? { tpl: z.tpl || ZALO_DEFAULT_TPL, keepers: z.keepers, app: !!z.app } : { tpl: ZALO_DEFAULT_TPL, keepers: [], app: false }; };
   function pickingName() { // số phiếu kho đang mở (chỉ khi là phiếu kho: có tên dạng KDQ/IN/00398 và các trường loại điều chuyển, kho đích)
     const n = $('[name="name"]'); const t = n ? n.textContent.trim() : "";
-    if (!/^[A-Za-z0-9]{2,8}\/[A-Za-z0-9]{1,8}\/\d{3,}(\s*-\s*\d+)?$/.test(t)) return ""; // kể cả phiếu giao một phần/đơn nối tiếp: KDS/IN/00666 - 1
+    if (!/^[^\s\/]{2,12}\/[^\s\/]{1,12}\/\d{3,}(\s*-\s*\d+)?$/.test(t)) return ""; // đầu số có thể chứa ký tự như & (KR&D/IN/00033) // kể cả phiếu giao một phần/đơn nối tiếp: KDS/IN/00666 - 1
     return $('[name="picking_type_id"]') && $('[name="location_dest_id"]') ? t : "";
   }
   const isPicking = () => !isPayRecord() && !!pickingName();
