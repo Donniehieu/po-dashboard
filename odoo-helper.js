@@ -295,7 +295,7 @@
      tương ứng (theo đầu số phiếu: KDQ, KPH…). Người dùng dán (Ctrl+V) và bấm Gửi. Danh sách Thủ kho và mẫu tin lưu trong trình duyệt này. */
   const ZALO_KEY = "zalo_keepers_v1";
   const ZALO_DEFAULT_TPL = "Chị ơi, kiểm đếm và nhập giúp em phiếu kho này {phieu}";
-  const loadZalo = () => { const z = st.get(ZALO_KEY, null); return z && Array.isArray(z.keepers) ? { tpl: z.tpl || ZALO_DEFAULT_TPL, keepers: z.keepers } : { tpl: ZALO_DEFAULT_TPL, keepers: [] }; };
+  const loadZalo = () => { const z = st.get(ZALO_KEY, null); return z && Array.isArray(z.keepers) ? { tpl: z.tpl || ZALO_DEFAULT_TPL, keepers: z.keepers, app: !!z.app } : { tpl: ZALO_DEFAULT_TPL, keepers: [], app: false }; };
   function pickingName() { // số phiếu kho đang mở (chỉ khi là phiếu kho: có tên dạng KDQ/IN/00398 và các trường loại điều chuyển, kho đích)
     const n = $('[name="name"]'); const t = n ? n.textContent.trim() : "";
     if (!/^[A-Za-z0-9]{2,8}\/[A-Za-z0-9]{1,8}\/\d{3,}$/.test(t)) return "";
@@ -323,11 +323,11 @@
   if (location.hostname === "erp.dekko.com.vn") addEventListener("message", (e) => {
     if (!ZALO_ORIGINS.includes(e.origin)) return;
     const d = e.data;
-    if (d && d.qlcvz === "req" && zaloMsg && Date.now() - zaloMsg.at < 10 * 60 * 1000) e.source.postMessage({ qlcvz: "fill", id: zaloMsg.at, text: zaloMsg.text, to: zaloMsg.to, manual: zaloMsg.manual, phone: zaloMsg.phone }, e.origin);
+    if (d && d.qlcvz === "req" && zaloMsg && Date.now() - zaloMsg.at < 10 * 60 * 1000) e.source.postMessage({ qlcvz: "fill", id: zaloMsg.at, text: zaloMsg.text, to: zaloMsg.to, manual: zaloMsg.manual, phone: zaloMsg.phone, app: zaloMsg.app }, e.origin);
   });
   function pushZalo(w, m) {
     [1500, 4000, 8000, 15000, 30000].forEach((ms) => setTimeout(() => {
-      try { if (w && !w.closed) ZALO_ORIGINS.forEach((o) => w.postMessage({ qlcvz: "fill", id: m.at, text: m.text, to: m.to, manual: m.manual, phone: m.phone }, o)); } catch (e) {}
+      try { if (w && !w.closed) ZALO_ORIGINS.forEach((o) => w.postMessage({ qlcvz: "fill", id: m.at, text: m.text, to: m.to, manual: m.manual, phone: m.phone, app: m.app }, o)); } catch (e) {}
     }, ms));
   }
   let zaloBusy = 0;
@@ -342,10 +342,16 @@
     const url = zaloUrl(k.zalo), isLink = /^https:\/\//i.test(String(k.zalo || "").trim());
     const phone = isLink ? "" : String(k.zalo || "").replace(/[^\d]/g, "");
     // Số điện thoại: zalo.me/<số> chuyển sang ỨNG DỤNG Zalo trên máy, nên mở thẳng Zalo Web và để bạn chọn cuộc trò chuyện; liên kết (nhóm/hồ sơ) thì mở đúng liên kết
-    zaloMsg = { at: Date.now(), text, to: k.name || "", manual: !isLink, phone };
-    const w = window.open(isLink ? url : "https://chat.zalo.me/", "zalo-chat");
+    if (loadZalo().app && !url) { // dùng ứng dụng nhưng chỉ có tên (tài khoản không cho tìm bằng số / không có liên kết): chỉ sao chép tin, bạn chọn chat cũ trong ứng dụng
+      return msg((ok ? "Đã sao chép tin: " : "Không sao chép được, hãy gõ tay: ") + "“" + text + "”\nMở ứng dụng Zalo, bấm vào chat cũ với " + (k.name || "Thủ kho") + ", bấm ô chat, Ctrl+V, kiểm tra rồi Enter.", !ok);
+    }
+    const useApp = loadZalo().app && !!url; // ứng dụng Zalo: mở trang zalo.me/<số> (hoặc liên kết) rồi script tự bấm “Nhắn tin”
+    zaloMsg = { at: Date.now(), text, to: k.name || "", manual: !isLink && !useApp, phone, app: useApp };
+    const w = window.open(useApp || isLink ? url : "https://chat.zalo.me/", "zalo-chat");
     pushZalo(w, zaloMsg);
-    msg((ok ? "Đã sao chép tin: " : "Không sao chép được, hãy gõ tay: ") + "“" + text + "”\n" + (isLink
+    msg((ok ? "Đã sao chép tin: " : "Không sao chép được, hãy gõ tay: ") + "“" + text + "”\n" + (useApp
+      ? "Đang mở ứng dụng Zalo của " + (k.name || "Thủ kho") + " (nếu trình duyệt hỏi, chọn Mở; nếu chưa mở thì bấm nút “Nhắn tin” trên trang vừa hiện). Trong ứng dụng: bấm ô chat, Ctrl+V, kiểm tra rồi Enter."
+      : isLink
       ? "Đã mở Zalo của " + (k.name || "Thủ kho") + ". Nếu đã cài script Zalo, tin tự điền vào ô chat (bạn kiểm tra rồi bấm Enter); nếu không thì dán (Ctrl+V)."
       : "Đã mở Zalo Web. Hãy mở cuộc trò chuyện với " + (k.name || "Thủ kho") + (phone ? " (tìm SĐT " + phone + " ở ô Tìm kiếm)" : " (chat cũ)") + ", rồi bấm nút “Điền vào cuộc trò chuyện đang mở” ở khung nhỏ góc trái dưới trang Zalo (hoặc dán Ctrl+V)."), !ok);
   }
@@ -355,16 +361,17 @@
     if (focusPrefix && !rows.some((r) => String(r.prefix || "").trim().toUpperCase() === focusPrefix.toUpperCase())) rows.push({ prefix: focusPrefix, name: "", zalo: "" }); // thêm sẵn dòng cho đầu số của phiếu đang mở
     const m = document.createElement("div"); m.id = "nccz-modal";
     m.style.cssText = "position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;font:13px/1.4 system-ui,Segoe UI,sans-serif";
-    const rowHtml = (r, i) => '<div class="zr" data-i="' + i + '" style="display:grid;grid-template-columns:70px 1fr 1.4fr 28px;gap:6px;margin-bottom:6px"><input class="p" placeholder="Đầu số (KDQ)" value="' + xe(r.prefix || "") + '"><input class="n" placeholder="Tên Thủ kho" value="' + xe(r.name || "") + '"><input class="z" placeholder="SĐT Zalo / liên kết (trống nếu dùng chat cũ)" value="' + xe(r.zalo || "") + '"><button class="x" title="Xóa dòng" style="border:1px solid #bbb;border-radius:6px;background:#fff;cursor:pointer">✕</button></div>';
+    const rowHtml = (r, i) => '<div class="zr" data-i="' + i + '" style="display:grid;grid-template-columns:70px 1fr 1.4fr 28px;gap:6px;margin-bottom:6px"><input class="p" placeholder="Đầu số (KDQ)" value="' + xe(r.prefix || "") + '"><input class="n" placeholder="Tên Thủ kho" value="' + xe(r.name || "") + '"><input class="z" placeholder="SĐT / liên kết zalo.me (trống = dùng chat cũ)" value="' + xe(r.zalo || "") + '"><button class="x" title="Xóa dòng" style="border:1px solid #bbb;border-radius:6px;background:#fff;cursor:pointer">✕</button></div>';
     m.innerHTML = '<div style="background:#fff;color:#222;border-radius:12px;padding:18px 20px;width:min(560px,94vw);box-shadow:0 10px 40px rgba(0,0,0,.35)"><div style="font-size:15px;font-weight:700;margin-bottom:8px">💬 Zalo Thủ kho (phiếu kho)</div>' +
       '<div style="margin-bottom:6px;color:#555">Mỗi dòng: đầu số phiếu kho (KDQ, KPH… để trống hoặc * = dùng cho mọi phiếu), tên, và số điện thoại đã đăng ký Zalo hoặc liên kết zalo.me (nhóm). Không có số: chỉ ghi tên và để trống ô số, dùng chat cũ trên Zalo Web. Dữ liệu chỉ lưu trong trình duyệt này.</div>' +
       '<div class="rows"></div><button class="add" style="padding:5px 10px;border:1px solid #888;border-radius:6px;background:#f5f5f5;cursor:pointer;margin-bottom:10px">＋ Thêm Thủ kho</button>' +
       '<div style="margin-bottom:4px;font-weight:600">Mẫu tin nhắn <small style="font-weight:400;color:#666">({phieu} = số phiếu kho)</small></div><textarea class="tpl" rows="2" style="width:100%;padding:6px;border:1px solid #bbb;border-radius:6px;font:inherit"></textarea>' +
+      '<label style="display:flex;gap:6px;align-items:flex-start;margin-top:10px"><input type="checkbox" class="zapp" style="margin-top:3px"><span><b>Dùng ứng dụng Zalo trên máy</b> (thay cho Zalo Web): mở trang <i>zalo.me</i> của Thủ kho và tự bấm “Nhắn tin” để ứng dụng mở đúng cuộc trò chuyện; tin đã được sao chép sẵn, bạn bấm vào ô chat, <b>Ctrl+V</b>, kiểm tra rồi Enter. Cần ghi <b>số điện thoại hoặc liên kết</b> của Thủ kho.</span></label>' +
       '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px"><button class="cancel" style="padding:7px 14px;border:1px solid #888;border-radius:8px;background:#f5f5f5;cursor:pointer;font:inherit">Hủy</button><button class="save" style="padding:7px 16px;border:0;border-radius:8px;background:#1565c0;color:#fff;cursor:pointer;font:inherit;font-weight:700">Lưu</button></div></div>';
     document.body.appendChild(m);
     const host = m.querySelector(".rows"), draw = () => { host.innerHTML = rows.map(rowHtml).join(""); };
     const sync = () => host.querySelectorAll(".zr").forEach((el) => { const r = rows[+el.dataset.i]; if (r) { r.prefix = el.querySelector(".p").value; r.name = el.querySelector(".n").value; r.zalo = el.querySelector(".z").value; } });
-    draw(); m.querySelector(".tpl").value = z.tpl;
+    draw(); m.querySelector(".tpl").value = z.tpl; m.querySelector(".zapp").checked = !!z.app;
     host.onclick = (e) => { const b = e.target.closest(".x"); if (!b) return; sync(); rows.splice(+b.closest(".zr").dataset.i, 1); if (!rows.length) rows.push({ prefix: "", name: "", zalo: "" }); draw(); };
     m.querySelector(".add").onclick = () => { sync(); rows.push({ prefix: "", name: "", zalo: "" }); draw(); };
     m.querySelector(".cancel").onclick = () => m.remove();
@@ -372,7 +379,7 @@
       sync();
       const keepers = rows.filter((r) => zaloUrl(r.zalo) || String(r.name || "").trim()).map((r) => ({ prefix: String(r.prefix || "").trim(), name: String(r.name || "").trim(), zalo: String(r.zalo || "").trim() }));
       const tpl = m.querySelector(".tpl").value.trim() || ZALO_DEFAULT_TPL;
-      st.set(ZALO_KEY, { tpl, keepers }); m.remove(); msg("Đã lưu " + keepers.length + " Thủ kho. Bấm “💬 Nhắn Zalo thủ kho” để gửi.");
+      st.set(ZALO_KEY, { tpl, keepers, app: m.querySelector(".zapp").checked }); m.remove(); msg("Đã lưu " + keepers.length + " Thủ kho. Bấm “💬 Nhắn Zalo thủ kho” để gửi.");
     };
   }
   /* ---------- Sau khi bấm “Gửi” (gửi đề nghị thanh toán): hỏi có in “Đề nghị thanh toán” không ----------

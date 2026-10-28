@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Odoo Helper + Zalo (mồi tải bản mới nhất từ dashboard, tự điền tin vào Zalo Web)
 // @namespace    https://github.com/Donniehieu
-// @version      2.1.3
+// @version      2.1.4
 // @description  Trên Odoo: tự chạy Odoo Helper (mã nằm trong dashboard, không cần cập nhật). Trên Zalo Web: nhận tin "nhắn Zalo thủ kho" từ Odoo và tự điền vào ô chat (không tự gửi, bạn bấm Enter).
 // @match        https://erp.dekko.com.vn/*
 // @match        https://chat.zalo.me/*
@@ -81,6 +81,15 @@
   function tryFill() {
     if (!pending || filled[pending.id]) return;
     if (Date.now() - pending.at > 10 * 60 * 1000) { pending = null; return; } // tin chờ quá 10 phút thì bỏ
+    if (pending.app) { // dùng ứng dụng Zalo trên máy: mở ứng dụng từ trang zalo.me, KHÔNG điền vào Zalo Web (người dùng dán Ctrl+V trong ứng dụng)
+      if (!pending.appDone) {
+        var nb = [].slice.call(document.querySelectorAll("button,a,[role='button']")).filter(function (b) { return vis(b) && /^\s*Nhắn tin\s*$/i.test(b.textContent || ""); })[0];
+        if (nb && !pending.clicked) { pending.clicked = 1; setTimeout(function () { try { nb.click(); } catch (e) {} }, 700); }
+        chip("📱 Tin đã sao chép: <i>" + esc(pending.text) + "</i><br><small>" + (nb ? "Đang mở ứng dụng Zalo (nếu trình duyệt hỏi hãy chọn <b>Mở</b>; chưa mở thì bấm nút <b>Nhắn tin</b> trên trang này). " : "Bấm nút <b>Nhắn tin</b> để mở ứng dụng Zalo. ") + "Trong ứng dụng: bấm vào ô chat, <b>Ctrl+V</b>, kiểm tra đúng người rồi <b>Enter</b>.</small>");
+        if (nb && pending.clicked) pending.appDone = 1;
+      }
+      return;
+    }
     if (pending.manual) { // không có số điện thoại (dùng chat cũ): chỉ điền khi bạn bấm nút, để không điền nhầm vào cuộc trò chuyện đang mở
       if (!pending.shown) {
         pending.shown = 1;
@@ -114,7 +123,7 @@
     var d = e.data;
     if (!d || d.qlcvz !== "fill" || typeof d.text !== "string" || !d.text || d.text.length > 600) return;
     if (filled[d.id] || (pending && pending.id === d.id)) return;
-    pending = { id: d.id, text: d.text, at: Date.now(), to: typeof d.to === "string" ? d.to.slice(0, 80) : "", manual: !!d.manual, phone: typeof d.phone === "string" ? d.phone.replace(/[^\d]/g, "").slice(0, 15) : "" };
+    pending = { id: d.id, text: d.text, at: Date.now(), to: typeof d.to === "string" ? d.to.slice(0, 80) : "", manual: !!d.manual, phone: typeof d.phone === "string" ? d.phone.replace(/[^\d]/g, "").slice(0, 15) : "", app: !!d.app };
     tryFill();
   });
   // Zalo Web do Odoo mở ra có window.opener: chủ động xin tin (phòng khi tin đẩy sang lúc trang còn đang nạp/đăng nhập)

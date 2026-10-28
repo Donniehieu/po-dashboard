@@ -59,6 +59,19 @@ Cách này không tự điền để tránh điền nhầm vào cuộc trò chuy
 
 Nếu Thủ kho được ghi bằng **liên kết** `https://zalo.me/g/…` (nhóm) thì mở đúng liên kết đó và tin tự điền khi ô chat xuất hiện, không cần bấm nút Điền.
 
+## Dùng ứng dụng Zalo trên máy (thay cho Zalo Web)
+Nếu bạn dùng ứng dụng Zalo trên máy tính và không muốn dùng Zalo Web:
+1. Trong hộp ⚙ (ở phiếu kho), ghi **số điện thoại** (hoặc liên kết zalo.me) của Thủ kho, tích **Dùng ứng dụng Zalo trên máy**, bấm **Lưu**.
+2. Bấm **💬 Nhắn Zalo thủ kho**. Tin được sao chép sẵn; một tab `zalo.me/<số>` mở ra và script tự bấm nút **Nhắn tin**.
+3. Trình duyệt hỏi "Mở Zalo?" thì chọn **Mở** (tích *luôn cho phép* để lần sau khỏi hỏi). Nếu ứng dụng chưa mở, bấm nút **Nhắn tin** trên trang đó bằng tay.
+4. Ứng dụng Zalo mở đúng cuộc trò chuyện: bấm vào ô chat, **Ctrl+V**, kiểm tra đúng người rồi **Enter**.
+Ở chế độ này không điền gì vào Zalo Web.
+
+### Thủ kho khóa tìm kiếm bằng số điện thoại
+Một số tài khoản Zalo tắt chế độ cho người khác tìm bằng số điện thoại nên số/`zalo.me/<số>` không tìm ra họ. Cách xử lý, theo thứ tự dễ nhất:
+1. **Dùng chat cũ**: trong hộp ⚙ chỉ ghi **Tên** và **để trống** ô SĐT/liên kết. Nếu đang bật *Dùng ứng dụng Zalo trên máy*: bấm 💬, tin được sao chép, bạn mở ứng dụng Zalo → bấm chat cũ với người đó → ô chat → **Ctrl+V** → **Enter**. Nếu dùng Zalo Web: bấm 💬, vào chat cũ trên Zalo Web rồi bấm **✍ Điền vào cuộc trò chuyện đang mở**.
+2. **Liên kết cá nhân**: nhờ người đó mở Zalo → *Cá nhân* → chia sẻ **mã QR / liên kết** của họ (dạng `https://zalo.me/…`) rồi dán liên kết đó vào ô SĐT/liên kết.
+
 ## Nếu có sự cố
 | Hiện tượng | Cách xử lý |
 |---|---|
