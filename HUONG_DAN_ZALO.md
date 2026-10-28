@@ -49,12 +49,15 @@ Trong hộp ⚙, chỉ ghi **Tên** (và đầu số kho), **để trống ô S�
 Cách này không tự điền để tránh điền nhầm vào cuộc trò chuyện khác đang mở. Muốn tự điền hoàn toàn thì cần số điện thoại hoặc liên kết `zalo.me` của người đó.
 
 ## Cách dùng hằng ngày
+(Từ khi script mồi lên 2.1.3, Thủ kho ghi bằng **số điện thoại** sẽ mở **Zalo Web**, vì trang `zalo.me/<số>` của Zalo chỉ có nút "Nhắn tin" mở ứng dụng trên máy, không vào được Zalo Web.)
+
 1. Mở phiếu kho trên Odoo.
-2. Bấm **💬 Nhắn Zalo thủ kho**.
-3. Một tab Zalo mở ra (tin cũng đã được sao chép sẵn vào bộ nhớ tạm).
-4. Nếu Zalo hiện trang giới thiệu tài khoản, bấm **Nhắn tin** / **Dùng Zalo Web** để vào cuộc trò chuyện. Nếu Zalo hỏi mở ứng dụng, chọn tiếp tục trên trình duyệt.
-5. Khi ô chat hiện ra, tin **tự điền** và có khung nhỏ ở góc trái dưới: *"Đã điền tin vào ô chat…"*.
-6. Kiểm tra đúng người nhận, bấm **Enter** để gửi.
+2. Bấm **💬 Nhắn Zalo thủ kho**. Tab Zalo Web mở ra (tin cũng đã được sao chép sẵn).
+3. Ở khung nhỏ góc trái dưới trang Zalo: bấm **🔎 Điền SĐT vào ô tìm kiếm** để đưa số của Thủ kho vào ô **Tìm kiếm** của Zalo, rồi bấm vào kết quả để mở cuộc trò chuyện. (Có chat cũ rồi thì bấm thẳng vào chat cũ.)
+4. Khi cuộc trò chuyện đã mở, bấm **✍ Điền vào cuộc trò chuyện đang mở**. Tin được điền vào ô chat.
+5. Kiểm tra đúng người nhận rồi bấm **Enter** để gửi.
+
+Nếu Thủ kho được ghi bằng **liên kết** `https://zalo.me/g/…` (nhóm) thì mở đúng liên kết đó và tin tự điền khi ô chat xuất hiện, không cần bấm nút Điền.
 
 ## Nếu có sự cố
 | Hiện tượng | Cách xử lý |

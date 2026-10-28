@@ -323,11 +323,11 @@
   if (location.hostname === "erp.dekko.com.vn") addEventListener("message", (e) => {
     if (!ZALO_ORIGINS.includes(e.origin)) return;
     const d = e.data;
-    if (d && d.qlcvz === "req" && zaloMsg && Date.now() - zaloMsg.at < 10 * 60 * 1000) e.source.postMessage({ qlcvz: "fill", id: zaloMsg.at, text: zaloMsg.text, to: zaloMsg.to, manual: zaloMsg.manual }, e.origin);
+    if (d && d.qlcvz === "req" && zaloMsg && Date.now() - zaloMsg.at < 10 * 60 * 1000) e.source.postMessage({ qlcvz: "fill", id: zaloMsg.at, text: zaloMsg.text, to: zaloMsg.to, manual: zaloMsg.manual, phone: zaloMsg.phone }, e.origin);
   });
   function pushZalo(w, m) {
     [1500, 4000, 8000, 15000, 30000].forEach((ms) => setTimeout(() => {
-      try { if (w && !w.closed) ZALO_ORIGINS.forEach((o) => w.postMessage({ qlcvz: "fill", id: m.at, text: m.text, to: m.to, manual: m.manual }, o)); } catch (e) {}
+      try { if (w && !w.closed) ZALO_ORIGINS.forEach((o) => w.postMessage({ qlcvz: "fill", id: m.at, text: m.text, to: m.to, manual: m.manual, phone: m.phone }, o)); } catch (e) {}
     }, ms));
   }
   let zaloBusy = 0;
@@ -339,13 +339,15 @@
     if (!k) { msg("Chưa có Zalo của Thủ kho cho phiếu " + name + ". Hãy nhập ở hộp vừa mở.", true); return zaloSettings(name.split("/")[0]); }
     const text = loadZalo().tpl.split("{phieu}").join(name);
     const ok = await copyText(text);
-    const url = zaloUrl(k.zalo);
-    zaloMsg = { at: Date.now(), text, to: k.name || "", manual: !url };
-    const w = window.open(url || "https://chat.zalo.me/", "zalo-chat");
+    const url = zaloUrl(k.zalo), isLink = /^https:\/\//i.test(String(k.zalo || "").trim());
+    const phone = isLink ? "" : String(k.zalo || "").replace(/[^\d]/g, "");
+    // Số điện thoại: zalo.me/<số> chuyển sang ỨNG DỤNG Zalo trên máy, nên mở thẳng Zalo Web và để bạn chọn cuộc trò chuyện; liên kết (nhóm/hồ sơ) thì mở đúng liên kết
+    zaloMsg = { at: Date.now(), text, to: k.name || "", manual: !isLink, phone };
+    const w = window.open(isLink ? url : "https://chat.zalo.me/", "zalo-chat");
     pushZalo(w, zaloMsg);
-    msg((ok ? "Đã sao chép tin: " : "Không sao chép được, hãy gõ tay: ") + "“" + text + "”\n" + (url
+    msg((ok ? "Đã sao chép tin: " : "Không sao chép được, hãy gõ tay: ") + "“" + text + "”\n" + (isLink
       ? "Đã mở Zalo của " + (k.name || "Thủ kho") + ". Nếu đã cài script Zalo, tin tự điền vào ô chat (bạn kiểm tra rồi bấm Enter); nếu không thì dán (Ctrl+V)."
-      : "Đã mở Zalo Web. Hãy mở chat cũ với " + (k.name || "Thủ kho") + ", rồi bấm nút “Điền vào cuộc trò chuyện đang mở” ở khung nhỏ góc trái dưới trang Zalo (hoặc dán Ctrl+V)."), !ok);
+      : "Đã mở Zalo Web. Hãy mở cuộc trò chuyện với " + (k.name || "Thủ kho") + (phone ? " (tìm SĐT " + phone + " ở ô Tìm kiếm)" : " (chat cũ)") + ", rồi bấm nút “Điền vào cuộc trò chuyện đang mở” ở khung nhỏ góc trái dưới trang Zalo (hoặc dán Ctrl+V)."), !ok);
   }
   function zaloSettings(focusPrefix) {
     if (document.getElementById("nccz-modal")) return;

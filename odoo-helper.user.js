@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Odoo Helper + Zalo (mồi tải bản mới nhất từ dashboard, tự điền tin vào Zalo Web)
 // @namespace    https://github.com/Donniehieu
-// @version      2.1.2
+// @version      2.1.3
 // @description  Trên Odoo: tự chạy Odoo Helper (mã nằm trong dashboard, không cần cập nhật). Trên Zalo Web: nhận tin "nhắn Zalo thủ kho" từ Odoo và tự điền vào ô chat (không tự gửi, bạn bấm Enter).
 // @match        https://erp.dekko.com.vn/*
 // @match        https://chat.zalo.me/*
@@ -84,7 +84,18 @@
     if (pending.manual) { // không có số điện thoại (dùng chat cũ): chỉ điền khi bạn bấm nút, để không điền nhầm vào cuộc trò chuyện đang mở
       if (!pending.shown) {
         pending.shown = 1;
-        chip("💬 Tin gửi <b>" + esc(pending.to || "Thủ kho") + "</b>: <i>" + esc(pending.text) + "</i><br><small>Mở <b>chat cũ</b> với người này trong Zalo, rồi bấm nút bên dưới.</small><br><button id='qz-go' style='margin-top:6px;padding:6px 10px;border:0;border-radius:6px;background:#1565c0;color:#fff;font-weight:700;cursor:pointer'>✍ Điền vào cuộc trò chuyện đang mở</button>");
+        var bs = "margin:6px 6px 0 0;padding:6px 10px;border-radius:6px;cursor:pointer;";
+        chip("💬 Tin gửi <b>" + esc(pending.to || "Thủ kho") + "</b>: <i>" + esc(pending.text) + "</i><br><small>" + (pending.phone ? "Tìm SĐT <b>" + esc(pending.phone) + "</b> ở ô <b>Tìm kiếm</b> của Zalo, hoặc mở <b>chat cũ</b>" : "Mở <b>chat cũ</b> với người này trong Zalo") + ", mở cuộc trò chuyện rồi bấm nút <b>Điền</b> bên dưới.</small><br>" +
+          (pending.phone ? "<button id='qz-find' style='" + bs + "border:1px solid #888;background:#f5f5f5'>🔎 Điền SĐT vào ô tìm kiếm</button>" : "") +
+          "<button id='qz-go' style='" + bs + "border:0;background:#1565c0;color:#fff;font-weight:700'>✍ Điền vào cuộc trò chuyện đang mở</button>");
+        var f = document.getElementById("qz-find");
+        if (f) f.onclick = function () {
+          var inp = [].slice.call(document.querySelectorAll("input")).filter(function (i) { return vis(i) && /tìm|search/i.test((i.placeholder || "") + " " + (i.getAttribute("aria-label") || "")); })[0];
+          if (!inp) { f.textContent = "Chưa thấy ô tìm kiếm: hãy gõ SĐT tay"; return; }
+          inp.focus();
+          var setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
+          setter.call(inp, pending.phone); inp.dispatchEvent(new Event("input", { bubbles: true }));
+        };
         var g = document.getElementById("qz-go");
         if (g) g.onclick = function () {
           var el = composer();
@@ -103,7 +114,7 @@
     var d = e.data;
     if (!d || d.qlcvz !== "fill" || typeof d.text !== "string" || !d.text || d.text.length > 600) return;
     if (filled[d.id] || (pending && pending.id === d.id)) return;
-    pending = { id: d.id, text: d.text, at: Date.now(), to: typeof d.to === "string" ? d.to.slice(0, 80) : "", manual: !!d.manual };
+    pending = { id: d.id, text: d.text, at: Date.now(), to: typeof d.to === "string" ? d.to.slice(0, 80) : "", manual: !!d.manual, phone: typeof d.phone === "string" ? d.phone.replace(/[^\d]/g, "").slice(0, 15) : "" };
     tryFill();
   });
   // Zalo Web do Odoo mở ra có window.opener: chủ động xin tin (phòng khi tin đẩy sang lúc trang còn đang nạp/đăng nhập)
