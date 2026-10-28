@@ -40,6 +40,14 @@ Lần đầu bấm nút, trình duyệt có thể chặn cửa sổ Zalo. Bấm 
 4. Sửa **Mẫu tin nhắn** nếu muốn (`{phieu}` sẽ được thay bằng số phiếu kho).
 5. Bấm **Lưu**. Dữ liệu chỉ lưu trong trình duyệt của bạn, không gửi đi đâu.
 
+### Thủ kho không có số điện thoại, chỉ có chat cũ trong Zalo
+Trong hộp ⚙, chỉ ghi **Tên** (và đầu số kho), **để trống ô SĐT/liên kết**. Khi bấm **💬 Nhắn Zalo thủ kho**:
+1. Zalo Web mở ra (tin đã sao chép sẵn).
+2. Trong Zalo, bấm vào **chat cũ** với người đó.
+3. Ở khung nhỏ góc trái dưới trang Zalo, bấm **✍ Điền vào cuộc trò chuyện đang mở**. Tin được điền vào ô chat.
+4. Kiểm tra đúng người rồi bấm **Enter**.
+Cách này không tự điền để tránh điền nhầm vào cuộc trò chuyện khác đang mở. Muốn tự điền hoàn toàn thì cần số điện thoại hoặc liên kết `zalo.me` của người đó.
+
 ## Cách dùng hằng ngày
 1. Mở phiếu kho trên Odoo.
 2. Bấm **💬 Nhắn Zalo thủ kho**.

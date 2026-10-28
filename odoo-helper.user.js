@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Odoo Helper + Zalo (mồi tải bản mới nhất từ dashboard, tự điền tin vào Zalo Web)
 // @namespace    https://github.com/Donniehieu
-// @version      2.1.1
+// @version      2.1.2
 // @description  Trên Odoo: tự chạy Odoo Helper (mã nằm trong dashboard, không cần cập nhật). Trên Zalo Web: nhận tin "nhắn Zalo thủ kho" từ Odoo và tự điền vào ô chat (không tự gửi, bạn bấm Enter).
 // @match        https://erp.dekko.com.vn/*
 // @match        https://chat.zalo.me/*
@@ -64,14 +64,10 @@
     }
     return (el.textContent || "").indexOf(text) >= 0;
   }
-  function tryFill() {
-    if (!pending || filled[pending.id]) return;
-    if (Date.now() - pending.at > 10 * 60 * 1000) { pending = null; return; } // tin chờ quá 10 phút thì bỏ
-    var el = composer();
-    if (!el) { chip("⏳ Tin gửi Thủ kho đang chờ: <i>" + esc(pending.text) + "</i><br><small>Hãy mở cuộc trò chuyện với Thủ kho, tin sẽ tự điền vào ô chat.</small>"); return; }
+  function doFill(el) { // chèn tin vào ô chat rồi báo kết quả
     if (insert(el, pending.text)) {
       filled[pending.id] = 1;
-      chip("✅ Đã điền tin vào ô chat: <i>" + esc(pending.text) + "</i><br><small>Kiểm tra đúng người nhận rồi bấm <b>Enter</b> để gửi.</small>");
+      chip("✅ Đã điền tin vào ô chat" + (pending.to ? " (gửi cho <b>" + esc(pending.to) + "</b>)" : "") + ": <i>" + esc(pending.text) + "</i><br><small>Kiểm tra đúng người nhận rồi bấm <b>Enter</b> để gửi.</small>");
       setTimeout(function () { if (note) { note.remove(); note = null; } }, 20000);
     } else {
       chip("⚠ Không điền tự động được. Tin đã được sao chép: bấm vào ô chat rồi <b>Ctrl+V</b>.<br><i>" + esc(pending.text) + "</i><br><button id='qz-paste' style='margin-top:6px;padding:5px 10px;border:1px solid #888;border-radius:6px;background:#f5f5f5;cursor:pointer'>Dán từ bộ nhớ tạm</button>", true);
@@ -82,12 +78,32 @@
       filled[pending.id] = 1; // không thử lại liên tục
     }
   }
+  function tryFill() {
+    if (!pending || filled[pending.id]) return;
+    if (Date.now() - pending.at > 10 * 60 * 1000) { pending = null; return; } // tin chờ quá 10 phút thì bỏ
+    if (pending.manual) { // không có số điện thoại (dùng chat cũ): chỉ điền khi bạn bấm nút, để không điền nhầm vào cuộc trò chuyện đang mở
+      if (!pending.shown) {
+        pending.shown = 1;
+        chip("💬 Tin gửi <b>" + esc(pending.to || "Thủ kho") + "</b>: <i>" + esc(pending.text) + "</i><br><small>Mở <b>chat cũ</b> với người này trong Zalo, rồi bấm nút bên dưới.</small><br><button id='qz-go' style='margin-top:6px;padding:6px 10px;border:0;border-radius:6px;background:#1565c0;color:#fff;font-weight:700;cursor:pointer'>✍ Điền vào cuộc trò chuyện đang mở</button>");
+        var g = document.getElementById("qz-go");
+        if (g) g.onclick = function () {
+          var el = composer();
+          if (!el) { g.textContent = "Chưa thấy ô chat: hãy mở cuộc trò chuyện trước"; return; }
+          doFill(el);
+        };
+      }
+      return;
+    }
+    var el = composer();
+    if (!el) { chip("⏳ Tin gửi Thủ kho đang chờ: <i>" + esc(pending.text) + "</i><br><small>Hãy mở cuộc trò chuyện với Thủ kho, tin sẽ tự điền vào ô chat.</small>"); return; }
+    doFill(el);
+  }
   window.addEventListener("message", function (e) {
     if (e.origin !== ERP) return;
     var d = e.data;
     if (!d || d.qlcvz !== "fill" || typeof d.text !== "string" || !d.text || d.text.length > 600) return;
     if (filled[d.id] || (pending && pending.id === d.id)) return;
-    pending = { id: d.id, text: d.text, at: Date.now() };
+    pending = { id: d.id, text: d.text, at: Date.now(), to: typeof d.to === "string" ? d.to.slice(0, 80) : "", manual: !!d.manual };
     tryFill();
   });
   // Zalo Web do Odoo mở ra có window.opener: chủ động xin tin (phòng khi tin đẩy sang lúc trang còn đang nạp/đăng nhập)
