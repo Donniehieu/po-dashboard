@@ -154,6 +154,7 @@ table.hist td{vertical-align:top}
 .auto{display:inline-flex;gap:6px;align-items:center;font-size:13px;color:var(--mute);cursor:pointer}
 
 .ol{color:var(--brand);text-decoration:none;cursor:pointer;border-bottom:1px dashed var(--brand)}
+.hl{color:var(--brand);text-decoration:none;cursor:pointer;border-bottom:1px dashed var(--brand)}.hl:hover{background:var(--soft)}
 .ol:hover{background:var(--soft)}
 .micbtn{border:1px solid var(--line);background:var(--card);border-radius:8px;padding:4px 8px;margin-left:4px;font-size:15px}
 .micbtn.rec,#vmic.rec{background:var(--bad);color:#fff;animation:pulse 1s infinite}
@@ -837,7 +838,7 @@ async function ghFetchFile(){
   const hd=ghHead(c);if(cached&&cached.etag&&cached.buf)hd["If-None-Match"]=cached.etag;
   const r=await fetch(url,{headers:hd,cache:"no-store"});
   if(r.status===304&&cached&&cached.buf)return {buf:cached.buf,sha:cached.sha,name:cached.name};
-  if(!r.ok)throw new Error(r.status===404?"Không tìm thấy file trên GitHub (kiểm tra tên repo, đường dẫn và quyền của mã truy cập)":r.status===401?"Mã truy cập GitHub không đúng hoặc đã hết hạn":"GitHub trả lỗi "+r.status);
+  if(!r.ok){const e=new Error(r.status===404?"Không tìm thấy file trên GitHub (kiểm tra tên repo, đường dẫn và quyền của mã truy cập)":r.status===401?"Mã truy cập GitHub không đúng, đã hết hạn hoặc đã bị thu hồi. Mã được lưu riêng trên từng thiết bị: hãy nhập mã mới ở hộp “Kết nối GitHub” (⚙ GitHub).":"GitHub trả lỗi "+r.status);e.status=r.status;throw e}
   const j=await r.json();let buf;
   if(j.content&&j.encoding==="base64")buf=b64ToBuf(j.content);
   else buf=await (await fetch(url,{headers:{...ghHead(c),Accept:"application/vnd.github.raw+json"},cache:"no-store"})).arrayBuffer();
@@ -863,7 +864,10 @@ async function loadFromGitHub(silent){
     ods.fileSha=fc0?fc0.sha:null;
     if(keep!=="overview"&&(typeof keep!=="number"||state.sheets[keep])){state.active=keep;renderTabs();render()}
     if(!silent)toast("Đã tải “"+f.name+"” từ GitHub");
-  }catch(e){toast(e.message,true)}
+  }catch(e){
+    toast(e.message,true);
+    if(e.status===401){try{const b=$("#btnGh");if(b&&!$("#dlg").open)b.click()}catch(_){}} // mở sẵn hộp nhập mã mới
+  }
 }
 
 /* ---- Tab Netsuite Data: bộ dữ liệu lớn (hàng chục nghìn dòng) nên KHÔNG gộp vào PO-data.xlsx và KHÔNG lưu dạng Excel trên GitHub:
@@ -1465,14 +1469,17 @@ function fillHistory(){
   const box=$("#hlist");if(!box)return;const u=state.hui;
   const list=state.history.filter(e=>(!u.act||e.act===u.act)&&(!u.q||JSON.stringify(e).toLowerCase().includes(u.q)));
   if(!list.length){box.innerHTML=`<div class="card sub">Chưa có thao tác nào${u.act||u.q?" khớp bộ lọc":""}. Hãy sửa, thêm hoặc xóa một bản ghi, lịch sử sẽ hiện ở đây.</div>`;return}
+  const poIdx=state.sheets.findIndex(s=>s.wf),poSh=state.sheets[poIdx],poSet=new Set(poSh?poSh.rows.map(r=>String(r.v[poSh.title]??"").trim().toUpperCase()):[]);
+  const keyHtml=e=>{const k=String(e.key||"").trim();return poSh&&k&&poSet.has(k.toUpperCase())?`<a class="hl" href="#" data-hpo="${esc(k)}" title="Bấm để xem ${esc(k)} ở tab PO">${esc(k)}</a>`:esc(e.key||"")}; // bản ghi là số PO -> bấm nhảy sang tab PO
   const rows=list.slice(0,u.shown).map(e=>{
     const d=new Date(e.t);const tm=`${pad2(d.getDate())}/${pad2(d.getMonth()+1)} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
     let det="";
     if(e.ch){det=e.ch.slice(0,5).map(c=>`<b>${esc(c.col)}</b>: ${showVal(c.old)} → ${showVal(c.new)}`).join("<br>")+(e.ch.length>5?`<br><span class="sub">… và ${e.ch.length-5} cột nữa</span>`:"")}
     else if(e.snap){const en=Object.entries(e.snap);det=en.slice(0,5).map(([k,v])=>`<b>${esc(k)}</b>: ${showVal(v)}`).join(" · ")+(en.length>5?` <span class="sub">… +${en.length-5} cột</span>`:"")}
     const can=(e.act==="xóa"||e.ch)&&state.sheets.some(s=>s.name===e.sheet);
-    return `<tr><td class="num" style="text-align:left">${tm}</td><td><span class="chip" style="--c:${ACT_COLOR[e.act]||"#64748b"}">${esc(e.act)}</span>${e.via&&e.via!=="dashboard"?`<div class="sub">${esc(e.via)}</div>`:""}</td><td>${esc(e.sheet)}</td><td><b>${esc(e.key||"")}</b><div class="sub">dòng ${e.n}</div></td><td>${det}</td><td>${can?`<button class="btn sm" data-rs="${esc(e.id)}">↩ Khôi phục</button>`:""}</td></tr>`}).join("");
+    return `<tr><td class="num" style="text-align:left">${tm}</td><td><span class="chip" style="--c:${ACT_COLOR[e.act]||"#64748b"}">${esc(e.act)}</span>${e.via&&e.via!=="dashboard"?`<div class="sub">${esc(e.via)}</div>`:""}</td><td>${esc(e.sheet)}</td><td><b>${keyHtml(e)}</b><div class="sub">dòng ${e.n}</div></td><td>${det}</td><td>${can?`<button class="btn sm" data-rs="${esc(e.id)}">↩ Khôi phục</button>`:""}</td></tr>`}).join("");
   box.innerHTML=`<div class="tablewrap"><table class="hist"><thead><tr><th>Thời gian</th><th>Thao tác</th><th>Sheet</th><th>Bản ghi</th><th>Chi tiết</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`+(list.length>u.shown?`<div class="more"><button class="btn" id="hmore">Hiện thêm (${list.length-u.shown})</button></div>`:"");
+  box.querySelectorAll("[data-hpo]").forEach(a=>a.onclick=ev=>{ev.preventDefault();const k=a.dataset.hpo;goSheet(poIdx,{search:k.toLowerCase()});toast("Đang xem "+k+" ở tab PO")});
   box.querySelectorAll("[data-rs]").forEach(b=>b.onclick=()=>{if(confirm("Khôi phục thao tác này? Thay đổi sẽ được ghi thành một thao tác mới."))restoreEntry(b.dataset.rs)});
   const m=$("#hmore");if(m)m.onclick=()=>{u.shown+=200;fillHistory()};
 }
