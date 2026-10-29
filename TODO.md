@@ -314,6 +314,13 @@ Vì số PAY **đổi tên** thành chuỗi chứa `BNK` khi được thanh toá
 
 - ✅ (28/10/2026) **Sửa tiếp: không hiện nút Nhắn Zalo thủ kho ở phiếu `…/action-1572/2259/action-322/29710`**: số phiếu là **`KR&D/IN/00033`** (kho R&D), đầu số có ký tự `&` nên cách nhận diện cũ (chỉ chữ và số) bỏ sót. Đã nới: đầu số/loại là bất kỳ ký tự nào không phải khoảng trắng hoặc `/`, vẫn yêu cầu dạng `…/…/<số>` kèm đuôi " - <số>" tùy chọn và các trường loại điều chuyển, kho đích của phiếu kho (số PAY/BNK, PO không bị nhận nhầm). Trong hộp ⚙ nhập đầu số đúng là **`KR&D`** cho kho này. Đã thử: `KDQ/IN/00398`, `KDS/IN/00666 - 1`, `KR&D/IN/00033` hiện nút; `PAY…`, `…/BNK…`, mã PO không hiện.
 
+### Cột "Theo dõi tiến độ" và tự ghi tiến độ sau khi in Đề nghị thanh toán (29/10/2026)
+- Tab **Phiếu thanh toán**: cột "Nhắc KT thanh toán" đổi tên hiển thị thành **"Theo dõi tiến độ"** (tên gốc trong Excel giữ nguyên để script đồng bộ không đổi); vẫn nhận lời nhắc mặc định của script như cũ.
+- Sau khi nút **In tự động** của Odoo Helper mở hộp thoại in và hộp thoại đóng, Helper hiện thanh xanh “Đã in …? Sau 15s sẽ ghi…” kèm nút **Hoàn tác** (sự kiện `afterprint` của trình duyệt cũng nổ khi bấm Hủy nên không ghi ngay; bấm Hoàn tác nếu đã hủy in). Hết 15 giây Helper gửi sự kiện về dashboard (qua tab Odoo mở từ dashboard; nếu mở Odoo trực tiếp thì sự kiện chờ trong bộ nhớ Odoo, dashboard hỏi lại mỗi lần mở Odoo từ dashboard).
+- Dashboard xử lý mỗi sự kiện một lần: ghi **"Đã gửi duyệt TT cho TP"** vào cột Theo dõi tiến độ của phiếu (bỏ qua phiếu đã thanh toán/hủy); các PO trong "PO liên quan" đang ở đúng bước **"Chờ làm TT"** (cả thanh toán trước lẫn sau) được chuyển sang **"Chờ gửi UNC"**; PO ở bước khác giữ nguyên và dashboard báo trong thông báo.
+- Script đồng bộ (`pay_sync.py`) giữ ghi chú này khi phiếu quá hạn / cần kiểm tra; được thay bằng nhắc KTNH khi sang bước "KTNH xác nhận", thành "Đã TT…" khi đã thanh toán, xóa khi phiếu hủy. 3 test mới, tổng 50 test đạt.
+- Đã thử trên dashboard với dữ liệu thật: ghi đúng, sự kiện lặp không xử lý lại, phiếu không có trên bảng được giữ chờ, PO đã đi xa hơn không bị hạ, PO ở "Chờ gửi NCC" chuyển đúng sang "Chờ gửi UNC". Phía Helper mới kiểm tra cú pháp, chưa thử với hộp thoại in Odoo thật.
+
 ## Đã bỏ theo yêu cầu
 - Bot nhắc việc (Telegram/Zalo/email) và tuổi công nợ theo nhà cung cấp.
 

@@ -642,7 +642,7 @@ const VIEWS=[
   {is:sh=>IS_DS(sh.name),
    order:[/^stt$/i,/^tên ncc$/i,/^(phân loại|note)$/i,/^phát sinh công nợ$/i,/^trạng thái$/i,/^ngày điều chỉnh$/i,/^(ghi chú|ngày check)$/i]},
   {is:sh=>sh.pay,
-   rename:[[/^số pay$/i,"Số chứng từ"],[/^số ngày làm việc trễ$/i,"Số ngày quá hạn"]],
+   rename:[[/^số pay$/i,"Số chứng từ"],[/^số ngày làm việc trễ$/i,"Số ngày quá hạn"],[/^nhắc kt thanh toán$/i,"Theo dõi tiến độ"]],
    hide:[/^số chứng từ hiện tại$/i],
    order:[/^công ty$/i,/^số pay$/i,/^số tiền$/i,/^nhà cung cấp$/i,/^trạng thái tt$/i,/^trạng thái odoo$/i,/^ngày lập$/i,/^hạn thanh toán$/i,/^ngày thanh toán$/i,/^số ngày làm việc trễ$/i,/^po liên quan$/i,/^diễn giải$/i,/^nhắc kt thanh toán$/i,/^ghi chú$/i]}];
 function applyColView(sh,cols){
@@ -1090,6 +1090,7 @@ async function loadBuffer(buf,name,opts={}){
     if(state.src==="github"&&ghReady())loadRemoteHistory();
     odooStart();loadOdooIds();
     setTimeout(()=>{checkRemovals().catch(()=>{})},900); // PO/PAY bị xóa hoặc hủy trên Odoo -> popup
+    setTimeout(()=>{try{applyPrintQueue()}catch(err){console.error(err)}},1400); // sự kiện "đã in Đề nghị thanh toán" đang chờ
   }catch(e){
     console.error(e);
     if(err){err.hidden=false;err.textContent="Không đọc được file: "+e.message}
@@ -1799,6 +1800,65 @@ function applyRemindLog(extra){
   }finally{remindBusy=false}
   return total;
 }
+/* ---- Odoo Helper báo "đã in Đề nghị thanh toán" -> ghi tiến độ của PAY và chuyển PO ----
+   Sau khi bấm in thành công, Odoo Helper gửi sự kiện về dashboard (qua tab Odoo mở từ dashboard, hoặc khi dashboard hỏi lại).
+   Dashboard: cột "Theo dõi tiến độ" của phiếu thanh toán = "Đã gửi duyệt TT cho TP"; các PO trong "PO liên quan" đang ở "Chờ làm TT"
+   -> "Tiến độ hiện tại" = "Chờ gửi UNC" (bước khác giữ nguyên và báo trong thông báo). Mỗi sự kiện chỉ xử lý một lần. */
+const PRINT_Q="qlcv:printq",PRINT_APPLIED="qlcv:printapplied",PROGRESS_SENT="Đã gửi duyệt TT cho TP",PO_AFTER_PRINT="Chờ gửi UNC",PO_BEFORE_PRINT="Chờ làm TT";
+function applyPrintEvent(e){ // -> {found, pay, pos:[mã PO đã chuyển]}
+  const psi=state.sheets.findIndex(s=>s.pay),ps=state.sheets[psi];
+  if(!ps||ps.payNoteIdx==null)return {found:false};
+  const id=String(e.id||"").trim().toUpperCase(),rid=String(e.rid||"").trim();
+  const rows=ps.rows.filter(r=>{
+    const no=String(r.v[ps.title]??"").trim().toUpperCase(),cur=ps.payCurIdx!=null?String(r.v[ps.payCurIdx]??"").trim().toUpperCase():"";
+    return (id&&(no===id||cur===id))||(rid&&ps.payId>=0&&String(r.v[ps.payId]??"")===rid);
+  });
+  if(!rows.length)return {found:false};
+  const poSi=state.sheets.findIndex(s=>s.wf),po=state.sheets[poSi],moved=[],skipped=[];let pay=false;
+  state.via="Odoo Helper (in đề nghị)";
+  try{for(const r of rows){
+    if(r.done)continue; // phiếu đã thanh toán / hủy: không ghi tiến độ nữa
+    if(String(r.v[ps.payNoteIdx]??"")!==PROGRESS_SENT){setCell(psi,r,ps.payNoteIdx,PROGRESS_SENT);pay=true}
+    if(!po||po.noteIdx==null||ps.payPoIdx==null)continue;
+    for(const raw of String(r.v[ps.payPoIdx]??"").split(/[,;\s]+/)){
+      const code=raw.trim().toUpperCase();if(!code)continue;
+      const pr=po.rows.find(x=>String(x.v[po.title]??"").trim().toUpperCase()===code);
+      if(!pr||pr.done)continue;
+      // chỉ chuyển khi PO đang đúng bước liền trước ("Chờ làm TT", cả TT trước lẫn TT sau); bước khác thì giữ nguyên và báo
+      if(pr.wf===PO_BEFORE_PRINT&&seqOf(po,pr).includes(PO_AFTER_PRINT)){if(setWf(poSi,pr,PO_AFTER_PRINT))moved.push(code)}
+      else if(pr.wf!==PO_AFTER_PRINT)skipped.push(code+" ("+pr.wf+")");
+    }
+  }}finally{state.via="dashboard"}
+  if(pay||moved.length){setStatus(ps);if(po)setStatus(po)}
+  return {found:true,pay,pos:moved,skipped,no:rows[0].v[ps.title]};
+}
+function applyPrintQueue(){ // -> khóa các sự kiện đã xử lý xong (để báo ngược cho Odoo Helper xóa)
+  if(!state.sheets.length||state.stale)return [];
+  let q=store.get(PRINT_Q)||[];if(!q.length)return [];
+  const applied=new Set(store.get(PRINT_APPLIED)||[]),done=[],msgs=[];
+  for(const e of q){
+    if(applied.has(e.k)){done.push(e.k);continue}
+    const r=applyPrintEvent(e);
+    if(!r.found)continue; // chưa thấy phiếu trên bảng (dữ liệu chưa về): giữ lại thử sau
+    applied.add(e.k);done.push(e.k);
+    if(r.skipped.length)msgs.push(`${r.no}: PO ${r.skipped.join(", ")} chưa ở “${PO_BEFORE_PRINT}” nên chưa tự chuyển sang “${PO_AFTER_PRINT}”`);
+    if(r.pay||r.pos.length)msgs.push(`${r.no}: “${PROGRESS_SENT}”${r.pos.length?" · PO "+r.pos.join(", ")+" → “"+PO_AFTER_PRINT+"”":""}`);
+  }
+  store.set(PRINT_APPLIED,[...applied].slice(-500));
+  store.set(PRINT_Q,q.filter(e=>!done.includes(e.k)));
+  if(msgs.length){renderTabs();render();updateChrome();toast("Đã ghi tiến độ sau khi in Đề nghị thanh toán: "+msgs.join(" | "))}
+  return done;
+}
+function receivePrintEvents(list,source,origin){
+  const q=store.get(PRINT_Q)||[],have=new Set(q.map(x=>x.k)),applied=new Set(store.get(PRINT_APPLIED)||[]);
+  for(const x of Array.isArray(list)?list:[]){
+    if(!x||typeof x.k!=="string"||!(x.id||x.rid)||x.kind!=="printed")continue;
+    if(!have.has(x.k)&&!applied.has(x.k))q.push({k:x.k.slice(0,120),id:String(x.id||"").slice(0,60),rid:String(x.rid||"").slice(0,20),kind:"printed",at:String(x.at||"")});
+  }
+  store.set(PRINT_Q,q.slice(-200));
+  const done=applyPrintQueue(),all=(Array.isArray(list)?list:[]).map(x=>x&&x.k).filter(k=>done.includes(k)||applied.has(k));
+  if(source&&all.length){try{source.postMessage({qlcv:"printev-ack",keys:all},origin)}catch(err){}}
+}
 /* Dữ liệu tab Thông tin thanh toán gửi cho Odoo Helper (tự điền thụ hưởng) */
 function bankItems(){
   const B=state.sheets.find(x=>x.bank);if(!B)return [];
@@ -1810,12 +1870,13 @@ function bankItems(){
 /* Mở/điều hướng tab Odoo rồi đẩy dữ liệu tab Thông tin thanh toán sang ngay (nhiều lần vì trang Odoo cần vài giây để nạp Odoo Helper). Cách này chạy cả khi tab Odoo đã mở từ trước (không có window.opener). */
 function openErp(url){
   const w=window.open(url,"odoo-erp");
-  if(w){const send=()=>{try{if(!w.closed){const items=bankItems();if(items.length)w.postMessage({qlcv:"bank-data",items,t:Date.now()},"https://erp.dekko.com.vn")}}catch(e){}};[1500,4000,8000,15000].forEach(ms=>setTimeout(send,ms))}
+  if(w){const send=()=>{try{if(!w.closed){const items=bankItems();if(items.length)w.postMessage({qlcv:"bank-data",items,t:Date.now()},"https://erp.dekko.com.vn");w.postMessage({qlcv:"printev-req"},"https://erp.dekko.com.vn")}}catch(e){}};[1500,4000,8000,15000].forEach(ms=>setTimeout(send,ms))}
   return w;
 }
 /* Odoo Helper chạy trong tab Odoo (mở từ dashboard) gửi nhật ký tin đã gửi về đây bằng postMessage */
 addEventListener("message",e=>{
   if(e.origin!=="https://erp.dekko.com.vn")return;
+  if(e.data&&e.data.qlcv==="printev"&&Array.isArray(e.data.events)){try{receivePrintEvents(e.data.events,e.source,e.origin)}catch(err){console.error(err)}return}
   if(e.data&&e.data.qlcv==="bank-req"&&e.source){ // Odoo Helper xin dữ liệu tab Thông tin thanh toán để tự điền thụ hưởng
     try{e.source.postMessage({qlcv:"bank-data",items:bankItems(),t:Date.now()},e.origin)}catch(err){console.error(err)}
     return;

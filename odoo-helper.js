@@ -457,9 +457,54 @@
     say("Bản xem trước đã sẵn sàng, giữ một chút rồi bấm In…"); await sleep(HOLD + 300);
     const pb = frame.contentDocument.querySelector("#printButton");
     if (!pb || pb.disabled) throw new Error("nút In của trình xem PDF chưa dùng được.");
+    const doc = docInfo();
+    watchPrinted(frame, doc);
     pb.click();
     msg("Đã mở hộp thoại in Đề nghị thanh toán: hãy kiểm tra, căn chỉnh rồi xác nhận in.");
   }
+  /* Sau khi hộp thoại in đóng (afterprint – sự kiện này cũng nổ khi người dùng bấm Hủy, nên không ghi ngay): hiện thông báo
+     có nút Hoàn tác trong PRINT_HOLD giây, hết thời gian mới ghi sự kiện "đã in" để dashboard note “Đã gửi duyệt TT cho TP” và chuyển PO sang “Chờ gửi UNC”. */
+  const PRINTEV_KEY = "qlcv_printev_v1", PRINT_HOLD = 15;
+  function watchPrinted(frame, doc) {
+    let fired = false;
+    const onAfter = () => { if (fired) return; fired = true; offerPrinted(doc); };
+    try { frame.contentWindow.addEventListener("afterprint", onAfter, { once: true }); } catch (e) {}
+    addEventListener("afterprint", onAfter, { once: true });
+  }
+  function offerPrinted(doc) {
+    if (!doc || !(doc.id || doc.rid)) return;
+    const bar = document.createElement("div");
+    bar.style.cssText = "position:fixed;left:50%;transform:translateX(-50%);bottom:18px;z-index:2147483647;background:#1b5e20;color:#fff;border-radius:8px;padding:10px 14px;font:13px system-ui;box-shadow:0 4px 14px rgba(0,0,0,.35);display:flex;gap:12px;align-items:center";
+    const txt = document.createElement("span"), undo = document.createElement("button");
+    undo.textContent = "Hoàn tác"; undo.style.cssText = "background:#fff;color:#1b5e20;border:0;border-radius:5px;padding:3px 10px;cursor:pointer;font:inherit";
+    bar.append(txt, undo); document.body.appendChild(bar);
+    let left = PRINT_HOLD, dead = false;
+    const timer = setInterval(() => {
+      left--; txt.textContent = `Đã in ${doc.id || doc.rid}? Sau ${left}s sẽ ghi “Đã gửi duyệt TT cho TP” trên dashboard (bấm Hoàn tác nếu đã hủy in).`;
+      if (left <= 0) { clearInterval(timer); bar.remove(); if (!dead) recordPrinted(doc); }
+    }, 1000);
+    txt.textContent = `Đã in ${doc.id || doc.rid}? Sau ${left}s sẽ ghi “Đã gửi duyệt TT cho TP” trên dashboard (bấm Hoàn tác nếu đã hủy in).`;
+    undo.onclick = () => { dead = true; clearInterval(timer); bar.remove(); msg("Đã hoàn tác: không ghi tiến độ trên dashboard."); };
+  }
+  function recordPrinted(doc) {
+    const q = st.get(PRINTEV_KEY, []);
+    q.push({ k: "printed:" + (doc.id || doc.rid) + ":" + nowIso(), id: doc.id, rid: doc.rid, kind: "printed", at: nowIso() });
+    st.set(PRINTEV_KEY, q.slice(-100));
+    msg("✔ Đã ghi nhận in xong " + (doc.id || doc.rid) + " – dashboard sẽ note “Đã gửi duyệt TT cho TP”.");
+    sendPrintEvents();
+  }
+  function sendPrintEvents(target, origin) { // gửi các sự kiện chưa được dashboard xác nhận
+    const q = st.get(PRINTEV_KEY, []); if (!q.length) return;
+    try {
+      if (target) target.postMessage({ qlcv: "printev", events: q }, origin);
+      else if (window.opener && !window.opener.closed) window.opener.postMessage({ qlcv: "printev", events: q }, "*");
+    } catch (e) {}
+  }
+  if (location.hostname === "erp.dekko.com.vn") addEventListener("message", (e) => {
+    const d = e.data; if (!d || !/^https:\/\/[a-z0-9-]+\.github\.io$/i.test(e.origin)) return;
+    if (d.qlcv === "printev-req") sendPrintEvents(e.source, e.origin);
+    else if (d.qlcv === "printev-ack" && Array.isArray(d.keys)) st.set(PRINTEV_KEY, st.get(PRINTEV_KEY, []).filter((x) => !d.keys.includes(x.k)));
+  });
   if (location.hostname === "erp.dekko.com.vn") { hookSend(); hookSendRequest(); }
   async function typeMessage(tpl) {
     const doc = docInfo();
@@ -658,7 +703,7 @@
   let lastKey = "";
   function tick() {
     if (location.hostname !== "erp.dekko.com.vn") { bridge(); return; }
-    sendToOpener(); requestBank();
+    sendToOpener(); requestBank(); sendPrintEvents();
     if (!PATH_RE.test(location.pathname + location.hash)) { if (ui) { ui.box.remove(); ui = null; } lastKey = ""; return; }
     build(); syncMode();
     if (!ui || !canFill() || !cfg().auto) return;
