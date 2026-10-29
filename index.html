@@ -2776,15 +2776,21 @@ function nextWf(sh,r,dir){
   const seq=seqOf(sh,r),cur=r.wf,i=seq.indexOf(cur);let ni;
   if(i>=0)ni=i+dir;
   else{const u=WF_ALL.indexOf(cur);
-    if(u<0)ni=dir>0?0:-1;
+    if(u<0){ // ghi chú tự do (không thuộc bước nào): ▶ vào quy trình ở bước hợp lệ đầu tiên (mốc tối thiểu theo Odoo nếu có), ◀ không có bước trước
+      if(dir<0)return null;
+      const fl=wfFloorOf(sh,r);ni=fl?seq.indexOf(fl):0}
     else if(dir>0)ni=seq.findIndex(x=>WF_ALL.indexOf(x)>u);
     else{ni=-1;seq.forEach((x,j)=>{if(WF_ALL.indexOf(x)<u)ni=j})}}
   return ni<0||ni>=seq.length?null:seq[ni];
 }
+const seq0=(sh,r)=>seqOf(sh,r);
 function stepStatus(si,n,dir){
   const sh=state.sheets[si],r=sh.rows.find(x=>x.n===n);if(!r)return;
   const nv=nextWf(sh,r,dir),cur=r.wf;
-  if(!nv){toast(dir>0?"PO này đã ở bước cuối của quy trình.":"PO này đang ở bước đầu của quy trình.");return}
+  if(!nv){
+    if(seq0(sh,r).indexOf(cur)<0&&WF_ALL.indexOf(cur)<0)toast(`Tiến độ “${cur}” là ghi chú tự do, chưa thuộc bước nào của quy trình nên không có bước trước. Bấm ▶ để đưa vào bước “${wfFloorOf(sh,r)||seq0(sh,r)[0]}”.`);
+    else toast(dir>0?"PO này đã ở bước cuối của quy trình.":"PO này đang ở bước đầu của quy trình.");
+    return}
   if(!setWf(si,r,nv))return;setStatus(sh);renderDyn(sh,true,n);updateChrome();
   toast(`${r.v[sh.title]}: ${cur} → ${nv}`);
 }
