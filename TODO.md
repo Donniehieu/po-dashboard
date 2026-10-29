@@ -342,3 +342,8 @@ Vì số PAY **đổi tên** thành chuỗi chứa `BNK` khi được thanh toá
 1. Nhãn trạng thái "Dự thảo" và "Đã phê duyệt" của Odoo có đúng không (file của bạn chưa có cột này): xem log lần "Chạy thử" của workflow.
 2. Mở Odoo bằng liên kết trực tiếp đã đúng công ty chưa (tham số `?cids=`).
 3. Note cũ dạng ghi chú tự do (vd. "PAY00598") nên chuyển sang cột "Ghi chú".
+
+## Tab Việc hôm nay (đã làm, đang chạy thử)
+- ✅ Tab “🎯 Việc hôm nay”: chấm điểm gấp/quan trọng/dễ, 4 mục, “Đang chờ”, NCC quan trọng tự đoán + ghim tay, kéo thả giữa các mục, chạy lại rule mỗi 2 tiếng, chế độ “Theo workflow”.
+- 🟡 Cần dùng thử vài ngày để so sánh hai chế độ (4 mục và workflow) rồi chọn cách nào hiệu quả thật; rule “NCC quan trọng” là ước đoán.
+- ✅ Mục 2 (PO chặn lệnh sản xuất): script `scripts/mrp_sync.py` (repo po-data) chạy trong workflow đồng bộ Odoo, mỗi giờ một lần (chạy tay thì tính ngay), ghi `data/mrp-block.json`; dashboard đọc file này và cộng điểm quan trọng cho PO cấp NVL cho lệnh sản xuất đang thiếu. Liên kết suy ra qua sản phẩm nên chỉ là ước lượng — 🟡 cần xem vài PO có dòng “cấp NVL cho … lệnh SX” xem đúng chưa.

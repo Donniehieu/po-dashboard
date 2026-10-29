@@ -9,6 +9,7 @@
 - Di chuột vào dòng nào thì dòng đó sáng lên; nút 🗑 cuối dòng để xóa bản ghi.
 - Tab “🕘 Lịch sử”: mọi lần sửa, thêm, xóa, nhập file đều được ghi lại và có nút “Khôi phục”.
 - Tab “⚠ Ưu tiên xử lý”: đơn quá hạn xếp theo mức Khẩn, Cao, Sắp đến hạn.
+- Tab “🎯 Việc hôm nay”: app tự chấm điểm (40% gấp + 40% quan trọng + 20% dễ), chia 4 mục Làm ngay / Lên lịch / Gộp theo NCC / Để sau; việc chờ người khác nằm ở “Đang chờ”. Có hai cách xem để so sánh: “Theo 4 mục” (xếp theo điểm) và “Theo workflow” (xếp theo bước: trễ nhập hàng, chờ nhập hàng, chờ gửi NCC, chờ gửi duyệt PO, chờ báo giá, chờ KT xác nhận công nợ, chờ lập hóa đơn, chờ làm TT). Kéo thả (hoặc ô ⇄) để chuyển việc sang mục khác hoặc “Để lượt sau”; cứ 2 tiếng rule tự chạy lại, nút “Xếp lại ngay” để chạy tay. Bảng “NCC quan trọng” do app tự đoán, bạn ghim/bỏ ghim NCC lệch (lưu trên trình duyệt).
 - Nút “⬆ Nhập file Odoo”: gộp file xuất tay từ Odoo theo Mã đơn hàng, giữ nguyên cột Note.
 
 ## Bước 1. Hai repo trên GitHub (tài khoản Donniehieu)
