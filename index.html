@@ -81,6 +81,17 @@ main{padding:18px 20px 60px;max-width:1500px;margin:0 auto}
 .donutwrap svg{flex:none}
 .donutwrap .bars{flex:1;min-width:200px}
 .scroll-x{overflow-x:auto}
+.qbar{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:0 0 12px}
+.qb{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:16px;padding:4px 11px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;gap:6px;align-items:center}
+.qb b{background:var(--soft);border-radius:10px;padding:0 7px;font-size:12px;font-variant-numeric:tabular-nums}
+.qb:hover{border-color:var(--brand)}
+.qb.zero{opacity:.5}
+.qb.bad b{background:color-mix(in srgb,var(--bad) 18%,transparent);color:var(--bad)}
+.qb.warn b{background:color-mix(in srgb,var(--warn) 22%,transparent);color:var(--warn)}
+.qb.ok b{background:color-mix(in srgb,var(--ok) 20%,transparent);color:var(--ok)}
+.qb.on{background:var(--brand);border-color:var(--brand);color:#fff}
+.qb.on b{background:rgba(255,255,255,.25);color:#fff}
+@media(max-width:700px){.qbar{flex-wrap:nowrap;overflow-x:auto;padding-bottom:4px}.qb{flex:none;white-space:nowrap}}
 .chips{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 12px;align-items:center}
 .fchip{background:var(--brand);color:#fff;border-radius:14px;padding:3px 6px 3px 12px;font-size:12px;display:inline-flex;gap:6px;align-items:center}
 .fchip b{cursor:pointer;background:rgba(255,255,255,.25);border-radius:50%;width:18px;height:18px;line-height:18px;text-align:center}
@@ -763,7 +774,7 @@ function analyze(raw){
     sh.checklist=false;
   }
   applyColView(sh,cols);
-  sh.ui={filters:{},cf:{},special:null,range:null,search:"",sort:null,shown:100,metric:"count"};
+  sh.ui={filters:{},cf:{},special:null,queue:null,range:null,search:"",sort:null,shown:100,metric:"count"};
   return sh;
 }
 /* huy hiệu PAY/BNK ở tab PO: gom từ tab “Phiếu thanh toán” (PO liên quan) và số PAY ghi trong Note/Ghi chú của PO */
@@ -794,6 +805,7 @@ function payBadges(sh,r){
   return h;
 }
 function setStatus(sh){
+  _qc=null;
   for(const r of sh.rows){
     r.st=null;r.done=null;
     if(sh.pay){
@@ -2085,7 +2097,7 @@ $("#btnNotify").onclick=async()=>{
 };
 function updateChrome(){updateSavebar();scheduleAutoSave();updateBanner();const t=document.querySelector('#tabs [data-i="priority"] .n');if(t)t.textContent=collectItems().length}
 
-function goSheet(si,patch){const sh=state.sheets[si];sh.ui.noteGrp=null;sh.ui.filters={};sh.ui.cf={};sh.ui.special=null;sh.ui.range=null;sh.ui.search="";sh.ui.shown=100;Object.assign(sh.ui,patch||{});state.active=si;renderTabs();render();scrollTo(0,0)}
+function goSheet(si,patch){const sh=state.sheets[si];sh.ui.noteGrp=null;sh.ui.filters={};sh.ui.cf={};sh.ui.special=null;sh.ui.queue=null;sh.ui.range=null;sh.ui.search="";sh.ui.shown=100;Object.assign(sh.ui,patch||{});state.active=si;renderTabs();render();scrollTo(0,0)}
 
 function renderPriority(){
   const it=collectItems();
@@ -2094,6 +2106,8 @@ function renderPriority(){
     {k:"high",t:"Cao – quá hạn",c:"var(--warn)",d:"Quá hạn từ 1 đến 7 ngày"},
     {k:"soon",t:"Sắp đến hạn (3 ngày tới)",c:"var(--brand)",d:"Hạn từ hôm nay đến 3 ngày tới, chưa hoàn thành"}];
   let html=`<div class="note" style="margin:0 0 14px">Một dòng được tính là “trễ” khi ngày hạn đã qua mà chưa hoàn thành (với sheet PO: cột Note chưa là “Hoàn thành”; PO đã Hoàn thành không bao giờ tính là trễ). Mức ưu tiên chỉ dựa vào số ngày trễ và giá trị đơn, không có số liệu nào được tự thêm.</div>`;
+  {const qs=[];state.sheets.forEach((sh,si)=>{if(sh.ext)return;for(const q of queuesFor(sh)){const n=queueCount(sh,q);if(n)qs.push({si,sh,q,n})}});
+   if(qs.length)html+=`<div class="qbar"><span class="sub">Hàng việc theo workflow:</span>`+qs.map(x=>`<button class="qb ${x.q.tone||""}" data-qgo="${x.si}|${x.q.k}" title="${esc(x.sh.name+": "+x.q.h)}">${esc(x.q.l)} <span class="sub">· ${esc(x.sh.name)}</span> <b>${x.n}</b></button>`).join("")+`</div>`}
   if(!it.length)html+=`<div class="card">Hiện không có dòng nào quá hạn hoặc sắp đến hạn. 🎉</div>`;
   else{
     html+=`<div class="grid pgrid">`;
@@ -2145,6 +2159,7 @@ function renderPriority(){
   }
   $("#main").innerHTML=html;
   const m=$("#main");
+  m.querySelectorAll("[data-qgo]").forEach(b=>b.onclick=()=>{const [si,k]=b.dataset.qgo.split("|");goSheet(+si,{queue:k})});
   m.querySelectorAll("[data-go]").forEach(li=>li.onclick=()=>goSheet(+li.dataset.go,{search:li.dataset.q.toLowerCase()}));
   m.querySelectorAll("[data-goblk]").forEach(b=>b.onclick=()=>{const si=+b.dataset.goblk,sh=state.sheets[si];const ci=sh.wf?sh.noteIdx:sh.blockIdx;goSheet(si,{special:b.dataset.done==="1"?null:"overdue",filters:{[ci]:b.dataset.v==="(Trống)"?"":b.dataset.v}})});
   m.querySelectorAll("[data-gof]").forEach(tr=>tr.onclick=()=>goSheet(+tr.dataset.gof,{filters:{[tr.dataset.c]:tr.dataset.v}}));
@@ -2216,6 +2231,64 @@ function renderOverview(){
   $("#main").querySelectorAll("[data-od]").forEach(a=>a.onclick=e=>{e.preventDefault();const s=state.sheets[+a.dataset.od];s.ui.special="overdue";state.active=+a.dataset.od;renderTabs();render();scrollTo(0,0)});
 }
 
+/* ---- Hàng việc: nút lọc tự động theo workflow. Mỗi nút = một điều kiện tính từ dữ liệu hiện có (không cấu hình tay), có số đếm; bấm để lọc đúng danh sách việc cần làm ---- */
+let _qc=null;
+function qctx(){ // tra cứu PO theo mã (dùng cho nút của tab Phiếu thanh toán); xóa cache mỗi lần setStatus
+  if(_qc)return _qc;
+  const po=state.sheets.find(s=>s.wf),by=new Map();
+  if(po)for(const r of po.rows)by.set(String(r.v[po.title]??"").trim().toUpperCase(),r);
+  return _qc={po,by};
+}
+const noteLines=v=>String(v??"").replace(/\r/g,"").split("\n").map(x=>x.trim()).filter(Boolean);
+const noteTop=v=>{const l=noteLines(v);return l.length?l[0].replace(NOTE_STAMP,""):""};
+const isPre=(sh,r)=>sh.payIdx!=null&&isPay(r.v[sh.payIdx]);
+const inWf=(...n)=>(sh,r)=>!r.done&&n.includes(r.wf);
+const colBy=(sh,re)=>{const c=sh.cols.find(c=>re.test(c.name.trim()));return c?c.idx:null};
+const filled=(sh,r,i)=>i!=null&&String(r.v[i]??"").trim()!=="";
+const QUEUES={
+  po:[
+    {k:"quote",l:"Chờ báo giá",h:"PO đang ở bước Chờ báo giá",t:inWf("Chờ báo giá")},
+    {k:"approve",l:"Chờ gửi / duyệt PO",h:"PO ở bước Chờ gửi duyệt PO hoặc Chờ duyệt PO",t:inWf("Chờ gửi duyệt PO","Chờ duyệt PO")},
+    {k:"sendncc",l:"Chờ gửi NCC",h:"Đơn đã xác nhận trên Odoo nhưng chưa gửi NCC",t:inWf("Chờ gửi NCC")},
+    {k:"recv",l:"Chờ nhận hàng",h:"Đã gửi NCC hoặc đang chờ nhận hàng",t:inWf("Đã gửi NCC","Chờ nhận hàng")},
+    {k:"recvlate",l:"Nhận hàng trễ",h:"Đã gửi NCC / Chờ nhận hàng và đã quá ngày nhận hàng dự kiến",tone:"bad",t:(sh,r)=>inWf("Đã gửi NCC","Chờ nhận hàng")(sh,r)&&r.st==="overdue"},
+    {k:"invoice",l:"Cần lập hóa đơn",h:"Đã nhận hàng, cần lập hóa đơn",t:inWf("Cần lập hóa đơn")},
+    {k:"prett",l:"TT trước: chờ làm TT",h:"Đơn thanh toán trước đang chờ làm thanh toán (in Đề nghị thanh toán)",t:(sh,r)=>inWf("Chờ làm TT")(sh,r)&&isPre(sh,r)},
+    {k:"unc",l:"Chờ gửi UNC",h:"Đã gửi duyệt hoặc đã có BNK, cần gửi UNC cho NCC",t:inWf("Chờ gửi UNC")},
+    {k:"debt",l:"Công nợ chờ KT / TT",h:"Đơn công nợ chờ KT xác nhận hoặc chờ làm thanh toán",t:(sh,r)=>!r.done&&(r.wf==="Chờ KT xác nhận công nợ"||(r.wf==="Chờ làm TT"&&!isPre(sh,r)))},
+    {k:"sugdone",l:"Gợi ý Hoàn thành",h:"Đơn thanh toán trước đã nhận hết hàng và xuất hóa đơn, chờ bạn duyệt hoàn thành",tone:"ok",t:(sh,r)=>sugDone(sh,r)},
+    {k:"mismatch",l:"Note lệch Odoo",h:"Note thấp hơn mốc Odoo (sẽ được nâng khi đồng bộ) hoặc là ghi chú tự do ngoài luồng chuẩn",t:(sh,r)=>!r.done&&(!!r.raised||seqOf(sh,r).indexOf(r.wf)<0)},
+    {k:"overdue",l:"Quá hạn",h:"Quá ngày nhận hàng dự kiến, chưa hoàn thành",tone:"bad",t:(sh,r)=>r.st==="overdue"},
+    {k:"soon",l:"Sắp đến hạn",h:"Hạn trong 3 ngày tới",tone:"warn",t:(sh,r)=>r.st==="soon"}
+  ],
+  pay:[
+    {k:"nosent",l:"Chưa gửi duyệt cho TP",h:"Phiếu chưa thanh toán và chưa có dòng “Đã gửi duyệt TT cho TP” — cần In Đề nghị thanh toán",t:(sh,r)=>!r.done&&sh.payNoteIdx!=null&&!noteLines(r.v[sh.payNoteIdx]).some(l=>l.replace(NOTE_STAMP,"").startsWith(PROGRESS_SENT))},
+    {k:"sent",l:"Đã gửi duyệt, chờ TP",h:"Dòng mới nhất của Theo dõi tiến độ là “Đã gửi duyệt TT cho TP”",t:(sh,r)=>!r.done&&sh.payNoteIdx!=null&&noteTop(r.v[sh.payNoteIdx]).startsWith(PROGRESS_SENT)},
+    {k:"late",l:"Quá hạn cần nhắc KT",h:"Chưa thanh toán, quá hạn và chưa gửi duyệt cho TP",tone:"bad",t:(sh,r)=>r.st==="overdue"&&!(sh.payNoteIdx!=null&&noteTop(r.v[sh.payNoteIdx]).startsWith(PROGRESS_SENT))},
+    {k:"ktnh",l:"Chờ KTNH thanh toán",h:"Trạng thái Odoo: KTNH xác nhận",t:(sh,r)=>!r.done&&sh.payOdooIdx!=null&&/ktnh/.test(wfn(r.v[sh.payOdooIdx]))},
+    {k:"check",l:"⚠ Kiểm tra",h:"Số đã là BNK nhưng Odoo chưa báo đã thanh toán",tone:"warn",t:(sh,r)=>sh.payStIdx!=null&&wfn(r.v[sh.payStIdx])==="⚠ kiểm tra"},
+    {k:"paidpo",l:"Đã TT, PO chưa chuyển",h:"Phiếu đã thanh toán (BNK) nhưng PO liên quan chưa tới Chờ gửi UNC / Hoàn thành",t:(sh,r)=>{
+      if(wfn(r.v[sh.payStIdx])!=="đã thanh toán"||sh.payPoIdx==null)return false;const c=qctx();if(!c.po)return false;
+      return String(r.v[sh.payPoIdx]??"").split(/[,;\s]+/).some(code=>{const p=c.by.get(code.trim().toUpperCase());if(!p||p.done)return false;const s=seqOf(c.po,p);return s.indexOf(p.wf)>=0&&s.indexOf(p.wf)<s.indexOf("Chờ gửi UNC")})}},
+    {k:"gone",l:"Không còn trên Odoo",h:"Phiếu chưa thanh toán nhưng không còn trên Odoo",tone:"warn",t:(sh,r)=>sh.payStIdx!=null&&wfn(r.v[sh.payStIdx]).startsWith("⚠ không còn")},
+    {k:"cancel",l:"Đã hủy",h:"Phiếu đã hủy trên Odoo",t:(sh,r)=>sh.payStIdx!=null&&wfn(r.v[sh.payStIdx])==="đã hủy"}
+  ],
+  ncc:[
+    {k:"unclass",l:"Chưa phân loại",h:"NCC chưa chọn Phân loại (Đơn hàng / Công nợ) nên chưa tick được “Thanh toán trước”",tone:"warn",t:(sh,r)=>{const c=colBy(sh,/^phân loại$/i);return c!=null&&filled(sh,r,sh.title)&&!filled(sh,r,c)}}
+  ],
+  bank:[
+    {k:"unchecked",l:"Chưa kiểm tra thông tin",h:"Dòng chưa tick “Đã kiểm tra thông tin”",t:(sh,r)=>filled(sh,r,sh.title)&&sh.chkIdx!=null&&!filled(sh,r,sh.chkIdx)},
+    {k:"manual",l:"Odoo chưa có — nhập tay",h:"Odoo chưa có ngân hàng / số tài khoản, cần nhập tay",tone:"warn",t:(sh,r)=>sh.bankNoteIdx!=null&&/^odoo chưa có/i.test(String(r.v[sh.bankNoteIdx]??"").trim())}
+  ]
+};
+const queuesFor=sh=>sh.wf?QUEUES.po:sh.pay?QUEUES.pay:IS_DS(sh.name)?QUEUES.ncc:sh.bank?QUEUES.bank:[];
+const queueDef=(sh,k)=>queuesFor(sh).find(q=>q.k===k)||null;
+const queueCount=(sh,q)=>{let n=0;for(const r of sh.rows)if(q.t(sh,r))n++;return n};
+function queueBar(sh){
+  const L=queuesFor(sh);if(!L.length)return "";
+  return `<div class="qbar"><span class="sub">Hàng việc:</span>`+L.map(q=>{const n=queueCount(sh,q);
+    return `<button class="qb ${sh.ui.queue===q.k?"on":""} ${n?"":"zero"} ${q.tone||""}" data-qk="${q.k}" title="${esc(q.h)}">${esc(q.l)} <b>${n}</b></button>`}).join("")+`</div>`;
+}
 function rowsFor(sh,except){
   const u=sh.ui;
   return sh.rows.filter(r=>{
@@ -2223,6 +2296,7 @@ function rowsFor(sh,except){
     for(const k in u.cf){if(!cfTest(sh,r,+k,u.cf[k]))return false}
     if(u.noteGrp&&except!=="noteGrp"&&sh.pay&&sh.ghiIdx!=null&&payNoteGroup(sh,r)!==u.noteGrp)return false;
     if(u.special&&except!=="special"&&r.st!==u.special)return false;
+    if(u.queue&&except!=="queue"){const q=queueDef(sh,u.queue);if(q&&!q.t(sh,r))return false}
     if(u.range&&except!=="range"){const d=r.v[sh.dueIdx];if(!(d instanceof Date)||d<u.range.from||d>=u.range.to)return false}
     if(u.search){if(!(r._t||(r._t=r.v.map(x=>x instanceof Date?fmtD(x):String(x??"")).join(" ").toLowerCase()+" "+String(r.wf||"").toLowerCase())).includes(u.search))return false}
     return true;
@@ -2334,7 +2408,8 @@ function renderDyn(sh,keep,anchor){
   if(u.noteGrp)chips.push(`<span class="fchip">Ghi chú: ${esc(u.noteGrp)} <b data-rm="noteGrp">×</b></span>`);
   if(u.special)chips.push(`<span class="fchip">${u.special==="overdue"?"Quá hạn":"Sắp đến hạn"} <b data-rm="special">×</b></span>`);
   if(u.range)chips.push(`<span class="fchip">Khoảng ${fmtDS(u.range.from)}–${fmtDS(new Date(u.range.to-DAY))} <b data-rm="range">×</b></span>`);
-  let html=chips.length?`<div class="chips">${chips.join("")}<button class="btn" data-clear>Xoá tất cả bộ lọc</button></div>`:"";
+  if(u.queue){const q=queueDef(sh,u.queue);if(q)chips.push(`<span class="fchip">Hàng việc: ${esc(q.l)} <b data-rm="queue">×</b></span>`)}
+  let html=queueBar(sh)+(chips.length?`<div class="chips">${chips.join("")}<button class="btn" data-clear>Xoá tất cả bộ lọc</button></div>`:"");
   // KPI
   html+=`<div class="grid kpis">`;
   html+=kpi("Số dòng",fmtN(fr.length),fr.length!==sh.rows.length?`trên tổng ${fmtN(sh.rows.length)}`:"tổng số dòng");
@@ -2372,9 +2447,10 @@ function renderDyn(sh,keep,anchor){
   dyn.querySelectorAll(".tb").forEach(g=>g.onclick=()=>{const f=new Date(+g.dataset.from),t=new Date(+g.dataset.to);
     if(u.range&&+u.range.from===+f)u.range=null;else u.range={from:f,to:t};u.shown=100;renderDyn(sh)});
   dyn.querySelectorAll("[data-k]").forEach(k=>k.onclick=()=>{u.special=u.special===k.dataset.k?null:k.dataset.k;u.shown=100;renderDyn(sh)});
-  dyn.querySelectorAll("[data-rm]").forEach(b=>b.onclick=()=>{const k=b.dataset.rm;if(k==="special")u.special=null;else if(k==="noteGrp")u.noteGrp=null;else if(k==="range")u.range=null;else delete u.filters[k];renderDyn(sh)});
+  dyn.querySelectorAll("[data-rm]").forEach(b=>b.onclick=()=>{const k=b.dataset.rm;if(k==="special")u.special=null;else if(k==="queue")u.queue=null;else if(k==="noteGrp")u.noteGrp=null;else if(k==="range")u.range=null;else delete u.filters[k];renderDyn(sh)});
   dyn.querySelectorAll("[data-rmf]").forEach(b=>b.onclick=()=>{delete u.cf[b.dataset.rmf];u.shown=100;renderDyn(sh)});
-  const cl=dyn.querySelector("[data-clear]");if(cl)cl.onclick=()=>{u.filters={};u.cf={};u.noteGrp=null;u.special=null;u.range=null;renderDyn(sh)};
+  const cl=dyn.querySelector("[data-clear]");if(cl)cl.onclick=()=>{u.filters={};u.cf={};u.noteGrp=null;u.special=null;u.queue=null;u.range=null;renderDyn(sh)};
+  dyn.querySelectorAll("[data-qk]").forEach(b=>b.onclick=()=>{u.queue=u.queue===b.dataset.qk?null:b.dataset.qk;u.shown=100;renderDyn(sh)});
   renderTable(sh,fr);
   if(ks){const nw=dyn.querySelector(".tablewrap");if(nw){nw.scrollLeft=ks.l;nw.scrollTop=ks.t}scrollTo(ks.x,ks.y)
     if(at!=null){const na=dyn.querySelector(`tr[data-row="${anchor}"]`);if(na){let d=na.getBoundingClientRect().top-at;
@@ -2730,10 +2806,10 @@ function bulkBar(sh){
 /* chế độ xem đã lưu */
 const viewsKey=sh=>"qlcv:views:"+sh.name;
 const viewsOf=sh=>store.get(viewsKey(sh))||[];
-function snapView(u){return{filters:{...u.filters},cf:Object.fromEntries(Object.entries(u.cf).map(([k,f])=>[k,{...f,vals:f.vals?[...f.vals]:null}])),search:u.search,special:u.special,sort:u.sort}}
+function snapView(u){return{filters:{...u.filters},cf:Object.fromEntries(Object.entries(u.cf).map(([k,f])=>[k,{...f,vals:f.vals?[...f.vals]:null}])),search:u.search,special:u.special,queue:u.queue||null,sort:u.sort}}
 function applyView(sh,v){
   const u=sh.ui;u.filters={...(v.filters||{})};u.cf=Object.fromEntries(Object.entries(v.cf||{}).map(([k,f])=>[k,{...f,vals:f.vals?new Set(f.vals):null}]));
-  u.search=v.search||"";u.special=v.special||null;u.sort=v.sort||null;u.range=null;u.shown=100;
+  u.search=v.search||"";u.special=v.special||null;u.queue=v.queue||null;u.sort=v.sort||null;u.range=null;u.shown=100;
 }
 /* xuất .xlsx (đang lọc) */
 async function makeZipDeflated(files){

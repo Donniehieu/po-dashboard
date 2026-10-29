@@ -324,6 +324,13 @@ Vì số PAY **đổi tên** thành chuỗi chứa `BNK` khi được thanh toá
 - **Gợi ý Hoàn thành (đơn thanh toán trước)**: thanh gợi ý liệt kê từng mã PO, bấm mã để lọc đúng PO kiểm tra lại; nút "Duyệt hoàn thành" (từng PO / tất cả, có xác nhận danh sách) ghi vào tab Lịch sử với loại mới **Duyệt hoàn thành** (có bộ lọc riêng).
 - Đã thử trên dashboard với dữ liệu thật: ghi đúng, sự kiện lặp không xử lý lại, phiếu không có trên bảng được giữ chờ, PO đã đi xa hơn không bị hạ, PO ở "Chờ gửi NCC" chuyển đúng sang "Chờ gửi UNC". Phía Helper mới kiểm tra cú pháp, chưa thử với hộp thoại in Odoo thật.
 
+### Hàng việc: nút lọc tự động theo workflow (30/10/2026)
+- Thanh nút ngay trên bảng của tab PO, Phiếu thanh toán, Công nợ NCC, Thông tin thanh toán; mỗi nút tự đếm theo dữ liệu hiện có, bấm để lọc, bấm lại để bỏ; có chip "Hàng việc: …" và được lưu cùng chế độ xem đã lưu. Khai báo ở `QUEUES` trong index.html (thêm nút mới = thêm một dòng).
+- PO: Chờ báo giá, Chờ gửi/duyệt PO, Chờ gửi NCC, Chờ nhận hàng, Nhận hàng trễ, Cần lập hóa đơn, TT trước chờ làm TT, Chờ gửi UNC, Công nợ chờ KT/TT, Gợi ý Hoàn thành, Note lệch Odoo, Quá hạn, Sắp đến hạn.
+- Phiếu thanh toán: Chưa gửi duyệt cho TP, Đã gửi duyệt chờ TP, Quá hạn cần nhắc KT, Chờ KTNH thanh toán, ⚠ Kiểm tra, Đã TT mà PO chưa chuyển, Không còn trên Odoo, Đã hủy.
+- Công nợ NCC: Chưa phân loại. Thông tin thanh toán: Chưa kiểm tra, Odoo chưa có - nhập tay.
+- Trang Ưu tiên có hàng nút tổng hợp, bấm nhảy tới đúng tab và bộ lọc.
+
 ## Đã bỏ theo yêu cầu
 - Bot nhắc việc (Telegram/Zalo/email) và tuổi công nợ theo nhà cung cấp.
 
