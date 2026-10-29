@@ -135,7 +135,13 @@ h2.sec{font-size:15px;margin:22px 0 10px}
 .td-mv{font:inherit;font-size:12px;border:1px solid var(--line);border-radius:6px;background:var(--soft);color:var(--ink);padding:1px 2px;margin-top:4px}
 li.dragging{opacity:.4}[draggable=true]{cursor:grab}
 .td-drop{outline:2px dashed var(--brand);outline-offset:-4px;background:color-mix(in srgb,var(--brand) 6%,transparent)}
-.td-flow{display:flex;flex-direction:column;gap:14px}.td-stage{margin:10px 0 2px;padding-top:6px;border-top:1px dashed var(--line);font-size:13px}
+.td-flow{display:flex;flex-direction:column;gap:14px}
+.td-g>summary,.td-grp>summary,.td-stage>summary{cursor:pointer;list-style:none;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.td-g>summary::-webkit-details-marker,.td-grp>summary::-webkit-details-marker,.td-stage>summary::-webkit-details-marker{display:none}
+.td-g>summary::before,.td-grp>summary::before,.td-stage>summary::before{content:"▾";color:var(--mute);font-size:12px;width:12px}
+.td-g:not([open])>summary::before,.td-grp:not([open])>summary::before,.td-stage:not([open])>summary::before{content:"▸"}
+.td-g>summary .lvl{margin:0}.td-g[open]>summary{margin-bottom:8px}
+.td-stage{margin:10px 0 2px;padding-top:6px;border-top:1px dashed var(--line);font-size:13px}.td-stage[open]>summary{margin-bottom:4px}
 .td-sum{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 14px}
 .td-grid{align-items:start}
 .td-score{font-weight:800;font-size:18px;text-align:right;color:var(--brand)}
@@ -2263,47 +2269,49 @@ function tdRow(t,extra,showQ){
   return `<li class="click" ${t.in?`draggable="true" data-tdk="${esc(t.key)}"`:""} data-tdgo="${t.si}" data-q="${esc(t.code)}"><span class="tag">${esc(t.sh.pay?"PAY":"PO")}</span><div><b>${esc(t.code)}</b> <span class="chip" style="--c:${colorFor(t.step)}">${esc(t.step)}</span>${t.moved?` <span class="chip" style="--c:#7c3aed" title="Bạn đã chuyển tay; tới lần xếp lại kế tiếp sẽ tự tính lại">✋ đã chuyển</span>`:""}<div class="sub">${esc(t.k)}${t.amt?" · "+fmtN(t.amt):""}</div><div class="sub td-why">${esc(t.rs.join(" · ")||"không có tín hiệu gấp")}${extra||""}</div></div><span class="td-score" title="Điểm = 40% gấp + 40% quan trọng + 20% dễ&#10;Gấp ${t.u} · Quan trọng ${t.im} · Dễ ${t.ease}">${t.score}<div class="sub">${age>0&&t.wait?"chờ "+age+" ngày":""}</div>${mv}</span></li>`;
 }
 function tdCount(){try{return tdCompute().m.q1.slice(0,tdTop()).length}catch(e){return 0}}
+const tdOpenMap=()=>store.get("qlcv:tdOpen")||{};
+function tdD(key,cls,sum,body,def){const o=tdOpenMap()[key],op=o===undefined?def:o;return `<details class="${cls}" data-tdd="${esc(key)}"${op?" open":""}><summary>${sum}</summary>${body}</details>`}
 function renderToday(){
   tdLoadMrp();
   const d=tdCompute(),run=d.run,top=tdTop();
   const view=store.get("qlcv:tdView")||"matrix",{q0,q1,q2,q3,q4,waiting}=view==="flow"?d.f:d.m,hm=t=>new Date(t).toLocaleTimeString("vi-VN",{hour:"2-digit",minute:"2-digit"});
   const cut=q1.slice(0,top),rest=q1.slice(top),remind=waiting.filter(t=>(t.pay?t.late:t.stuck)>=STUCK());
-  let html=`<div class="td-bar"><button class="btn td-tg ${view==="matrix"?"on":""}" data-tdview="matrix">▦ Theo 4 mục</button><button class="btn td-tg ${view==="flow"?"on":""}" data-tdview="flow">⛓ Theo workflow</button><span class="grow"></span><span class="sub">${view==="matrix"?`Việc “Làm ngay” hiện <select id="tdTop">${[5,8,10,15,30].map(n=>`<option${n===top?" selected":""}>${n}</option>`).join("")}</select> · `:""}Xếp lần cuối ${hm(run.t)}, lần kế ${hm(run.t+TD_EVERY)}</span><button class="btn" id="tdRerun" title="Bỏ các việc đã kéo tay và tính lại toàn bộ theo rule">🔄 Xếp lại ngay</button></div>`;
+  let html=`<div class="td-bar"><button class="btn td-tg ${view==="matrix"?"on":""}" data-tdview="matrix">▦ Theo 4 mục</button><button class="btn td-tg ${view==="flow"?"on":""}" data-tdview="flow">⛓ Theo workflow</button><span class="grow"></span><span class="sub">${view==="matrix"?`Việc “Làm ngay” hiện <select id="tdTop">${[5,8,10,15,30].map(n=>`<option${n===top?" selected":""}>${n}</option>`).join("")}</select> · `:""}Xếp lần cuối ${hm(run.t)}, lần kế ${hm(run.t+TD_EVERY)}</span><button class="btn" id="tdOpenAll" title="Mở rộng tất cả các nhóm">▾ Mở tất cả</button><button class="btn" id="tdCloseAll" title="Thu gọn tất cả các nhóm">▸ Thu gọn tất cả</button><button class="btn" id="tdRerun" title="Bỏ các việc đã kéo tay và tính lại toàn bộ theo rule">🔄 Xếp lại ngay</button></div>`;
   html+=view==="matrix"?`<div class="note" style="margin:0 0 14px">🎯 <b>Việc hôm nay ${fmtD(TODAY)} · theo 4 mục</b> — bản DEMO trên dữ liệu thật. Điểm = 40% <b>Gấp</b> + 40% <b>Quan trọng</b> + 20% <b>Dễ</b>; trong mỗi mục việc xếp theo điểm. Việc đang chờ người khác để riêng ở “Đang chờ”. Mỗi 2 tiếng rule chạy lại một lần; kéo thả một việc sang mục khác (hoặc chọn ⇄) thì giữ tới lần chạy kế tiếp.</div>`:`<div class="note" style="margin:0 0 14px">⛓ <b>Việc hôm nay ${fmtD(TODAY)} · theo workflow</b> — cùng phân loại gấp / quan trọng, nhưng xếp theo quy trình: <b>quan trọng & gấp → gấp mà không quan trọng → quan trọng mà không gấp → không quan trọng, không gấp</b>. Trong mỗi nhóm: <b>trễ nhập hàng → chờ nhập hàng → chờ gửi NCC → chờ gửi duyệt PO → chờ báo giá → chờ KT xác nhận công nợ → chờ lập hóa đơn → chờ làm TT</b>; cùng bước thì trễ nhiều và điểm quan trọng cao lên trước. Việc đang chờ người khác chỉ vào các nhóm này khi đã trễ hoặc đứng yên từ ${STUCK()} ngày (🔔 cần đi nhắc). Kéo thả vẫn dùng chung với tab 4 mục.</div>`;
   html+=`<div class="td-sum"><span class="chip" style="--c:var(--bad)">Làm ngay ${q1.length}</span><span class="chip" style="--c:var(--brand)">Lên lịch ${q2.length}</span><span class="chip" style="--c:var(--warn)">Gộp theo NCC ${q3.length}</span><span class="chip" style="--c:#64748b">Để sau ${q4.length}</span><span class="chip" style="--c:#7c3aed">Đang chờ ${waiting.length}${q0.length?` · hoãn ${q0.length}`:""}</span></div>`;
   const ul=a=>`<ul class="attn">`+a.map(t=>tdRow(t)).join("")+`</ul>`;
-  const list=(a,n)=>a.length?ul(a.slice(0,n))+(a.length>n?`<details class="td-more"><summary>… và ${a.length-n} việc nữa</summary>${ul(a.slice(n))}</details>`:""):`<div class="sub">Không có (kéo việc vào đây).</div>`;
+  const list=(a,n,id)=>a.length?ul(a.slice(0,n))+(a.length>n?tdD(view+":more:"+id,"td-more",`… và ${a.length-n} việc nữa`,ul(a.slice(n)),false):""):`<div class="sub">Không có (kéo việc vào đây).</div>`;
+  const card=(q,color,title,tag,desc,body)=>`<div class="card" data-tdq="${q}">`+tdD(view+":card:"+q,"td-g",`<span class="lvl"><i style="background:${color}"></i>${title}<span class="tag">${tag}</span></span>`,`<div class="sub" style="margin-bottom:8px">${desc}</div>${body}`,true)+`</div>`;
   if(view==="matrix"){
-    html+=`<div class="grid pgrid td-grid">`;
-    html+=`<div class="card" data-tdq="1"><div class="lvl"><i style="background:var(--bad)"></i>1 · Làm ngay<span class="tag">${cut.length}/${q1.length}</span></div><div class="sub" style="margin-bottom:8px">Gấp và quan trọng, bạn làm được ngay. Theo điểm, hiện ${top} việc đầu.</div>${cut.length?ul(cut):`<div class="sub">Không có. 🎉</div>`}${rest.length?`<details class="td-more"><summary>Xếp hàng chờ (${rest.length})</summary>${ul(rest)}</details>`:""}</div>`;
-    html+=`<div class="card" data-tdq="2"><div class="lvl"><i style="background:var(--brand)"></i>2 · Lên lịch<span class="tag">${q2.length}</span></div><div class="sub" style="margin-bottom:8px">Quan trọng nhưng chưa gấp.</div>${list(q2,6)}</div>`;
     const g=new Map();q3.forEach(t=>{const o=g.get(t.k)||{k:t.k,ts:[]};o.ts.push(t);g.set(t.k,o)});
     const gl=[...g.values()].sort((a,b)=>b.ts.length-a.ts.length||b.ts[0].score-a.ts[0].score);
-    html+=`<div class="card" data-tdq="3"><div class="lvl"><i style="background:var(--warn)"></i>3 · Gộp theo NCC<span class="tag">${q3.length} việc · ${gl.length} NCC</span></div><div class="sub" style="margin-bottom:8px">Gấp nhưng không quan trọng: liên hệ một lần cho cả nhóm PO của NCC.</div>${gl.length?gl.slice(0,6).map(o=>`<div class="td-grp"><div><b>${esc(o.k)}</b> <span class="tag">${o.ts.length} PO</span> <span class="sub">${fmtBig(o.ts.reduce((a,t)=>a+t.amt,0))}</span></div>${ul(o.ts)}</div>`).join("")+(gl.length>6?`<details class="td-more"><summary>… và ${gl.length-6} NCC nữa</summary>${gl.slice(6).map(o=>`<div class="td-grp"><b>${esc(o.k)}</b> <span class="tag">${o.ts.length}</span>${ul(o.ts)}</div>`).join("")}</details>`:""):`<div class="sub">Không có (kéo việc vào đây).</div>`}</div>`;
-    html+=`<div class="card" data-tdq="4"><div class="lvl"><i style="background:#64748b"></i>4 · Để sau<span class="tag">${q4.length}</span></div><div class="sub" style="margin-bottom:8px">Không gấp, không quan trọng.</div>${list(q4,5)}</div>`;
-    html+=`</div>`;
+    const grp=o=>tdD(view+":ncc:"+o.k,"td-grp",`<b>${esc(o.k)}</b> <span class="tag">${o.ts.length} PO</span> <span class="sub">${fmtBig(o.ts.reduce((a,t)=>a+t.amt,0))}</span>`,ul(o.ts),true);
+    html+=`<div class="grid pgrid td-grid">`
+      +card(1,"var(--bad)","1 · Làm ngay",`${cut.length}/${q1.length}`,`Gấp và quan trọng, bạn làm được ngay. Theo điểm, hiện ${top} việc đầu.`,(cut.length?ul(cut):`<div class="sub">Không có. 🎉</div>`)+(rest.length?tdD(view+":more:1","td-more",`Xếp hàng chờ (${rest.length})`,ul(rest),false):""))
+      +card(2,"var(--brand)","2 · Lên lịch",q2.length,"Quan trọng nhưng chưa gấp.",list(q2,6,"2"))
+      +card(3,"var(--warn)","3 · Gộp theo NCC",`${q3.length} việc · ${gl.length} NCC`,"Gấp nhưng không quan trọng: liên hệ một lần cho cả nhóm PO của NCC.",gl.length?gl.slice(0,6).map(grp).join("")+(gl.length>6?tdD(view+":more:3","td-more",`… và ${gl.length-6} NCC nữa`,gl.slice(6).map(grp).join(""),false):""):`<div class="sub">Không có (kéo việc vào đây).</div>`)
+      +card(4,"#64748b","4 · Để sau",q4.length,"Không gấp, không quan trọng.",list(q4,5,"4"))
+      +`</div>`;
   }else{
     const SEC=[[1,"① Quan trọng & gấp","NCC quan trọng, việc gấp"],[3,"② Gấp mà không quan trọng","nhắc lặp lại, xử lý theo workflow"],[2,"③ Quan trọng mà không gấp","đặt lịch trước khi thành gấp"],[4,"④ Không quan trọng, không gấp","không cần nhìn hàng ngày"]];
     const QL={1:q1,2:q2,3:q3,4:q4};
     html+=`<div class="td-flow">`;
     for(const [q,t1,t2] of SEC){
-      const a=QL[q];
-      html+=`<div class="card" data-tdq="${q}"><div class="lvl"><i style="background:${TD_QC[q]}"></i>${t1}<span class="tag">${a.length}</span><span class="sub" style="font-weight:500">· ${t2}</span></div>`;
-      if(!a.length)html+=`<div class="sub">Không có (kéo việc vào đây).</div>`;
+      const a=QL[q];let body=a.length?"":`<div class="sub">Không có (kéo việc vào đây).</div>`;
       TD_STAGE.forEach((lb,i)=>{const b=a.filter(t=>t.wr===i);if(!b.length)return;
-        html+=`<div class="td-stage"><b>${lb}</b> <span class="tag">${b.length}</span></div>${b.length>6?ul(b.slice(0,6))+`<details class="td-more"><summary>… và ${b.length-6} việc nữa</summary>${ul(b.slice(6))}</details>`:ul(b)}`});
-      html+=`</div>`;
+        body+=tdD(view+":st:"+q+":"+i,"td-stage",`<b>${lb}</b> <span class="tag">${b.length}</span>`,b.length>6?ul(b.slice(0,6))+tdD(view+":more:"+q+":"+i,"td-more",`… và ${b.length-6} việc nữa`,ul(b.slice(6)),false):ul(b),true)});
+      html+=card(q,TD_QC[q],t1,a.length,t2,body);
     }
     html+=`</div>`;
   }
   // hàng chờ lượt sau
-  html+=`<div class="card td-snooze" data-tdq="0" style="margin-top:14px"><div class="lvl"><i style="background:#7c3aed"></i>💤 Để lượt sau<span class="tag">${q0.length}</span></div><div class="sub">Kéo việc vào đây để tạm ẩn; tới lần xếp lại kế tiếp (${hm(run.t+TD_EVERY)}) việc tự quay về mục theo rule.</div>${q0.length?`<details class="td-more"><summary>Xem ${q0.length} việc đã hoãn</summary>${ul(q0)}</details>`:""}</div>`;
+  html+=`<div class="card td-snooze" data-tdq="0" style="margin-top:14px"><div class="lvl"><i style="background:#7c3aed"></i>💤 Để lượt sau<span class="tag">${q0.length}</span></div><div class="sub">Kéo việc vào đây để tạm ẩn; tới lần xếp lại kế tiếp (${hm(run.t+TD_EVERY)}) việc tự quay về mục theo rule.</div>${q0.length?tdD(view+":more:0","td-more",`Xem ${q0.length} việc đã hoãn`,ul(q0),false):""}</div>`;
   // đang chờ
   html+=`<h2 class="sec">⏳ Đang chờ người khác <span class="tag">${waiting.length}</span></h2><div class="card"><div class="sub" style="margin-bottom:8px">Chờ NCC, người duyệt, kế toán hoặc hàng về và chưa trễ — không phải việc của bạn hôm nay. Khi trễ hoặc đứng yên từ ${STUCK()} ngày sẽ nhảy lên 4 mục ở trên.</div>`;
   if(!waiting.length)html+=`<div class="sub">Không có.</div>`;
   else{
     const by=new Map();waiting.forEach(t=>{const k=t.pay?"Phiếu thanh toán · kế toán":t.step+" · "+(TD_WHO[t.step]||"");const o=by.get(k)||[];o.push(t);by.set(k,o)});
-    html+=[...by].map(([k,a])=>{const rm=a.filter(t=>(t.pay?t.late:t.stuck)>=STUCK());return `<details class="td-wg" ${rm.length?"open":""}><summary><b>${esc(k)}</b> <span class="tag">${a.length}</span>${rm.length?` <span class="chip" style="--c:var(--bad)">cần nhắc ${rm.length}</span>`:""}</summary><ul class="attn">${a.map(t=>{const age=t.pay?t.late:t.stuck;return tdRow(t,age>=STUCK()?` · <span style="color:var(--bad)">⏱ chờ ${age} ngày, cần nhắc</span>`:"")}).join("")}</ul></details>`}).join("");
+    html+=[...by].map(([k,a])=>{const rm=a.filter(t=>(t.pay?t.late:t.stuck)>=STUCK());return tdD(view+":wg:"+k,"td-wg",`<b>${esc(k)}</b> <span class="tag">${a.length}</span>${rm.length?` <span class="chip" style="--c:var(--bad)">cần nhắc ${rm.length}</span>`:""}`,`<ul class="attn">${a.map(t=>{const age=t.pay?t.late:t.stuck;return tdRow(t,age>=STUCK()?` · <span style="color:var(--bad)">⏱ chờ ${age} ngày, cần nhắc</span>`:"")}).join("")}</ul>`,rm.length>0)}).join("");
   }
   html+=`</div>`;
   // NCC quan trọng
@@ -2317,6 +2325,10 @@ function renderToday(){
   m.querySelectorAll("[data-tdpin]").forEach(b=>b.onclick=()=>{const [k,v]=b.dataset.tdpin.split("|"),pp=tdPins();if(+v===0)delete pp[k];else pp[k]=+v;store.set("qlcv:impPin",pp);renderToday()});
   m.querySelectorAll("[data-tdview]").forEach(b=>b.onclick=()=>{store.set("qlcv:tdView",b.dataset.tdview);renderToday()});
   if($("#tdTop"))$("#tdTop").onchange=e=>{store.set("qlcv:tdTop",+e.target.value);renderToday()};
+  const dets=()=>[...m.querySelectorAll("details[data-tdd]")];
+  const setAll=on=>{const mp=tdOpenMap();dets().forEach(x=>{x.open=on;mp[x.dataset.tdd]=on});store.set("qlcv:tdOpen",mp)};
+  $("#tdOpenAll").onclick=()=>setAll(true);$("#tdCloseAll").onclick=()=>setAll(false);
+  setTimeout(()=>dets().forEach(x=>x.addEventListener("toggle",()=>{const mp=tdOpenMap();if(mp[x.dataset.tdd]!==x.open){mp[x.dataset.tdd]=x.open;store.set("qlcv:tdOpen",mp)}})),80); // gắn sau khi trình duyệt phát xong sự kiện toggle ban đầu
   $("#tdRerun").onclick=()=>{store.set("qlcv:tdRun",null);renderToday();updateChrome()};
   m.querySelectorAll("select[data-tdmv]").forEach(sel=>sel.onchange=()=>{if(sel.value!=="")moveTo(sel.dataset.tdmv,+sel.value)});
   // kéo thả: kéo một việc thả vào thẻ của mục khác (hoặc vào ô “Để lượt sau”)
