@@ -1437,7 +1437,7 @@ function makeHistory(edits,dels){
       const kv=list.find(e=>e.col===sh.title);
       out.push({id:uid(),t,act:"thêm",sheet:sh.name,n:list[0].n,key:kv&&kv.val!=null?String(kv.val):"",snap,via});
     }else{
-      out.push({id:uid(),t,act:via==="nhập file Odoo"?"nhập":"sửa",sheet:sh.name,n:list[0].n,key:list[0].key||"",ch:list.map(e=>({col:cn(e.col),old:ser(e.old),new:ser(e.val)})),via});
+      out.push({id:uid(),t,act:via==="nhập file Odoo"?"nhập":via==="duyệt hoàn thành"?"duyệt hoàn thành":"sửa",sheet:sh.name,n:list[0].n,key:list[0].key||"",ch:list.map(e=>({col:cn(e.col),old:ser(e.old),new:ser(e.val)})),via});
     }
   }
   for(const d of dels)out.push({id:uid(),t,act:"xóa",sheet:d.sheet,n:d.n,key:d.key,snap:d.snap,via:"dashboard"});
@@ -1508,11 +1508,11 @@ function restoreEntry(id){
   setStatus(sh);updateChrome();
   if(state.active==="history")fillHistory();
 }
-const ACT_COLOR={"sửa":"#2563eb","thêm":"#16a34a","xóa":"#dc2626","nhập":"#7c3aed"};
+const ACT_COLOR={"sửa":"#2563eb","thêm":"#16a34a","xóa":"#dc2626","nhập":"#7c3aed","duyệt hoàn thành":"#059669"};
 function renderHistory(){
   const u=state.hui||(state.hui={act:"",q:"",shown:100});
   $("#main").innerHTML=`<div class="toolbar"><input type="search" id="hq" placeholder="Tìm trong lịch sử (mã đơn, sheet, giá trị…)" value="${esc(u.q)}">
-    <span class="seg" id="hseg">${[["","Tất cả"],["sửa","Sửa"],["thêm","Thêm"],["xóa","Xóa"],["nhập","Nhập Odoo"]].map(([k,l])=>`<button data-a="${k}" class="${u.act===k?"on":""}">${l}</button>`).join("")}</span></div>
+    <span class="seg" id="hseg">${[["","Tất cả"],["sửa","Sửa"],["thêm","Thêm"],["xóa","Xóa"],["nhập","Nhập Odoo"],["duyệt hoàn thành","Duyệt hoàn thành"]].map(([k,l])=>`<button data-a="${k}" class="${u.act===k?"on":""}">${l}</button>`).join("")}</span></div>
     <div id="hlist"></div>
     <div class="note">Lịch sử ghi lại mọi thao tác sửa, thêm, xóa và nhập file từ dashboard${state.src==="github"?" và lưu trong file <b>history.json</b> cạnh file Excel trên GitHub":" (lưu trong trình duyệt này; kết nối GitHub để lưu lâu dài và dùng chung nhiều máy)"}. Các lần đồng bộ tự động từ Odoo nằm trong lịch sử commit của repo.</div>`;
   $("#hq").oninput=e=>{u.q=e.target.value.trim().toLowerCase();u.shown=100;fillHistory()};
@@ -1531,7 +1531,7 @@ function fillHistory(){
     if(e.ch){det=e.ch.slice(0,5).map(c=>`<b>${esc(c.col)}</b>: ${showVal(c.old)} → ${showVal(c.new)}`).join("<br>")+(e.ch.length>5?`<br><span class="sub">… và ${e.ch.length-5} cột nữa</span>`:"")}
     else if(e.snap){const en=Object.entries(e.snap);det=en.slice(0,5).map(([k,v])=>`<b>${esc(k)}</b>: ${showVal(v)}`).join(" · ")+(en.length>5?` <span class="sub">… +${en.length-5} cột</span>`:"")}
     const can=(e.act==="xóa"||e.ch)&&state.sheets.some(s=>s.name===e.sheet);
-    return `<tr><td class="num" style="text-align:left">${tm}</td><td><span class="chip" style="--c:${ACT_COLOR[e.act]||"#64748b"}">${esc(e.act)}</span>${e.via&&e.via!=="dashboard"?`<div class="sub">${esc(e.via)}</div>`:""}</td><td>${esc(e.sheet)}</td><td><b>${keyHtml(e)}</b><div class="sub">dòng ${e.n}</div></td><td>${det}</td><td>${can?`<button class="btn sm" data-rs="${esc(e.id)}">↩ Khôi phục</button>`:""}</td></tr>`}).join("");
+    return `<tr><td class="num" style="text-align:left">${tm}</td><td><span class="chip" style="--c:${ACT_COLOR[e.act]||"#64748b"}">${esc(e.act)}</span>${e.via&&e.via!=="dashboard"&&e.via!==e.act?`<div class="sub">${esc(e.via)}</div>`:""}</td><td>${esc(e.sheet)}</td><td><b>${keyHtml(e)}</b><div class="sub">dòng ${e.n}</div></td><td>${det}</td><td>${can?`<button class="btn sm" data-rs="${esc(e.id)}">↩ Khôi phục</button>`:""}</td></tr>`}).join("");
   box.innerHTML=`<div class="tablewrap"><table class="hist"><thead><tr><th>Thời gian</th><th>Thao tác</th><th>Sheet</th><th>Bản ghi</th><th>Chi tiết</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`+(list.length>u.shown?`<div class="more"><button class="btn" id="hmore">Hiện thêm (${list.length-u.shown})</button></div>`:"");
   box.querySelectorAll("[data-hpo]").forEach(a=>a.onclick=ev=>{ev.preventDefault();const k=a.dataset.hpo;goSheet(poIdx,{search:k.toLowerCase()});toast("Đang xem "+k+" ở tab PO")});
   box.querySelectorAll("[data-rs]").forEach(b=>b.onclick=()=>{if(confirm("Khôi phục thao tác này? Thay đổi sẽ được ghi thành một thao tác mới."))restoreEntry(b.dataset.rs)});
@@ -1542,6 +1542,7 @@ function startEdit(sh,td){
   if(sh.ext){toast("Dữ liệu Netsuite chỉ để xem, lọc và xuất. Muốn cập nhật hãy dùng ⬆ Nhập Excel (thay toàn bộ bằng file mới).",true);return}
   const n=+td.dataset.r,ci=+td.dataset.c,si=state.sheets.indexOf(sh);
   const col=sh.cols.find(c=>c.idx===ci),r=sh.rows.find(x=>x.n===n);if(!col||!r)return;
+  if(sh.pay&&ci===sh.payNoteIdx&&String(r.v[ci]??"").includes("\n")){toast("Cột Theo dõi tiến độ đang là nhật ký nhiều dòng (mới nhất ở trên). Muốn sửa nội dung, hãy sửa trong file Excel.",true);return}
   if(sh.fset.has(n+":"+ci)){toast("Ô này là công thức trong Excel nên không sửa từ dashboard",true);return}
   const cur=r.v[ci];let inp=document.createElement("input");inp.className="cell";td.textContent="";
   const ymd=d=>d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
@@ -1804,6 +1805,12 @@ function applyRemindLog(extra){
    Sau khi bấm in thành công, Odoo Helper gửi sự kiện về dashboard (qua tab Odoo mở từ dashboard, hoặc khi dashboard hỏi lại).
    Dashboard: cột "Theo dõi tiến độ" của phiếu thanh toán = "Đã gửi duyệt TT cho TP"; các PO trong "PO liên quan" đang ở "Chờ làm TT"
    -> "Tiến độ hiện tại" = "Chờ gửi UNC" (bước khác giữ nguyên và báo trong thông báo). Mỗi sự kiện chỉ xử lý một lần. */
+const NOTE_STAMP=/^\[\d{2}\/\d{2}(?:\/\d{4})? \d{2}:\d{2}\]\s*/;
+function pushProgress(old,text){ // nhật ký nhiều dòng "[dd/mm HH:mm] nội dung", mới nhất ở trên; trả null nếu dòng trên cùng đã là nội dung này
+  const ls=String(old??"").replace(/\r/g,"").split("\n").map(x=>x.trim()).filter(Boolean),d=new Date();
+  if(ls.length&&ls[0].replace(NOTE_STAMP,"").startsWith(text))return null;
+  return [`[${pad2(d.getDate())}/${pad2(d.getMonth()+1)} ${pad2(d.getHours())}:${pad2(d.getMinutes())}] ${text}`,...ls].join("\n");
+}
 const PRINT_Q="qlcv:printq",PRINT_APPLIED="qlcv:printapplied",PROGRESS_SENT="Đã gửi duyệt TT cho TP",PO_AFTER_PRINT="Chờ gửi UNC",PO_BEFORE_PRINT="Chờ làm TT";
 function applyPrintEvent(e){ // -> {found, pay, pos:[mã PO đã chuyển]}
   const psi=state.sheets.findIndex(s=>s.pay),ps=state.sheets[psi];
@@ -1817,15 +1824,17 @@ function applyPrintEvent(e){ // -> {found, pay, pos:[mã PO đã chuyển]}
   const poSi=state.sheets.findIndex(s=>s.wf),po=state.sheets[poSi],moved=[],skipped=[];let pay=false;
   state.via="Odoo Helper (in đề nghị)";
   try{for(const r of rows){
+    state.via="Odoo Helper (in đề nghị)";
     if(r.done)continue; // phiếu đã thanh toán / hủy: không ghi tiến độ nữa
-    if(String(r.v[ps.payNoteIdx]??"")!==PROGRESS_SENT){setCell(psi,r,ps.payNoteIdx,PROGRESS_SENT);pay=true}
+    const nn=pushProgress(r.v[ps.payNoteIdx],PROGRESS_SENT);
+    if(nn!=null&&setCell(psi,r,ps.payNoteIdx,nn))pay=true;
     if(!po||po.noteIdx==null||ps.payPoIdx==null)continue;
     for(const raw of String(r.v[ps.payPoIdx]??"").split(/[,;\s]+/)){
       const code=raw.trim().toUpperCase();if(!code)continue;
       const pr=po.rows.find(x=>String(x.v[po.title]??"").trim().toUpperCase()===code);
       if(!pr||pr.done)continue;
       // chỉ chuyển khi PO đang đúng bước liền trước ("Chờ làm TT", cả TT trước lẫn TT sau); bước khác thì giữ nguyên và báo
-      if(pr.wf===PO_BEFORE_PRINT&&seqOf(po,pr).includes(PO_AFTER_PRINT)){if(setWf(poSi,pr,PO_AFTER_PRINT))moved.push(code)}
+      if(pr.wf===PO_BEFORE_PRINT&&seqOf(po,pr).includes(PO_AFTER_PRINT)){if(setWf(poSi,pr,PO_AFTER_PRINT,"Odoo Helper (in đề nghị)"))moved.push(code)}
       else if(pr.wf!==PO_AFTER_PRINT)skipped.push(code+" ("+pr.wf+")");
     }
   }}finally{state.via="dashboard"}
@@ -2385,7 +2394,10 @@ function renderTable(sh,fr){
   const hint=sh.wf&&sh.payIdx==null?`<div class="note">Chưa có cột “Thanh toán trước” và “Ghi chú” trong file Excel. Bấm “🔄 Đồng bộ Odoo” một lần để script tự thêm các cột này.</div>`:"";
   const selSet=u.sel||(u.sel=new Set());
   const sugN=sh.wf?sh.rows.filter(r=>sugDone(sh,r)).length:0;
-  const sugBar=sugN?`<div class="bulk" style="border-color:var(--ok);background:color-mix(in srgb,var(--ok) 10%,var(--card))">💡 <b>${sugN} PO</b> Odoo báo đã nhận hết hàng và đã xuất hóa đơn, chưa đặt Hoàn thành.<span class="grow"></span><button class="btn sm" data-sugall>Đặt Hoàn thành tất cả</button></div>`:"";
+  const sugRows=sh.wf?sh.rows.filter(r=>sugDone(sh,r)):[];
+  const sugBar=sugN?`<div class="bulk" style="border-color:var(--ok);background:color-mix(in srgb,var(--ok) 10%,var(--card));flex-wrap:wrap">💡 <b>${sugN} PO thanh toán trước</b> Odoo báo đã nhận hết hàng và đã xuất hóa đơn, chưa đặt Hoàn thành. Bấm mã PO để mở xem lại trước khi duyệt:
+    <span style="display:flex;flex-wrap:wrap;gap:6px;flex:1 1 100%">${sugRows.map(r=>`<a class="chip" href="#" data-sugpo="${esc(r.v[sh.title])}" style="--c:var(--ok)" title="Bấm để lọc đúng PO này trong bảng">${esc(r.v[sh.title])}</a>`).join("")}</span>
+    <span class="grow"></span><button class="btn sm" data-sugall>Duyệt hoàn thành tất cả (${sugN})</button></div>`:"";
   let h=hint+sugBar+bulkBar(sh)+`<h2 class="sec">Chi tiết (${fmtN(rows.length)} dòng) <small class="sub" style="font-weight:500">· ${matchMedia("(pointer:coarse)").matches?"chạm":"bấm đúp"} vào ô để sửa · bấm ▾ ở tiêu đề để lọc · kéo mép phải tiêu đề để chỉnh độ rộng cột</small></h2>
     <div class="tblbar">${sh.ext?"":`<button class="btn" data-t="add">＋ Thêm dòng</button><button class="btn" data-t="deln" ${selSet.size?"":"disabled"}>🗑 Xóa dòng đã chọn${selSet.size?" ("+selSet.size+")":""}</button>`}${sh.ext?`<button class="btn" data-t="nsref" title="Dữ liệu Netsuite được lưu sẵn trên máy này, không tự tải lại. Bấm để lấy bản mới nhất từ GitHub (khi máy khác đã cập nhật). Nguồn hiện tại: ${esc(sh.extMeta.src||"")}${sh.extMeta.ts?", lưu lúc "+new Date(sh.extMeta.ts).toLocaleString("vi-VN"):""}">↻ Làm mới từ GitHub</button>`:""}<button class="btn" data-t="imp" title="${sh.ext?"Thay TOÀN BỘ dữ liệu Netsuite bằng file Excel mới (hỏi xác nhận, có thể lưu lên GitHub)":"Nhập dữ liệu từ file Excel vào bảng này (khớp theo tên cột; có cột mã/tên thì cập nhật dòng trùng, dòng chưa có thì thêm mới)"}">⬆ Nhập Excel</button><button class="btn" data-t="xlsx">⬇ Xuất Excel (đang lọc)</button><button class="btn" data-t="csv">⬇ Xuất CSV</button><span class="grow"></span><button class="btn sm" data-t="cols" title="Chọn cột muốn hiện/ẩn trong bảng này (không xóa dữ liệu)">👁 Chọn cột hiển thị${hid.size?" (đang ẩn "+hid.size+")":""}</button><button class="btn sm" data-t="rzreset" title="Trả độ rộng các cột về mặc định">↔ Đặt lại độ rộng cột</button></div>
     ${hid.size?`<div class="hidbar">Cột đang ẩn: ${sh.cols.filter(c=>hid.has(c.idx)).map(c=>`<button class="btn sm" data-showcol="${c.idx}" title="Hiện lại cột này">＋ ${esc(c.type==="flag"?"TT trước":colLabel(c))}</button>`).join("")}<button class="btn sm" data-showcol="all">Hiện tất cả</button></div>`:""}
@@ -2404,7 +2416,7 @@ function renderTable(sh,fr){
         const nx=i>=0?seq[i+1]:null;
         const edited=state.pending.has(pkey(si,r.n,c.idx));
         const sd=stuckDays(sh,r),stk=!r.done&&sd!=null&&sd>=STUCK()?`<span class="stk" title="Đã ở bước này ${sd} ngày (từ ${fmtD(r.v[sh.chgIdx])})">⏱ ${sd} ngày</span>`:"";
-        const sg=sugDone(sh,r)?`<button class="sug" data-sug="${r.n}" title="Odoo báo đã nhận hết hàng và đã xuất hóa đơn. Bấm để đặt Hoàn thành">💡 Hoàn thành?</button>`:"";
+        const sg=sugDone(sh,r)?`<button class="sug" data-sug="${r.n}" title="Odoo báo đã nhận hết hàng và đã xuất hóa đơn. Bấm để duyệt hoàn thành PO này (ghi vào Lịch sử)">💡 Duyệt hoàn thành?</button>`:"";
         h+=`<td class="wfnote ${edited?"ed":""}" data-l="Trạng thái (Note)" data-r="${r.n}" data-c="${c.idx}"><span class="stp"><button data-stp="${r.n}|-1" title="Lùi một bước" ${i>0||(i<0)?"":"disabled"}>◀</button><button class="nx" data-stp="${r.n}|1" title="${nx?"Chuyển sang: "+esc(nx):(i<0?"Trạng thái tự nhập: bấm để về bước đầu":"Đã ở bước cuối")}" ${nx||i<0?"":"disabled"}>▶</button></span><span class="chip" style="--c:${colorFor(r.wf)}" ${raw?"":`title="${r.raised?"Tự nâng theo trạng thái Odoo ("+esc(r.v[sh.rcIdx])+(sh.stIdx!=null&&r.v[sh.stIdx]?" / "+esc(r.v[sh.stIdx]):"")+")":"Tự gán theo trạng thái Odoo vì cột Note đang trống"}"`}>${esc(r.wf)}${raw?"":" *"}</span>${stk}${payBadges(sh,r)}${sg}</td>`;continue}
       if(sh.bank&&c.idx===sh.chkIdx){h+=`<td class="flag" data-l="${esc(c.name)}"><input type="checkbox" data-chk="${r.n}" ${v!=null&&String(v).trim()!==""?"checked":""} aria-label="Đã kiểm tra thông tin" title="Tick khi đã kiểm tra thông tin thanh toán của NCC này"></td>`;continue}
       if(v==null)cell="";
@@ -2414,6 +2426,7 @@ function renderTable(sh,fr){
       else cell=esc(v);
       if(v!=null&&sh.pay&&c.idx===sh.payPoIdx)cell=String(v).split(/([,;\s]+)/).map(p=>/^[,;\s]*$/.test(p)?esc(p):`<a class="ol" href="#" data-code="${esc(p.trim().toUpperCase())}" title="Mở PO ${esc(p.trim())} trên Odoo">${esc(p)}</a>`).join("");
       if(sh.pay&&c.idx===sh.title&&v!=null&&sh.payCurIdx!=null){const cur=String(r.v[sh.payCurIdx]??"").trim();if(/bnk/i.test(cur)&&cur!==String(v))cell=`${esc(cur)} <span class="sub" title="Số PAY ban đầu">(${esc(v)})</span>`} // phiếu đã thanh toán: hiện số BNK, kèm số PAY ban đầu trong ngoặc
+      if(v!=null&&sh.pay&&c.idx===sh.payNoteIdx&&String(v).includes("\n")){const ls=String(v).split("\n").filter(Boolean);cell=esc(ls[0])+` <span class="sub" title="Rê chuột vào ô để xem toàn bộ nhật ký">(+${ls.length-1} ghi chú cũ)</span>`}
       if(v!=null&&c.idx===sh.title&&/mã đơn|số po|^po$/i.test(c.name))cell=`<a class="ol" href="#" data-code="${esc(v)}" title="Mở Odoo để tìm đơn này">${cell}</a>`;
       if(v!=null&&sh.wf&&/^nhà cung cấp$/i.test(c.name))cell=`<a class="sl" href="#" data-sup="${c.idx}" data-v="${esc(v)}" title="Bấm để lọc các PO của nhà cung cấp này">${cell}</a>`;
       const cls=typeof v==="number"?"num":(c.type==="text"?"txt":"");
@@ -2438,8 +2451,9 @@ function renderTable(sh,fr){
   t.querySelectorAll("[data-pay],[data-sel],[data-selall],[data-sug]").forEach(cb=>cb.onclick=e=>e.stopPropagation());
   t.querySelectorAll("[data-sel]").forEach(cb=>cb.onchange=()=>{cb.checked?selSet.add(+cb.dataset.sel):selSet.delete(+cb.dataset.sel);renderTable(sh,fr)});
   const sa=t.querySelector("[data-selall]");if(sa){const vis=rows.slice(0,u.shown);sa.checked=vis.length>0&&vis.every(r=>selSet.has(r.n));sa.onchange=()=>{vis.forEach(r=>sa.checked?selSet.add(r.n):selSet.delete(r.n));renderTable(sh,fr)}}
-  t.querySelectorAll("[data-sug]").forEach(b=>b.onclick=()=>{const r=sh.rows.find(x=>x.n===+b.dataset.sug);if(r&&setWf(si,r,WF_DONE)){setStatus(sh);renderDyn(sh,true);updateChrome();toast(r.v[sh.title]+": đã đặt Hoàn thành")}});
-  const sga=t.querySelector("[data-sugall]");if(sga)sga.onclick=()=>{let k=0;for(const r of sh.rows)if(sugDone(sh,r)&&setWf(si,r,WF_DONE))k++;setStatus(sh);renderDyn(sh);updateChrome();toast(`Đã đặt Hoàn thành cho ${k} PO.`)};
+  t.querySelectorAll("[data-sugpo]").forEach(a=>a.onclick=ev=>{ev.preventDefault();ev.stopPropagation();goSheet(si,{search:a.dataset.sugpo.toLowerCase()})});
+  t.querySelectorAll("[data-sug]").forEach(b=>b.onclick=()=>{const r=sh.rows.find(x=>x.n===+b.dataset.sug);if(r&&setWf(si,r,WF_DONE,"duyệt hoàn thành")){setStatus(sh);renderDyn(sh,true);updateChrome();toast(r.v[sh.title]+": đã duyệt hoàn thành")}});
+  const sga=t.querySelector("[data-sugall]");if(sga)sga.onclick=()=>{const L=sh.rows.filter(r=>sugDone(sh,r));if(!confirm(`Duyệt hoàn thành ${L.length} PO sau? Hãy chắc bạn đã kiểm tra từng PO.\n\n`+L.map(r=>r.v[sh.title]).join(", ")))return;let k=0;for(const r of L)if(setWf(si,r,WF_DONE,"duyệt hoàn thành"))k++;setStatus(sh);renderDyn(sh);updateChrome();toast(`Đã duyệt hoàn thành ${k} PO.`)};
   t.querySelectorAll("[data-bk]").forEach(b=>b.onclick=()=>{const k=b.dataset.bk;if(k==="clear"){u.sel=new Set();renderTable(sh,fr)}else if(k==="step1")bulkApply(si,"step",1);else if(k==="step-1")bulkApply(si,"step",-1);else bulkApply(si,k)});
   const bks=t.querySelector("#bkSet");if(bks)bks.onchange=()=>{if(bks.value)bulkApply(si,"set",bks.value)};
   t.querySelectorAll("[data-stp]").forEach(b=>{b.onclick=e=>{e.stopPropagation();const [n,d]=b.dataset.stp.split("|");stepStatus(si,+n,+d)};b.ondblclick=e=>e.stopPropagation()});
@@ -2673,12 +2687,13 @@ function sugDone(sh,r){ // Odoo báo đã nhận hết VÀ đã xuất hóa đơ
   const inv=/(đã (xuất|lập|ghi).*hóa đơn|hóa đơn đầy đủ|fully billed)/.test(iv)&&!/(chưa|một phần|nháp)/.test(iv);
   return got&&inv;
 }
-function setWf(si,r,status){
-  const sh=state.sheets[si];state.via="dashboard";
+function setWf(si,r,status,via){
+  const sh=state.sheets[si];state.via=via||"dashboard";
   const fl=wfFloor(sh,r,status);
   if(fl!==status){toast(`${r.v[sh.title]}: không thể về “${status}” vì Odoo báo ${r.v[sh.rcIdx]}${sh.stIdx!=null&&r.v[sh.stIdx]?" / "+r.v[sh.stIdx]:""}${fl==="Chờ làm TT"&&sh.ivIdx!=null?" / "+r.v[sh.ivIdx]:""} → tối thiểu phải là “${fl}”.`,true);return false}
   const ch=setCell(si,r,sh.noteIdx,status);
   if(ch&&sh.chgIdx!=null)setCell(si,r,sh.chgIdx,new Date(TODAY)); // ghi ngày đổi trạng thái
+  if(via)state.via="dashboard";
   return ch;
 }
 function nextWf(sh,r,dir){
