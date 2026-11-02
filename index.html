@@ -2507,8 +2507,10 @@ function renderReport(){
   <div class="note" style="margin-top:12px">Nội dung nhập tay (kết quả, lý do, kế hoạch, đề xuất, người viết) lưu theo từng kỳ trong trình duyệt này; dùng “Xuất Excel” để gửi hoặc lưu, “Nhập Excel” để nạp lại file đã xuất.</div>`;
   const pg=()=>rptData(),$m=$("#main");
   const setRange=(f,t)=>{R.from=f;R.to=t;renderReport()};
-  $("#rpFrom").onchange=e=>{const v=rptParse(e.target.value);if(v){R.from=v;if(R.to<v)R.to=rptAdd(v,6);renderReport()}};
-  $("#rpTo").onchange=e=>{const v=rptParse(e.target.value);if(v&&v>=R.from){R.to=v;renderReport()}};
+  // gõ ngày: chờ ngừng gõ ~0,7 giây rồi mới cập nhật bảng (ô ngày báo thay đổi cả khi mới gõ dở năm), bỏ qua năm chưa gõ xong
+  let rpT=0;const rpDate=(fn)=>e=>{const v=rptParse(e.target.value);clearTimeout(rpT);if(!v||v.getFullYear()<2000)return;rpT=setTimeout(()=>fn(v),700)};
+  $("#rpFrom").onchange=rpDate(v=>{R.from=v;if(R.to<v)R.to=rptAdd(v,6);renderReport()});
+  $("#rpTo").onchange=rpDate(v=>{if(v<R.from){toast("Ngày kết thúc phải sau hoặc bằng ngày bắt đầu.",true);renderReport();return}R.to=v;renderReport()});
   $("#rpThis").onclick=()=>{const mo=rptMonday(TODAY);setRange(mo,rptAdd(mo,6))};
   $("#rpPrev").onclick=()=>{const mo=rptAdd(rptMonday(TODAY),-7);setRange(mo,rptAdd(mo,6))};
   $("#rpMode").querySelectorAll("button").forEach(b=>b.onclick=()=>{R.mode=b.dataset.m;renderReport()});
