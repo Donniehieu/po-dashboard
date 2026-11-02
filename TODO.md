@@ -331,6 +331,14 @@ Vì số PAY **đổi tên** thành chuỗi chứa `BNK` khi được thanh toá
 - Công nợ NCC: Chưa phân loại. Thông tin thanh toán: Chưa kiểm tra, Odoo chưa có - nhập tay.
 - Trang Ưu tiên có hàng nút tổng hợp, bấm nhảy tới đúng tab và bộ lọc.
 
+### Tab Báo cáo công việc (02/11/2026)
+- Tab mới **📝 Báo cáo công việc** theo form BAO CAO CONG VIEC-FORM: bảng TT / Công việc / Kết quả (Đã hoàn thành, Chưa hoàn thành) / Lý do - giải pháp, kèm Kế hoạch cho tuần, Đề xuất - giải pháp, Người viết.
+- PO lấy từ tab PO, gom theo **Nhóm NCC** (cột mới của tab Công nợ NCC, dữ liệu từ NCC_loc.xlsx; khớp NCC bằng cùng hàm `NCC.find` của đồng bộ NCC). Mỗi dòng PO ghi rõ "Nhóm NCC: …"; nhóm: Vật tư tiêu hao, Vật tư bao bì đóng gói, Vật tư sắt thép, Bảo hộ lao động, Dầu-mỡ- chất bôi trơn (+ Chưa phân nhóm nếu NCC chưa có nhóm).
+- Lọc theo kỳ (Từ ngày - Đến ngày, mặc định tuần này, nút Tuần này / Tuần trước): PO có cập nhật tiến độ trong kỳ, hoặc ngày nhận hàng dự kiến trong kỳ, hoặc (tùy chọn) mọi PO chưa hoàn thành.
+- 3 kiểu, đều mỗi PO một dòng "PO - Cty - số tiền", dòng nhóm vật tư để trống cột Kết quả và Lý do: **Tổng hợp** (tick Đã/Chưa hoàn thành theo PO, lý do = tiến độ hiện tại của PO), **Chi tiết trạng thái PO** (lý do mỗi trạng thái một dòng: Tiến độ, Nhận hàng, Duyệt, Thanh toán theo phiếu thanh toán liên quan), **Mẫu nhập tay** (cùng danh sách PO, người dùng tự tick kết quả, ghi lý do, thêm dòng tự nhập).
+- Xuất .xlsx đúng bố cục form; Nhập .xlsx nạp lại file đã xuất (khôi phục kỳ, kết quả, lý do, kế hoạch, đề xuất, người viết). Nội dung nhập tay lưu theo kỳ trong trình duyệt (`qlcv:rpt:v1`).
+- Cột **Hoàn thành** đã thêm vào sheet CV theo ngày để dấu tick lưu lên GitHub và dùng chung (dashboard cũng nhận cột này dù còn trống).
+
 ## Đã bỏ theo yêu cầu
 - Bot nhắc việc (Telegram/Zalo/email) và tuổi công nợ theo nhà cung cấp.
 

@@ -81,6 +81,11 @@ main{padding:18px 20px 60px;max-width:1500px;margin:0 auto}
 .donutwrap svg{flex:none}
 .donutwrap .bars{flex:1;min-width:200px}
 .scroll-x{overflow-x:auto}
+.rpt{border-collapse:collapse;width:100%;background:var(--card)}
+.rpt th,.rpt td{border:1px solid var(--ink);padding:6px 8px;vertical-align:top;text-align:left}
+.rpt th{background:var(--soft);text-align:center;vertical-align:middle;position:static;text-transform:none;font-size:13px;color:var(--ink);cursor:default}
+.rpt td.c{text-align:center}.rpt tr.g td{font-weight:700}
+.rpt textarea,.rptx{width:100%;min-height:44px;font:inherit;border:1px solid var(--line);border-radius:6px;padding:5px 7px;background:var(--card);color:var(--ink);resize:vertical}
 .qbar{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:0 0 12px}
 .qb{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:16px;padding:4px 11px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;gap:6px;align-items:center}
 .qb b{background:var(--soft);border-radius:10px;padding:0 7px;font-size:12px;font-variant-numeric:tabular-nums}
@@ -598,7 +603,7 @@ async function parseXlsx(buf){
           else if(ty==="b")v=raw==="1";
           else if(ty==="e")v=null;
           else{const num=parseFloat(raw);v=isNaN(num)?raw:(dateXf[s]?serialToDate(num):num)}}
-        if(typeof v==="string"){v=v.replace(/\s+/g," ").trim();if(v==="")v=null}
+        if(typeof v==="string"){v=(parseXlsx.keepNl?v.replace(/[^\S\n]+/g," ").replace(/ ?\n ?/g,"\n"):v.replace(/\s+/g," ")).trim();if(v==="")v=null}
         if(v!==null)arr[colNum(ref)]=v;
       }
       grid[rn-1]=arr;
@@ -670,7 +675,7 @@ const VIEWS=[
    rename:[[/^tổng$/i,"Giá trị đơn hàng"],[/^note$/i,"Tiến độ hiện tại"],[/^ngày đổi trạng thái$/i,"Ngày cập nhật tiến độ"]],
    order:[/^mã đơn hàng$/i,/^nhà cung cấp$/i,/^ngày nhận hàng dự kiến$/i,/^người mua$/i,/^nguồn$/i,/^tổng$/i,/^trạng thái quy trình$/i,/^trạng thái phiếu nhập kho$/i,/^trạng thái hóa đơn$/i,/^note$/i,/^ngày đổi trạng thái$/i,/^thanh toán trước$/i,/^ghi chú$/i]},
   {is:sh=>IS_DS(sh.name),
-   order:[/^stt$/i,/^tên ncc$/i,/^(phân loại|note)$/i,/^phát sinh công nợ$/i,/^trạng thái$/i,/^ngày điều chỉnh$/i,/^(ghi chú|ngày check)$/i]},
+   order:[/^stt$/i,/^tên ncc$/i,/^(phân loại|note)$/i,/^phát sinh công nợ$/i,/^nhóm ncc$/i,/^trạng thái$/i,/^ngày điều chỉnh$/i,/^(ghi chú|ngày check)$/i]},
   {is:sh=>sh.pay,
    rename:[[/^số pay$/i,"Số chứng từ"],[/^số ngày làm việc trễ$/i,"Số ngày quá hạn"],[/^nhắc kt thanh toán$/i,"Theo dõi tiến độ"]],
    hide:[/^số chứng từ hiện tại$/i],
@@ -707,7 +712,7 @@ function analyze(raw){
   const hIdx=re=>hdr.findIndex(h=>re.test(String(h||"").trim()));
   const isBank=/^thông tin thanh toán$/i.test(String(raw.name||"").trim()); // tab Thông tin thanh toán của NCC
   const payId=isPaySheet?hIdx(/^id odoo$/i):-1,payCid=isPaySheet?hIdx(/^mã công ty$/i):-1,bankId=isBank?hIdx(/^id odoo$/i):-1;
-  const forced=n=>(hasKey&&FORCE_RE.test(n.trim()))||(isDs&&/^ngày điều chỉnh$/i.test(n.trim()))||(isPaySheet&&/^ghi chú$/i.test(n.trim()))||(isBank&&/^(note|đã kiểm tra( thông tin)?)$/i.test(n.trim()));
+  const forced=n=>/^hoàn thành$/i.test(n.trim())||(hasKey&&FORCE_RE.test(n.trim()))||(isDs&&/^(ngày điều chỉnh|nhóm ncc)$/i.test(n.trim()))||(isPaySheet&&/^ghi chú$/i.test(n.trim()))||(isBank&&/^(note|đã kiểm tra( thông tin)?)$/i.test(n.trim()));
   for(let c=0;c<maxC;c++){
     const name=(hdr[c]!=null?String(hdr[c]):"");
     const vals=rows.map(r=>r.v[c]).filter(x=>x!=null);
@@ -2347,13 +2352,14 @@ function renderTabs(){
   // Thứ tự: Tổng quan, Ưu tiên, CV theo ngày, Nhà cung cấp, Công nợ NCC, Công nợ Ms Thủy, Công nợ Hiếu, PO, Phiếu thanh toán, Bảng kê TT, (sheet khác), Lịch sử
   const rankSheet=sh=>{const n=norm(sh.name);return sh.ext?13:/^cv theo ngày/.test(n)?3:IS_DS(sh.name)?5:/^công nợ ms thủy/.test(n)?6:/^công nợ hiếu/.test(n)?7:sh.wf?8:sh.pay?9:/^bảng kê tt vận chuyển/.test(n)?10:/^bảng kê tt đơn hàng/.test(n)?11:12};
   const items=[{r:0,h:`<button data-i="overview" class="${on("overview")}">Tổng quan</button>`},{r:0.5,h:`<button data-i="today" class="${on("today")}">🎯 Việc hôm nay<span class="n">${tdCount()}</span></button>`},{r:1,h:`<button data-i="priority" class="${on("priority")}">⚠ Ưu tiên xử lý<span class="n">${pc}</span></button>`},{r:20,h:`<button data-i="history" class="${on("history")}">🕘 Lịch sử</button>`}];
+  if(state.sheets.some(s=>s.wf))items.push({r:3.5,h:`<button data-i="report" class="${on("report")}">📝 Báo cáo công việc</button>`});
   if(state.sheets.some(s=>s.wf))items.push({r:4,h:`<button data-i="suppliers" class="${on("suppliers")}">🏭 Nhà cung cấp</button>`});
   state.sheets.forEach((s,i)=>items.push({r:rankSheet(s),h:`<button data-i="${i}" class="${on(i)}">${esc(s.name)}<span class="n">${s.rows.length}</span></button>`}));
   if(!state.nsSheet&&state.sheets.length)items.push({r:13,h:`<button data-i="nsload" title="Dữ liệu từ NetSuite (file riêng Netsuite_data.xlsx, tải khi bấm lần đầu)">📊 Netsuite Data</button>`});
   t.innerHTML=items.map((x,k)=>({...x,k})).sort((a,b)=>a.r-b.r||a.k-b.k).map(x=>x.h).join("");
-  t.querySelectorAll("button").forEach(b=>b.onclick=()=>{const v=b.dataset.i;if(v==="nsload"){nsLoad(true);return}state.active=(v==="overview"||v==="priority"||v==="today"||v==="history"||v==="suppliers")?v:+v;renderTabs();render();scrollTo(0,0)});
+  t.querySelectorAll("button").forEach(b=>b.onclick=()=>{const v=b.dataset.i;if(v==="nsload"){nsLoad(true);return}state.active=(v==="overview"||v==="priority"||v==="today"||v==="history"||v==="suppliers"||v==="report")?v:+v;renderTabs();render();scrollTo(0,0)});
 }
-function render(){state.active==="today"?renderToday():state.active==="overview"?renderOverview():state.active==="priority"?renderPriority():state.active==="history"?renderHistory():state.active==="suppliers"?renderSuppliers():renderSheet(state.sheets[state.active])}
+function render(){state.active==="report"?renderReport():state.active==="today"?renderToday():state.active==="overview"?renderOverview():state.active==="priority"?renderPriority():state.active==="history"?renderHistory():state.active==="suppliers"?renderSuppliers():renderSheet(state.sheets[state.active])}
 
 function sheetStats(sh){
   const o={rows:sh.rows.length};
@@ -2406,6 +2412,183 @@ function renderOverview(){
   $("#main").querySelectorAll("[data-od]").forEach(a=>a.onclick=e=>{e.preventDefault();const s=state.sheets[+a.dataset.od];s.ui.special="overdue";state.active=+a.dataset.od;renderTabs();render();scrollTo(0,0)});
 }
 
+/* ============ Báo cáo công việc (theo form BAO CAO CONG VIEC-FORM): PO nhóm theo cột "Nhóm NCC" của tab Công nợ NCC ============ */
+const RPT_KEY="qlcv:rpt:v1",RPT_GROUPS=["Vật tư tiêu hao","Vật tư bao bì đóng gói","Vật tư sắt thép","Bảo hộ lao động","Dầu-mỡ- chất bôi trơn"],RPT_NONE="Chưa phân nhóm",RPT_PO=/PO[A-Z&]{2,}\d{3,}/i;
+const rptYmd=d=>d.getFullYear()+"-"+pad2(d.getMonth()+1)+"-"+pad2(d.getDate());
+const rptParse=s=>{const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(s||"");return m?new Date(+m[1],+m[2]-1,+m[3]):null};
+const rptAdd=(d,n)=>new Date(d.getFullYear(),d.getMonth(),d.getDate()+n);
+const rptMonday=d=>rptAdd(sod(d),-((d.getDay()+6)%7));
+const rptRoman=n=>{const t=[[10,"X"],[9,"IX"],[5,"V"],[4,"IV"],[1,"I"]];let s="";for(const [v,r] of t)while(n>=v){s+=r;n-=v}return s};
+function rptInit(){if(!state.rpt){const m=rptMonday(TODAY);state.rpt={from:m,to:rptAdd(m,6),mode:"sum",inc:{chg:true,due:true,open:false}}}return state.rpt}
+const rptKey=()=>{const R=rptInit();return rptYmd(R.from)+"|"+rptYmd(R.to)};
+function rptData(){const all=store.get(RPT_KEY)||{},d=all[rptKey()]||{};const R=rptInit();
+  return {rows:d.rows||{},custom:d.custom||{},plan:d.plan||"",planFrom:d.planFrom||rptYmd(rptAdd(R.from,7)),planTo:d.planTo||rptYmd(rptAdd(R.to,7)),prop:d.prop||"",author:d.author||""}}
+function rptSave(d){const all=store.get(RPT_KEY)||{};all[rptKey()]=d;const ks=Object.keys(all);if(ks.length>60)for(const k of ks.slice(0,ks.length-60))delete all[k];store.set(RPT_KEY,all)}
+function rptModel(){
+  const R=rptInit(),po=state.sheets.find(s=>s.wf),S=nccSheets(),out={ok:false,rows:[],groups:[]};
+  if(!po||!S){out.err="Chưa có đủ dữ liệu tab PO và Công nợ NCC.";return out}
+  const gc=S.ds.cols.find(c=>norm(c.name)==="nhóm ncc");
+  if(!gc){out.err="Tab Công nợ NCC chưa có cột “Nhóm NCC”.";return out}
+  const items=S.ds.rows.filter(r=>String(r.v[S.nc.idx]??"").trim()).map(r=>({name:String(r.v[S.nc.idx]).trim(),grp:String(r.v[gc.idx]??"").trim()}));
+  const cache=new Map(items.map(it=>[it,NCC.cands(it.name)])),memo=new Map();
+  const grpOf=sup=>{const k=String(sup??"");if(!memo.has(k)){const f=NCC.find(k,items,cache),g=new Set(f.hits.map(h=>h.grp).filter(Boolean));memo.set(k,g.size===1?[...g][0]:RPT_NONE)}return memo.get(k)};
+  const f=sod(R.from),t=sod(R.to),inR=d=>d instanceof Date&&sod(d)>=f&&sod(d)<=t;
+  const ps=state.sheets.find(x=>x.pay),payBy=new Map(); // PO -> các phiếu thanh toán liên quan: "PAY… (Trạng thái TT)"
+  if(ps&&ps.payPoIdx!=null)for(const p of ps.rows){
+    const cur=ps.payCurIdx!=null?String(p.v[ps.payCurIdx]??"").trim():"",no=cur||String(p.v[ps.title]??"").trim(),stt=String(p.v[ps.payStIdx]??"").trim();
+    for(const c of String(p.v[ps.payPoIdx]??"").split(/[,;\s]+/)){const k=c.trim().toUpperCase();if(k){if(!payBy.has(k))payBy.set(k,[]);payBy.get(k).push(`${no} (${stt||"chưa rõ"})`)}}
+  }
+  for(const r of po.rows){
+    const code=String(r.v[po.title]??"").trim();if(!code)continue;
+    const chg=po.chgIdx!=null?r.v[po.chgIdx]:null,due=po.dueIdx!=null?r.v[po.dueIdx]:null;
+    if(!((R.inc.chg&&inR(chg))||(R.inc.due&&inR(due))||(R.inc.open&&!r.done)))continue;
+    const sup=String(r.v[S.sc.idx]??"").trim();
+    out.rows.push({code,sup,group:grpOf(sup),wf:r.wf,done:!!r.done,late:r.st==="overdue",amt:po.money?+r.v[po.money.idx]||0:0,
+      rc:po.rcIdx!=null?String(r.v[po.rcIdx]??"").trim():"",iv:po.ivIdx!=null?String(r.v[po.ivIdx]??"").trim():"",
+      st:po.stIdx!=null?String(r.v[po.stIdx]??"").trim():"",pays:(payBy.get(code.toUpperCase())||[]).join("; ")});
+  }
+  out.rows.sort((a,b)=>(a.done-b.done)||a.code.localeCompare(b.code));
+  const extra=[...new Set(items.map(i=>i.grp).filter(g=>g&&!RPT_GROUPS.includes(g)))];
+  for(const name of [...RPT_GROUPS,...extra,RPT_NONE])if(out.rows.some(x=>x.group===name))out.groups.push(name);
+  out.ok=true;return out;
+}
+/* Bảng báo cáo theo kiểu đang chọn: danh sách dòng dùng chung cho hiển thị và xuất Excel */
+function rptTable(m,mode,d){
+  const L=[];let gi=0;
+  for(const g of m.groups){
+    const rows=m.rows.filter(x=>x.group===g);
+    L.push({k:"g",tt:rptRoman(++gi),work:g+":"});
+    let i=0;
+    for(const x of rows){
+      const m1=mode==="man"?(d.rows[x.code]||{}):null;
+      const why=mode==="sum"?x.wf
+        :mode==="det"?[`Tiến độ: ${x.wf}${!x.done&&x.late?" (quá hạn)":""}`,`Nhận hàng: ${x.rc||"chưa có thông tin"}`,`Duyệt: ${x.st||"chưa có thông tin"}`,`Thanh toán: ${x.pays||"chưa có phiếu thanh toán"}`].join("\n")
+        :(m1.why||"");
+      L.push({k:"r",tt:++i,code:x.code,group:g,work:`${x.code} - ${x.sup||"(chưa có NCC)"}${x.amt?" - "+fmtN(x.amt)+"đ":""}`,res:mode==="man"?(m1.res||""):(x.done?"done":"open"),why});
+    }
+    if(mode==="man")(d.custom[g]||[]).forEach((c,j)=>L.push({k:"r",tt:++i,custom:true,group:g,ci:j,work:c.t||"",res:c.res||"",why:c.why||""}));
+  }
+  return L;
+}
+function renderReport(){
+  const R=rptInit(),m=rptModel(),d=rptData(),mode=R.mode,L=m.ok?rptTable(m,mode,d):[];
+  const poSi=state.sheets.findIndex(s=>s.wf),man=mode==="man";
+  const tick=(x,w)=>man?`<input type="checkbox" data-rr="${esc(x.custom?"@"+x.group+"|"+x.ci:x.code)}|${w}" ${x.res===w?"checked":""}>`:(x.res===w?"✓":"");
+  const body=L.map(x=>{
+    if(x.k==="g")return `<tr class="g"><td class="c">${x.tt}</td><td>${esc(x.work.replace(/:$/,""))}:${man?` <button class="btn sm" data-rcadd="${esc(x.work.replace(/:$/,""))}" title="Thêm một dòng công việc tự nhập vào nhóm này">＋ Dòng</button>`:""}</td><td></td><td></td><td></td></tr>`;
+    const work=x.custom?`<input class="cell" data-rct="${esc(x.group)}|${x.ci}" value="${esc(x.work)}" placeholder="Nội dung công việc" style="width:100%">`
+      :`<a class="ol" href="#" data-rpo="${esc(x.code)}" title="Mở PO này ở tab PO">${esc(x.code)}</a>${esc(x.work.slice(x.code.length))}`;
+    const why=man?`<textarea data-rw="${esc(x.custom?"@"+x.group+"|"+x.ci:x.code)}" placeholder="Lý do – giải pháp">${esc(x.why)}</textarea>`:`<span style="white-space:pre-line">${esc(x.why)}</span>`;
+    return `<tr><td class="c">${x.tt}${x.custom?` <b class="rm" data-rcdel="${esc(x.group)}|${x.ci}" title="Xóa dòng này" style="cursor:pointer;color:var(--bad)">×</b>`:""}</td><td>${work}</td><td class="c">${tick(x,"done")}</td><td class="c">${tick(x,"open")}</td><td>${why}</td></tr>`}).join("");
+  const totD=m.rows.filter(x=>x.done).length;
+  $("#main").innerHTML=`<div class="toolbar" style="flex-wrap:wrap;gap:8px">
+    <label class="sub">Từ ngày <input type="date" id="rpFrom" value="${rptYmd(R.from)}"></label>
+    <label class="sub">Đến ngày <input type="date" id="rpTo" value="${rptYmd(R.to)}"></label>
+    <button class="btn sm" id="rpThis">Tuần này</button><button class="btn sm" id="rpPrev">Tuần trước</button>
+    <span class="seg" id="rpMode">${[["sum","Tổng hợp"],["det","Chi tiết trạng thái PO"],["man","Mẫu nhập tay"]].map(([k,l])=>`<button data-m="${k}" class="${mode===k?"on":""}">${l}</button>`).join("")}</span>
+    <span class="grow"></span>
+    <button class="btn" id="rpExp">⬇ Xuất Excel</button><button class="btn" id="rpImp">⬆ Nhập Excel</button><input type="file" id="rpFile" accept=".xlsx,.xlsm" hidden>
+  </div>
+  <div class="note" style="margin:0 0 10px">Lấy PO từ tab PO theo <b>nhóm NCC</b> (cột “Nhóm NCC” của tab Công nợ NCC) có:
+    <label><input type="checkbox" data-inc="chg" ${R.inc.chg?"checked":""}> cập nhật tiến độ trong kỳ</label> ·
+    <label><input type="checkbox" data-inc="due" ${R.inc.due?"checked":""}> ngày nhận hàng dự kiến trong kỳ</label> ·
+    <label><input type="checkbox" data-inc="open" ${R.inc.open?"checked":""}> tất cả PO chưa hoàn thành</label>
+    ${m.ok?`— <b>${m.rows.length}</b> PO (${totD} đã hoàn thành, ${m.rows.length-totD} chưa)`:""}</div>
+  ${m.ok?(m.rows.length?`<h2 class="sec">I. CÔNG VIỆC ĐÃ LÀM TRONG TUẦN TỪ NGÀY ${fmtD(R.from)} ĐẾN ${fmtD(R.to)}:</h2>
+  <div class="tablewrap"><table class="rpt"><thead><tr><th rowspan="2" style="width:48px">TT</th><th rowspan="2">CÔNG VIỆC</th><th colspan="2">KẾT QUẢ</th><th rowspan="2" style="width:30%">LÝ DO – GIẢI PHÁP</th></tr>
+    <tr><th style="width:96px">Đã hoàn thành</th><th style="width:96px">Chưa hoàn thành</th></tr></thead><tbody>${body}</tbody></table></div>`
+    :`<div class="card sub">Không có PO nào trong kỳ này theo các điều kiện đã chọn. Thử mở rộng khoảng ngày hoặc tick “tất cả PO chưa hoàn thành”.</div>`)
+    :`<div class="card">${esc(m.err)}</div>`}
+  <h2 class="sec">KẾ HOẠCH CHO TUẦN TỪ NGÀY <input type="date" id="rpPF" value="${esc(d.planFrom)}"> ĐẾN <input type="date" id="rpPT" value="${esc(d.planTo)}"> <button class="btn sm" id="rpPlanAuto" title="Điền sẵn danh sách PO chưa hoàn thành ở trên">Gợi ý từ PO chưa xong</button></h2>
+  <textarea id="rpPlan" class="rptx" rows="4">${esc(d.plan)}</textarea>
+  <h2 class="sec">ĐỀ XUẤT – GIẢI PHÁP</h2><textarea id="rpProp" class="rptx" rows="4">${esc(d.prop)}</textarea>
+  <h2 class="sec">NGƯỜI VIẾT</h2><input id="rpAuth" class="cell" style="width:100%;max-width:420px" value="${esc(d.author)}" placeholder="Họ tên người lập báo cáo">
+  <div class="note" style="margin-top:12px">Nội dung nhập tay (kết quả, lý do, kế hoạch, đề xuất, người viết) lưu theo từng kỳ trong trình duyệt này; dùng “Xuất Excel” để gửi hoặc lưu, “Nhập Excel” để nạp lại file đã xuất.</div>`;
+  const pg=()=>rptData(),$m=$("#main");
+  const setRange=(f,t)=>{R.from=f;R.to=t;renderReport()};
+  $("#rpFrom").onchange=e=>{const v=rptParse(e.target.value);if(v){R.from=v;if(R.to<v)R.to=rptAdd(v,6);renderReport()}};
+  $("#rpTo").onchange=e=>{const v=rptParse(e.target.value);if(v&&v>=R.from){R.to=v;renderReport()}};
+  $("#rpThis").onclick=()=>{const mo=rptMonday(TODAY);setRange(mo,rptAdd(mo,6))};
+  $("#rpPrev").onclick=()=>{const mo=rptAdd(rptMonday(TODAY),-7);setRange(mo,rptAdd(mo,6))};
+  $("#rpMode").querySelectorAll("button").forEach(b=>b.onclick=()=>{R.mode=b.dataset.m;renderReport()});
+  $m.querySelectorAll("[data-inc]").forEach(c=>c.onchange=()=>{R.inc[c.dataset.inc]=c.checked;renderReport()});
+  $m.querySelectorAll("[data-rpo]").forEach(a=>a.onclick=e=>{e.preventDefault();goSheet(poSi,{search:a.dataset.rpo.toLowerCase()})});
+  const slot=(x,dd)=>{if(x.startsWith("@")){const [g,i]=x.slice(1).split("|");return (dd.custom[g]||[])[+i]||null}return dd.rows[x]||(dd.rows[x]={})};
+  $m.querySelectorAll("[data-rr]").forEach(c=>c.onchange=()=>{const [x,w]=c.dataset.rr.split("|").length>2?[c.dataset.rr.split("|").slice(0,-1).join("|"),c.dataset.rr.split("|").pop()]:c.dataset.rr.split("|");const dd=pg(),s=slot(x,dd);if(!s)return;s.res=c.checked?w:"";rptSave(dd);renderReport()});
+  $m.querySelectorAll("[data-rw]").forEach(t=>t.oninput=()=>{const dd=pg(),s=slot(t.dataset.rw,dd);if(!s)return;s.why=t.value;rptSave(dd)});
+  $m.querySelectorAll("[data-rct]").forEach(t=>t.oninput=()=>{const [g,i]=t.dataset.rct.split("|"),dd=pg(),s=(dd.custom[g]||[])[+i];if(!s)return;s.t=t.value;rptSave(dd)});
+  $m.querySelectorAll("[data-rcadd]").forEach(b=>b.onclick=()=>{const dd=pg(),g=b.dataset.rcadd;(dd.custom[g]=dd.custom[g]||[]).push({t:"",res:"",why:""});rptSave(dd);renderReport()});
+  $m.querySelectorAll("[data-rcdel]").forEach(b=>b.onclick=()=>{const [g,i]=b.dataset.rcdel.split("|"),dd=pg();(dd.custom[g]||[]).splice(+i,1);rptSave(dd);renderReport()});
+  $("#rpPF").onchange=e=>{const dd=pg();dd.planFrom=e.target.value;rptSave(dd)};$("#rpPT").onchange=e=>{const dd=pg();dd.planTo=e.target.value;rptSave(dd)};
+  $("#rpPlan").oninput=e=>{const dd=pg();dd.plan=e.target.value;rptSave(dd)};$("#rpProp").oninput=e=>{const dd=pg();dd.prop=e.target.value;rptSave(dd)};$("#rpAuth").oninput=e=>{const dd=pg();dd.author=e.target.value;rptSave(dd)};
+  $("#rpPlanAuto").onclick=()=>{const dd=pg(),open=m.ok?m.rows.filter(x=>!x.done):[];if(!open.length)return toast("Không có PO chưa hoàn thành trong danh sách.",true);
+    dd.plan=(dd.plan?dd.plan.trimEnd()+"\n":"")+open.map(x=>`- ${x.code} (${x.group}): tiếp tục xử lý, hiện ở bước “${x.wf}”`).join("\n");rptSave(dd);renderReport()};
+  $("#rpExp").onclick=()=>rptExport().catch(e=>toast("Không xuất được: "+e.message,true));
+  $("#rpImp").onclick=()=>$("#rpFile").click();
+  $("#rpFile").onchange=async e=>{const f=e.target.files[0];e.target.value="";if(f)try{await rptImport(f)}catch(err){toast("Không nhập được: "+err.message,true)}};
+}
+/* ---- Xuất / nhập .xlsx theo đúng bố cục form ---- */
+async function rptExport(){
+  const R=rptInit(),m=rptModel();if(!m.ok)return toast(m.err,true);
+  const d=rptData(),L=rptTable(m,R.mode,d),rows=[],merges=[];let n=0;
+  const C=(c,v,s)=>{const ref=c+(n);return v===""||v==null?`<c r="${ref}" s="${s}"/>`:typeof v==="number"?`<c r="${ref}" s="${s}"><v>${v}</v></c>`:`<c r="${ref}" s="${s}" t="inlineStr"><is><t xml:space="preserve">${xe(v)}</t></is></c>`};
+  const add=(cells,ht)=>{n++;rows.push(`<row r="${n}"${ht?` ht="${ht}" customHeight="1"`:""}>${cells().join("")}</row>`)};
+  add(()=>[C("A",`I. CÔNG VIỆC ĐÃ LÀM TRONG TUẦN TỪ NGÀY ${fmtD(R.from)} ĐẾN ${fmtD(R.to)}:`,6)]);merges.push(`A${n}:E${n}`);
+  add(()=>[]);
+  add(()=>[C("A","TT",2),C("B","CÔNG VIỆC",2),C("C","KẾT QUẢ",2),C("D","",2),C("E","LÝ DO – GIẢI PHÁP",2)]);const h1=n;
+  add(()=>[C("A","",2),C("B","",2),C("C","Đã hoàn thành",2),C("D","Chưa hoàn thành",2),C("E","",2)]);
+  merges.push(`A${h1}:A${n}`,`B${h1}:B${n}`,`C${h1}:D${h1}`,`E${h1}:E${n}`);
+  for(const x of L){
+    if(x.k==="g")add(()=>[C("A",x.tt,8),C("B",x.work,5),C("C","",4),C("D","",4),C("E","",3)]);
+    else add(()=>[C("A",x.tt,4),C("B",x.work,3),C("C",x.res==="done"?"✓":"",4),C("D",x.res==="open"?"✓":"",4),C("E",x.why||"",3)]);
+  }
+  add(()=>[]);
+  const block=(title,text,minLines)=>{add(()=>[C("A",title,1)]);merges.push(`A${n}:E${n}`);const lines=Math.max(minLines,String(text||"").split("\n").length+1);add(()=>[C("A",text||"",7)],lines*15);merges.push(`A${n}:E${n}`)};
+  block(`KẾ HOẠCH CHO TUẦN TỪ NGÀY ${fmtD(rptParse(d.planFrom)||rptAdd(R.from,7))} ĐẾN ${fmtD(rptParse(d.planTo)||rptAdd(R.to,7))}`,d.plan,4);
+  block("ĐỀ XUẤT – GIẢI PHÁP",d.prop,4);
+  block("NGƯỜI VIẾT",d.author,2);
+  const H='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n',NS='xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"';
+  const bd='<border><left style="thin"/><right style="thin"/><top style="thin"/><bottom style="thin"/><diagonal/></border>';
+  const xf=(font,fill,border,al)=>`<xf numFmtId="0" fontId="${font}" fillId="${fill}" borderId="${border}" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment ${al}/></xf>`;
+  const styles=H+`<styleSheet ${NS}><fonts count="3"><font><sz val="11"/><name val="Times New Roman"/></font><font><b/><sz val="11"/><name val="Times New Roman"/></font><font><b/><sz val="13"/><name val="Times New Roman"/></font></fonts><fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFD9E1F2"/></patternFill></fill></fills><borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border>${bd}</borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="9">`
+    +xf(0,0,0,'vertical="top"')+xf(1,0,0,'vertical="top"')+xf(1,2,1,'horizontal="center" vertical="center" wrapText="1"')+xf(0,0,1,'vertical="top" wrapText="1"')+xf(0,0,1,'horizontal="center" vertical="top"')
+    +xf(1,0,1,'vertical="top" wrapText="1"')+xf(2,0,0,'vertical="center"')+xf(0,0,0,'vertical="top" wrapText="1"')+xf(1,0,1,'horizontal="center" vertical="top" wrapText="1"')+`</cellXfs></styleSheet>`;
+  const sheet=H+`<worksheet ${NS}><sheetViews><sheetView workbookViewId="0"/></sheetViews><cols><col min="1" max="1" width="7" customWidth="1"/><col min="2" max="2" width="62" customWidth="1"/><col min="3" max="4" width="17" customWidth="1"/><col min="5" max="5" width="48" customWidth="1"/></cols><sheetData>${rows.join("")}</sheetData><mergeCells count="${merges.length}">${merges.map(r=>`<mergeCell ref="${r}"/>`).join("")}</mergeCells><pageSetup orientation="landscape" fitToHeight="0"/></worksheet>`;
+  const files=[
+   ["[Content_Types].xml",H+'<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>'],
+   ["_rels/.rels",H+'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>'],
+   ["xl/workbook.xml",H+`<workbook ${NS} xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Báo cáo công việc" sheetId="1" r:id="rId1"/></sheets></workbook>`],
+   ["xl/_rels/workbook.xml.rels",H+'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>'],
+   ["xl/styles.xml",styles],["xl/worksheets/sheet1.xml",sheet]];
+  const a=document.createElement("a");a.href=URL.createObjectURL(await makeZipDeflated(files));
+  a.download=`Bao_cao_cong_viec_${rptYmd(R.from)}_${rptYmd(R.to)}.xlsx`;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+  toast("Đã xuất báo cáo công việc.");
+}
+async function rptImport(file){
+  let sheets;parseXlsx.keepNl=true;try{sheets=await parseXlsx(await file.arrayBuffer())}finally{parseXlsx.keepNl=false}
+  const sh=sheets.find(s=>/báo cáo/i.test(s.name))||sheets[0];if(!sh)throw new Error("file không có sheet nào");
+  const g=sh.grid,S=v=>v==null?"":(v instanceof Date?fmtD(v):String(v).trim()),R=rptInit();
+  const dmy=t=>[...String(t).matchAll(/(\d{1,2})\/(\d{1,2})\/(\d{4})/g)].map(x=>new Date(+x[3],+x[2]-1,+x[1]));
+  let ti=-1;for(let i=0;i<g.length;i++)if(/công việc đã làm/i.test(S((g[i]||[])[0]))){ti=i;break}
+  if(ti<0)throw new Error("không phải file báo cáo công việc (thiếu dòng “CÔNG VIỆC ĐÃ LÀM TRONG TUẦN…”)");
+  const dt=dmy(S(g[ti][0]));if(dt.length>=2){R.from=dt[0];R.to=dt[1]}
+  const d=rptData();d.rows={};d.custom={};let cur=null,sect=null,n=0;
+  for(let i=ti+1;i<g.length;i++){
+    const r=g[i]||[],a=S(r[0]),b=S(r[1]),c=S(r[2]),dd=S(r[3]),e=S(r[4]);
+    if(/^kế hoạch cho tuần/i.test(a)){sect="plan";const p=dmy(a);if(p.length>=2){d.planFrom=rptYmd(p[0]);d.planTo=rptYmd(p[1])}continue}
+    if(/^đề xuất/i.test(a)){sect="prop";continue}
+    if(/^người viết/i.test(a)){sect="author";continue}
+    if(sect){if(a){d[sect]=a}continue}
+    if(/^[IVXL]+$/.test(a)){cur=b.split(":")[0].trim();continue}
+    if(/^\d+$/.test(a)&&b){
+      const res=c?"done":dd?"open":"",po=RPT_PO.exec(b);
+      if(po){const code=po[0].toUpperCase();d.rows[code]={res,why:e};n++}
+      else if(cur){(d.custom[cur]=d.custom[cur]||[]).push({t:b,res,why:e});n++}
+    }
+  }
+  rptSave(d);R.mode="man";state.active="report";renderTabs();renderReport();
+  toast(`Đã nhập báo cáo kỳ ${fmtD(R.from)} – ${fmtD(R.to)}: ${n} dòng công việc. Kiểu “Mẫu nhập tay” đang hiển thị dữ liệu vừa nhập.`);
+}
 /* ---- Hàng việc: nút lọc tự động theo workflow. Mỗi nút = một điều kiện tính từ dữ liệu hiện có (không cấu hình tay), có số đếm; bấm để lọc đúng danh sách việc cần làm ---- */
 let _qc=null;
 function qctx(){ // tra cứu PO theo mã (dùng cho nút của tab Phiếu thanh toán); xóa cache mỗi lần setStatus
