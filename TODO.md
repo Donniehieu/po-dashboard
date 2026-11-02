@@ -341,6 +341,10 @@ Vì số PAY **đổi tên** thành chuỗi chứa `BNK` khi được thanh toá
 - Xuất .xlsx đúng bố cục form; Nhập .xlsx nạp lại file đã xuất (khôi phục kỳ, kết quả, lý do, kế hoạch, đề xuất, người viết). Nội dung nhập tay lưu theo kỳ trong trình duyệt (`qlcv:rpt:v1`).
 - Cột **Hoàn thành** đã thêm vào sheet CV theo ngày để dấu tick lưu lên GitHub và dùng chung (dashboard cũng nhận cột này dù còn trống).
 
+### Cập nhật nền không gián đoạn (02/11/2026)
+- Khi dữ liệu mới về từ Odoo/GitHub hoặc lưu xong: dashboard **chờ bạn ngừng thao tác** (không gõ, không bấm, không mở hộp thoại) rồi mới tải; tải xong **giữ nguyên tab đang xem, bộ lọc, tìm kiếm, sắp xếp, hàng việc và vị trí cuộn** (kể cả cuộn ngang của bảng), không nhảy về Tổng quan rồi quay lại như trước. Bỏ chọn dòng vì số dòng có thể đã đổi.
+- Vẽ lại cùng một tab luôn giữ vị trí cuộn; vẽ lại do cập nhật nền (lưu xong, sự kiện in) bị hoãn nếu đang thao tác (`userBusy`, `whenIdle`, `softRender`).
+
 ## Đã bỏ theo yêu cầu
 - Bot nhắc việc (Telegram/Zalo/email) và tuổi công nợ theo nhà cung cấp.
 

@@ -902,9 +902,8 @@ async function loadFromGitHub(silent){
     const fc0=await ghFileCommit().catch(()=>null); // lấy mốc commit trước khi tải file để không bỏ sót thay đổi
     const f=await ghFetchFile();
     state.sha=f.sha;state.handle=null;state.stale=false;state.histQ=store.get(histQKey())||[];
-    await loadBuffer(f.buf,f.name,{src:"github"});
+    await loadBuffer(f.buf,f.name,{src:"github",keepView:true});
     ods.fileSha=fc0?fc0.sha:null;
-    if(keep!=="overview"&&(typeof keep!=="number"||state.sheets[keep])){state.active=keep;renderTabs();render()}
     if(!silent)toast("Đã tải “"+f.name+"” từ GitHub");
   }catch(e){
     toast(e.message,true);
@@ -1099,19 +1098,40 @@ function showRemovals(list){
   if(!d.open)d.showModal();
 }
 
+/* ---- Cập nhật nền không làm gián đoạn: chờ người dùng ngừng thao tác, giữ bộ lọc / tab / vị trí cuộn ---- */
+let lastInputAt=0;
+["keydown","input","pointerdown","wheel"].forEach(ev=>addEventListener(ev,()=>{lastInputAt=Date.now()},{passive:true,capture:true}));
+function userBusy(){
+  const a=document.activeElement,since=Date.now()-lastInputAt;
+  const typing=a&&(a.tagName==="TEXTAREA"||a.tagName==="SELECT"||(a.tagName==="INPUT"&&!/^(checkbox|radio|button|submit|file)$/i.test(a.type))||a.isContentEditable);
+  return !!document.querySelector("dialog[open]")||since<2500||(!!typing&&since<15000);
+}
+async function whenIdle(maxMs=45000){const t=Date.now();while(userBusy()&&Date.now()-t<maxMs)await new Promise(r=>setTimeout(r,1000))}
+function softRender(){ // vẽ lại do cập nhật nền: hoãn nếu đang thao tác, giữ vị trí cuộn
+  if(userBusy()){clearTimeout(softRender._t);softRender._t=setTimeout(softRender,1500);return}
+  renderTabs();render();updateChrome();
+}
+function captureView(){const w=document.querySelector("#tbl .tablewrap");return{x:scrollX,y:scrollY,l:w?w.scrollLeft:0,t:w?w.scrollTop:0}}
+function restoreView(v){if(!v)return;const w=document.querySelector("#tbl .tablewrap");if(w){w.scrollLeft=v.l;w.scrollTop=v.t}scrollTo(v.x,v.y)}
 /* ---- Nạp file ---- */
 const HIDE_SHEETS=new Set(["thông báo duyệt giá","nhà cung cấp dây đai"]);
 async function loadBuffer(buf,name,opts={}){
   const err=$("#err");
   try{
     const raw=await parseXlsx(buf);
+    const kv=!!opts.keepView&&state.sheets.length>0,prevUi=kv?new Map(state.sheets.map(x=>[x.name,x.ui])):null,prevAct=state.active,
+      prevName=kv&&typeof prevAct==="number"&&state.sheets[prevAct]?state.sheets[prevAct].name:null,view=kv?captureView():null;
     state.buf=buf;state.fileName=name;state.src=opts.src||"local";state.pending.clear();state.pendingDel.clear();state.saveErr=null;state.fileMtime=opts.mtime||null;
     state.history=mergeHist(state.histQ,store.get(histKey())||[]);
     state.sheets=raw.map(analyze).filter(sh=>!HIDE_SHEETS.has(String(sh.name).toLowerCase().replace(/\s+/g," ").trim())); // sheet ẩn khỏi dashboard (vẫn còn nguyên trong file Excel)
     if(state.nsSheet)state.sheets.push(state.nsSheet); // tab Netsuite Data (file riêng) luôn nằm cuối danh sách sheet
     else setTimeout(()=>{nsPreload().catch(()=>{})},600); // có bản đã lưu trên máy thì nạp ngầm, bấm tab là xem ngay
     state.sheets.forEach(s=>{s.baseLast=s.lastRow;setStatus(s)});
-    state.active="overview";
+    if(kv){
+      state.sheets.forEach(x=>{const u=prevUi.get(x.name);if(u){u.sel=new Set();x.ui=u}}); // bộ lọc, tìm kiếm, sắp xếp… giữ nguyên; bỏ chọn dòng vì số dòng có thể đã đổi
+      const ni=prevName!=null?state.sheets.findIndex(x=>x.name===prevName):-1;
+      state.active=prevName!=null?(ni>=0?ni:"overview"):prevAct;
+    }else state.active="overview";
     $("#fname").textContent=name+(state.src==="github"?"  ·  GitHub":state.src==="cloud"?"  ·  Cloud riêng":"");
     $("#fname").title=name;
     $("#btnRefresh").hidden=!(state.handle||state.src==="github"||state.src==="cloud");
@@ -1119,7 +1139,7 @@ async function loadBuffer(buf,name,opts={}){
     $("#btnImport").hidden=false;
     $("#btnSync").hidden=!(ghReady()&&state.src==="github"&&isMainPath());
     $("#btnPushOther").hidden=!(ghReady()&&state.src==="local");
-    renderTabs();render();updateChrome();notifyDaily();
+    renderTabs();render();updateChrome();notifyDaily();if(view)restoreView(view);
     try{applyRemindLog()}catch(e){console.error(e)}
     const a1=nccAddMissing()+bankAddMissing(),a2=nccEnforceAll(true);
     if(a1||a2){renderTabs();render();updateChrome();if(a2)toast(`Đã tự động cập nhật “TT trước” cho ${a2} PO theo Phân loại NCC (cột này chỉ do hệ thống tick).`)}
@@ -1449,7 +1469,7 @@ async function saveAll(auto){
     const a=document.activeElement;
     if(typeof state.active==="number"&&state.sheets[state.active]){ // đang xem một bảng: chỉ bỏ nền “ô vừa sửa” của các ô đã lưu, giữ nguyên vị trí cuộn
       document.querySelectorAll("td.ed[data-r][data-c]").forEach(td=>{if(!state.pending.has(pkey(state.active,+td.dataset.r,+td.dataset.c)))td.classList.remove("ed")});
-    }else if(!(a&&a.classList&&a.classList.contains("cell")))render();
+    }else if(!(a&&a.classList&&a.classList.contains("cell")))softRender();
     updateChrome();
     if(ods.deferred&&!state.pending.size&&!state.pendingDel.size){const d=ods.deferred;ods.deferred=null;setTimeout(()=>reloadFromOdoo(d),600)}
   }catch(e){console.error(e);state.saveErr=e.message;setSaveState("⚠ Lưu lỗi","bad");toast(e.message,true);updateSavebar()}
@@ -1891,7 +1911,7 @@ function applyPrintQueue(){ // -> khóa các sự kiện đã xử lý xong (đ�
   }
   store.set(PRINT_APPLIED,[...applied].slice(-500));
   store.set(PRINT_Q,q.filter(e=>!done.includes(e.k)));
-  if(msgs.length){renderTabs();render();updateChrome();toast("Đã ghi tiến độ sau khi in Đề nghị thanh toán: "+msgs.join(" | "))}
+  if(msgs.length){softRender();toast("Đã ghi tiến độ sau khi in Đề nghị thanh toán: "+msgs.join(" | "))}
   return done;
 }
 function receivePrintEvents(list,source,origin){
@@ -2359,7 +2379,11 @@ function renderTabs(){
   t.innerHTML=items.map((x,k)=>({...x,k})).sort((a,b)=>a.r-b.r||a.k-b.k).map(x=>x.h).join("");
   t.querySelectorAll("button").forEach(b=>b.onclick=()=>{const v=b.dataset.i;if(v==="nsload"){nsLoad(true);return}state.active=(v==="overview"||v==="priority"||v==="today"||v==="history"||v==="suppliers"||v==="report")?v:+v;renderTabs();render();scrollTo(0,0)});
 }
-function render(){state.active==="report"?renderReport():state.active==="today"?renderToday():state.active==="overview"?renderOverview():state.active==="priority"?renderPriority():state.active==="history"?renderHistory():state.active==="suppliers"?renderSuppliers():renderSheet(state.sheets[state.active])}
+function render(){
+  const same=state._rt===state.active,v=same?captureView():null;
+  renderMain();state._rt=state.active;if(v)restoreView(v);
+}
+function renderMain(){state.active==="report"?renderReport(true):state.active==="today"?renderToday():state.active==="overview"?renderOverview():state.active==="priority"?renderPriority():state.active==="history"?renderHistory():state.active==="suppliers"?renderSuppliers():renderSheet(state.sheets[state.active])}
 
 function sheetStats(sh){
   const o={rows:sh.rows.length};
@@ -2489,7 +2513,10 @@ function rptSummary(L){
   return {done,open,none,total:done+open+none,why:[...why].sort((a,b)=>b[1]-a[1])};
 }
 const rptSummaryText=q=>`TỔNG HỢP: ${q.total} PO – ${q.done} đã hoàn thành – ${q.open} chưa hoàn thành${q.none?` – ${q.none} chưa chọn kết quả`:""}.${q.open?` Chưa hoàn thành do: ${q.why.map(([w,n])=>`${w} (${n})`).join("; ")}.`:""}`;
-function renderReport(){
+function renderReport(auto){
+  const ae=document.activeElement;
+  if(auto&&ae&&$("#main").contains(ae)&&/^(TEXTAREA|INPUT)$/.test(ae.tagName))return; // đang gõ trong báo cáo: không vẽ lại do cập nhật nền
+  const sx=scrollX,sy=scrollY;
   const R=rptInit(),m=rptModel(),d=rptData(),mode=R.mode,L=m.ok?rptTable(m,mode,d):[];
   const poSi=state.sheets.findIndex(s=>s.wf),man=mode==="man";
   const tick=(x,w)=>man?`<input type="checkbox" data-rr="${esc(x.custom?"@"+x.group+"|"+x.ci:x.code)}|${w}" ${x.res===w?"checked":""}>`:(x.res===w?"✓":"");
@@ -2499,7 +2526,7 @@ function renderReport(){
       :`<a class="ol" href="#" data-rpo="${esc(x.code)}" title="Mở PO này ở tab PO">${esc(x.code)}</a>${esc(x.work.slice(x.code.length))}`;
     const why=man?`<textarea data-rw="${esc(x.custom?"@"+x.group+"|"+x.ci:x.code)}" placeholder="Lý do – giải pháp">${esc(x.why)}</textarea>`:`<span style="white-space:pre-line">${esc(x.why)}</span>`;
     return `<tr><td class="c">${x.tt}${x.custom?` <b class="rm" data-rcdel="${esc(x.group)}|${x.ci}" title="Xóa dòng này" style="cursor:pointer;color:var(--bad)">×</b>`:""}</td><td>${work}</td><td class="c">${tick(x,"done")}</td><td class="c">${tick(x,"open")}</td><td>${why}</td></tr>`}).join("");
-  const sm=m.ok?rptSummary(L):null,sumRow=sm&&sm.total?`<tr class="g"><td colspan="5" style="background:var(--soft)">${esc(rptSummaryText(sm))}</td></tr>`:"";
+  const sm=m.ok?rptSummary(L):null,sumRow=sm&&sm.total?`<tr class="g"><td colspan="5" id="rpSum" style="background:var(--soft)">${esc(rptSummaryText(sm))}</td></tr>`:"";
   const syncBar=man?`<div class="note" style="margin:0 0 10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
     <span>${d.hold?"⏸ <b>Đang giữ dữ liệu nhập tay / đã upload</b> – dữ liệu Odoo mới sẽ không ghi đè cho đến khi bạn bấm Đồng bộ.":"🔄 <b>Đang theo dữ liệu Odoo/GitHub</b> – PO chưa chỉnh tay tự cập nhật theo Odoo."}</span>
     <span class="grow"></span>
@@ -2531,6 +2558,7 @@ function renderReport(){
   <h2 class="sec">NGƯỜI VIẾT</h2><input id="rpAuth" class="cell" style="width:100%;max-width:420px" value="${esc(d.author)}" placeholder="Họ tên người lập báo cáo">
   <div class="note" style="margin-top:12px">Nội dung nhập tay (kết quả, lý do, kế hoạch, đề xuất, người viết) lưu theo từng kỳ trong trình duyệt này; dùng “Xuất Excel” để gửi hoặc lưu, “Nhập Excel” để nạp lại file đã xuất.</div>`;
   const pg=()=>rptData(),$m=$("#main");
+  const liveSum=()=>{const c=$("#rpSum");if(c)c.textContent=rptSummaryText(rptSummary(rptTable(m,mode,pg())))}; // dòng tổng hợp cập nhật ngay, không tải lại trang
   const setRange=(f,t)=>{R.from=f;R.to=t;renderReport()};
   // gõ ngày: chờ ngừng gõ ~0,7 giây rồi mới cập nhật bảng (ô ngày báo thay đổi cả khi mới gõ dở năm), bỏ qua năm chưa gõ xong
   let rpT=0;const rpDate=(fn)=>e=>{const v=rptParse(e.target.value);clearTimeout(rpT);if(!v||v.getFullYear()<2000)return;rpT=setTimeout(()=>fn(v),700)};
@@ -2542,8 +2570,8 @@ function renderReport(){
   $m.querySelectorAll("[data-inc]").forEach(c=>c.onchange=()=>{R.inc[c.dataset.inc]=c.checked;renderReport()});
   $m.querySelectorAll("[data-rpo]").forEach(a=>a.onclick=e=>{e.preventDefault();goSheet(poSi,{search:a.dataset.rpo.toLowerCase()})});
   const slot=(x,dd)=>{if(x.startsWith("@")){const [g,i]=x.slice(1).split("|");return (dd.custom[g]||[])[+i]||null}return dd.rows[x]||(dd.rows[x]={})};
-  $m.querySelectorAll("[data-rr]").forEach(c=>c.onchange=()=>{const [x,w]=c.dataset.rr.split("|").length>2?[c.dataset.rr.split("|").slice(0,-1).join("|"),c.dataset.rr.split("|").pop()]:c.dataset.rr.split("|");const dd=pg(),s=slot(x,dd);if(!s)return;s.res=c.checked?w:"";rptSave(dd);renderReport()});
-  $m.querySelectorAll("[data-rw]").forEach(t=>t.oninput=()=>{const dd=pg(),s=slot(t.dataset.rw,dd);if(!s)return;s.why=t.value;rptSave(dd)});
+  $m.querySelectorAll("[data-rr]").forEach(c=>c.onchange=()=>{const [x,w]=c.dataset.rr.split("|").length>2?[c.dataset.rr.split("|").slice(0,-1).join("|"),c.dataset.rr.split("|").pop()]:c.dataset.rr.split("|");const dd=pg(),s=slot(x,dd);if(!s)return;s.res=c.checked?w:"";rptSave(dd);c.closest("tr").querySelectorAll("[data-rr]").forEach(o=>{if(o!==c)o.checked=false});liveSum()});
+  $m.querySelectorAll("[data-rw]").forEach(t=>t.oninput=()=>{const dd=pg(),s=slot(t.dataset.rw,dd);if(!s)return;s.why=t.value;rptSave(dd);liveSum()});
   $m.querySelectorAll("[data-rct]").forEach(t=>t.oninput=()=>{const [g,i]=t.dataset.rct.split("|"),dd=pg(),s=(dd.custom[g]||[])[+i];if(!s)return;s.t=t.value;rptSave(dd)});
   $m.querySelectorAll("[data-rcadd]").forEach(b=>b.onclick=()=>{const dd=pg(),g=b.dataset.rcadd;(dd.custom[g]=dd.custom[g]||[]).push({t:"",res:"",why:""});rptSave(dd);renderReport()});
   $m.querySelectorAll("[data-rcdel]").forEach(b=>b.onclick=()=>{const [g,i]=b.dataset.rcdel.split("|"),dd=pg();(dd.custom[g]||[]).splice(+i,1);rptSave(dd);renderReport()});
@@ -2556,6 +2584,7 @@ function renderReport(){
     dd.rows={};dd.hold=false;rptSave(dd);renderReport();
     if(ghReady()&&state.src==="github")requestSync(true);else if(!$("#btnRefresh").hidden)refresh();else toast("Đã đặt lại theo dữ liệu đang mở (chưa kết nối GitHub nên chưa lấy dữ liệu Odoo mới).");};
   const rpH=$("#rpHold");if(rpH)rpH.onclick=()=>{const dd=pg();for(const x of rptTable(m,"man",dd))if(x.k==="r"&&!x.custom)dd.rows[x.code]={res:x.res,why:x.why};dd.hold=true;rptSave(dd);renderReport();toast("Đã giữ dữ liệu hiện tại của kỳ này. Bấm “Đồng bộ từ Odoo/GitHub” khi muốn cập nhật lại.")};
+  scrollTo(sx,sy);
   $("#rpExp").onclick=()=>rptExport().catch(e=>toast("Không xuất được: "+e.message,true));
   $("#rpImp").onclick=()=>$("#rpFile").click();
   $("#rpFile").onchange=async e=>{const f=e.target.files[0];e.target.value="";if(f)try{await rptImport(f)}catch(err){toast("Không nhập được: "+err.message,true)}};
@@ -2996,6 +3025,7 @@ async function requestSync(manual){
   }catch(e){toast("Không gửi được yêu cầu đồng bộ: "+e.message+". Cần nhập file Odoo thủ công.",true);return false}
 }
 async function reloadFromOdoo(fc){
+  await whenIdle(); // đang gõ / thao tác thì chờ ngừng rồi mới tải dữ liệu mới
   const m=(fc.commit&&fc.commit.message)||"",fromOdoo=/^Đồng bộ Odoo/.test(m),keep=state.active;
   await loadFromGitHub(true);
   if(keep!==state.active&&(typeof keep!=="number"||state.sheets[keep])){state.active=keep;renderTabs();render()}
