@@ -1125,7 +1125,7 @@ async function loadBuffer(buf,name,opts={}){
     state.history=mergeHist(state.histQ,store.get(histKey())||[]);
     state.sheets=raw.map(analyze).filter(sh=>!HIDE_SHEETS.has(String(sh.name).toLowerCase().replace(/\s+/g," ").trim())); // sheet ẩn khỏi dashboard (vẫn còn nguyên trong file Excel)
     if(state.nsSheet)state.sheets.push(state.nsSheet); // tab Netsuite Data (file riêng) luôn nằm cuối danh sách sheet
-    else setTimeout(()=>{nsPreload().catch(()=>{})},600); // có bản đã lưu trên máy thì nạp ngầm, bấm tab là xem ngay
+    // Netsuite Data là dữ liệu cố định: KHÔNG tự nạp / kiểm tra GitHub khi mở trang. Chỉ nạp khi bấm tab (ưu tiên bản đã lưu trên máy) hoặc “↻ Làm mới từ GitHub”.
     state.sheets.forEach(s=>{s.baseLast=s.lastRow;setStatus(s)});
     if(kv){
       state.sheets.forEach(x=>{const u=prevUi.get(x.name);if(u){u.sel=new Set();x.ui=u}}); // bộ lọc, tìm kiếm, sắp xếp… giữ nguyên; bỏ chọn dòng vì số dòng có thể đã đổi
