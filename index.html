@@ -2463,8 +2463,9 @@ function rptTable(m,mode,d){
       const m1=mode==="man"?(d.rows[x.code]||{}):null;
       const why=mode==="sum"?x.wf
         :mode==="det"?[`Tiến độ: ${x.wf}${!x.done&&x.late?" (quá hạn)":""}`,`Nhận hàng: ${x.rc||"chưa có thông tin"}`,`Duyệt: ${x.st||"chưa có thông tin"}`,`Thanh toán: ${x.pays||"chưa có phiếu thanh toán"}`].join("\n")
-        :(m1.why||"");
-      L.push({k:"r",tt:++i,code:x.code,group:g,work:`${x.code} - ${x.sup||"(chưa có NCC)"}${x.amt?" - "+fmtN(x.amt)+"đ":""}`,res:mode==="man"?(m1.res||""):(x.done?"done":"open"),why});
+        :(m1.why!==undefined?m1.why:`Nhận hàng: ${x.rc||"chưa có thông tin"}
+Thanh toán: ${x.pays||"chưa có phiếu thanh toán"}`); // mẫu nhập tay: điền sẵn theo tình trạng thực tế, người dùng sửa được
+      L.push({k:"r",tt:++i,code:x.code,group:g,work:`${x.code} - ${x.sup||"(chưa có NCC)"}${x.amt?" - "+fmtN(x.amt)+"đ":""}`,res:mode==="man"&&m1.res!==undefined?m1.res:(x.done?"done":"open"),why});
     }
     if(mode==="man")(d.custom[g]||[]).forEach((c,j)=>L.push({k:"r",tt:++i,custom:true,group:g,ci:j,work:c.t||"",res:c.res||"",why:c.why||""}));
   }
