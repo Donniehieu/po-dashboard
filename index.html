@@ -2413,7 +2413,7 @@ function renderOverview(){
 }
 
 /* ============ Báo cáo công việc (theo form BAO CAO CONG VIEC-FORM): PO nhóm theo cột "Nhóm NCC" của tab Công nợ NCC ============ */
-const RPT_KEY="qlcv:rpt:v1",RPT_GROUPS=["Vật tư tiêu hao","Vật tư bao bì đóng gói","Vật tư sắt thép","Bảo hộ lao động","Dầu-mỡ- chất bôi trơn"],RPT_NONE="Chưa phân nhóm",RPT_PO=/PO[A-Z&]{2,}\d{3,}/i;
+const RPT_KEY="qlcv:rpt:v1",RPT_GROUPS=["Vật tư bao bì đóng gói","Vật tư sắt thép","Dầu-mỡ- chất bôi trơn","Vật tư tiêu hao","Bảo hộ lao động"],RPT_NONE="Chưa phân nhóm",RPT_PO=/PO[A-Z&]{2,}\d{3,}/i;
 const rptYmd=d=>d.getFullYear()+"-"+pad2(d.getMonth()+1)+"-"+pad2(d.getDate());
 const rptParse=s=>{const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(s||"");return m?new Date(+m[1],+m[2]-1,+m[3]):null};
 const rptAdd=(d,n)=>new Date(d.getFullYear(),d.getMonth(),d.getDate()+n);
@@ -2436,16 +2436,18 @@ function rptModel(){
   const ps=state.sheets.find(x=>x.pay),payBy=new Map(); // PO -> các phiếu thanh toán liên quan: "PAY… (Trạng thái TT)"
   if(ps&&ps.payPoIdx!=null)for(const p of ps.rows){
     const cur=ps.payCurIdx!=null?String(p.v[ps.payCurIdx]??"").trim():"",no=cur||String(p.v[ps.title]??"").trim(),stt=String(p.v[ps.payStIdx]??"").trim();
-    for(const c of String(p.v[ps.payPoIdx]??"").split(/[,;\s]+/)){const k=c.trim().toUpperCase();if(k){if(!payBy.has(k))payBy.set(k,[]);payBy.get(k).push(`${no} (${stt||"chưa rõ"})`)}}
+    for(const c of String(p.v[ps.payPoIdx]??"").split(/[,;\s]+/)){const k=c.trim().toUpperCase();if(k){if(!payBy.has(k))payBy.set(k,[]);payBy.get(k).push({t:`${no} (${stt||"chưa rõ"})`,paid:/^đã thanh toán/i.test(stt)})}}
   }
   for(const r of po.rows){
     const code=String(r.v[po.title]??"").trim();if(!code)continue;
     const chg=po.chgIdx!=null?r.v[po.chgIdx]:null,due=po.dueIdx!=null?r.v[po.dueIdx]:null;
     if(!((R.inc.chg&&inR(chg))||(R.inc.due&&inR(due))||(R.inc.open&&!r.done)))continue;
     const sup=String(r.v[S.sc.idx]??"").trim();
-    out.rows.push({code,sup,group:grpOf(sup),wf:r.wf,done:!!r.done,late:r.st==="overdue",amt:po.money?+r.v[po.money.idx]||0:0,
+    out.rows.push({code,sup,group:grpOf(sup),wf:r.wf,got:/^đã nhận hết/i.test(po.rcIdx!=null?String(r.v[po.rcIdx]??"").trim():""),done:!!r.done,late:r.st==="overdue",amt:po.money?+r.v[po.money.idx]||0:0,
       rc:po.rcIdx!=null?String(r.v[po.rcIdx]??"").trim():"",iv:po.ivIdx!=null?String(r.v[po.ivIdx]??"").trim():"",
-      st:po.stIdx!=null?String(r.v[po.stIdx]??"").trim():"",pays:(payBy.get(code.toUpperCase())||[]).join("; ")});
+      st:po.stIdx!=null?String(r.v[po.stIdx]??"").trim():"",pays:(payBy.get(code.toUpperCase())||[]).map(p=>p.t).join("; "),
+      payAll:(()=>{const a=payBy.get(code.toUpperCase())||[];return a.length>0&&a.every(p=>p.paid)})(),
+      pre:po.payIdx!=null&&isPay(r.v[po.payIdx])});
   }
   out.rows.sort((a,b)=>(a.done-b.done)||a.code.localeCompare(b.code));
   const extra=[...new Set(items.map(i=>i.grp).filter(g=>g&&!RPT_GROUPS.includes(g)))];
@@ -2453,6 +2455,12 @@ function rptModel(){
   out.ok=true;return out;
 }
 /* Bảng báo cáo theo kiểu đang chọn: danh sách dòng dùng chung cho hiển thị và xuất Excel */
+/* Mẫu nhập tay: PO đã nhận hết thì không cần lý do (kết quả tick hoàn thành). Chưa nhận hết: liên quan thanh toán (đang chờ làm thanh toán, chưa có phiếu / phiếu chưa thanh toán đối với đơn thanh toán trước) -> "Chưa thanh toán"; không liên quan thanh toán -> "Đang giao" */
+function rptManWhy(x){
+  if(x.got||!x.rc)return ""; // đã nhận hết, hoặc đơn chưa xác nhận (chưa có phiếu nhập kho): không điền
+  const unpaid=x.wf==="Chờ làm TT"||(x.pre&&!x.payAll)||(!!x.pays&&!x.payAll);
+  return unpaid?"Chưa thanh toán":"Đang giao";
+}
 function rptTable(m,mode,d){
   const L=[];let gi=0;
   for(const g of m.groups){
@@ -2463,9 +2471,8 @@ function rptTable(m,mode,d){
       const m1=mode==="man"?(d.rows[x.code]||{}):null;
       const why=mode==="sum"?x.wf
         :mode==="det"?[`Tiến độ: ${x.wf}${!x.done&&x.late?" (quá hạn)":""}`,`Nhận hàng: ${x.rc||"chưa có thông tin"}`,`Duyệt: ${x.st||"chưa có thông tin"}`,`Thanh toán: ${x.pays||"chưa có phiếu thanh toán"}`].join("\n")
-        :(m1.why!==undefined?m1.why:`Nhận hàng: ${x.rc||"chưa có thông tin"}
-Thanh toán: ${x.pays||"chưa có phiếu thanh toán"}`); // mẫu nhập tay: điền sẵn theo tình trạng thực tế, người dùng sửa được
-      L.push({k:"r",tt:++i,code:x.code,group:g,work:`${x.code} - ${x.sup||"(chưa có NCC)"}${x.amt?" - "+fmtN(x.amt)+"đ":""}`,res:mode==="man"&&m1.res!==undefined?m1.res:(x.done?"done":"open"),why});
+        :(m1.why!==undefined?m1.why:rptManWhy(x)); // mẫu nhập tay: điền sẵn theo tình trạng thực tế, người dùng sửa được
+      L.push({k:"r",tt:++i,code:x.code,group:g,work:`${x.code} - ${x.sup||"(chưa có NCC)"}${x.amt?" - "+fmtN(x.amt)+"đ":""}`,res:mode==="man"?(m1.res!==undefined?m1.res:(x.got?"done":"open")):(x.done?"done":"open"),why});
     }
     if(mode==="man")(d.custom[g]||[]).forEach((c,j)=>L.push({k:"r",tt:++i,custom:true,group:g,ci:j,work:c.t||"",res:c.res||"",why:c.why||""}));
   }
