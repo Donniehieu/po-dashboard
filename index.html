@@ -1140,6 +1140,7 @@ async function loadBuffer(buf,name,opts={}){
     $("#btnSync").hidden=!(ghReady()&&state.src==="github"&&isMainPath());
     $("#btnPushOther").hidden=!(ghReady()&&state.src==="local");
     renderTabs();render();updateChrome();notifyDaily();if(view)restoreView(view);
+    if(state.rptCmp){state.rptCmp=false;clearTimeout(state._rptCmpT);setTimeout(()=>{if(state.active==="report")rptCompareDialog()},500)}
     try{applyRemindLog()}catch(e){console.error(e)}
     const a1=nccAddMissing()+bankAddMissing(),a2=nccEnforceAll(true);
     if(a1||a2){renderTabs();render();updateChrome();if(a2)toast(`Đã tự động cập nhật “TT trước” cho ${a2} PO theo Phân loại NCC (cột này chỉ do hệ thống tick).`)}
@@ -2446,7 +2447,7 @@ const rptRoman=n=>{const t=[[10,"X"],[9,"IX"],[5,"V"],[4,"IV"],[1,"I"]];let s=""
 function rptInit(){if(!state.rpt){const m=rptMonday(TODAY);state.rpt={from:m,to:rptAdd(m,6),mode:"sum",inc:{chg:true,due:true,open:false}}}return state.rpt}
 const rptKey=()=>{const R=rptInit();return rptYmd(R.from)+"|"+rptYmd(R.to)};
 function rptData(){const all=store.get(RPT_KEY)||{},d=all[rptKey()]||{};const R=rptInit();
-  return {rows:d.rows||{},custom:d.custom||{},plan:d.plan||"",planFrom:d.planFrom||rptYmd(rptAdd(R.from,7)),planTo:d.planTo||rptYmd(rptAdd(R.to,7)),prop:d.prop||"",author:d.author||"",hold:!!d.hold}}
+  return {rows:d.rows||{},custom:d.custom||{},plan:d.plan||"",planFrom:d.planFrom||rptYmd(rptAdd(R.from,7)),planTo:d.planTo||rptYmd(rptAdd(R.to,7)),prop:d.prop||"",author:d.author||"",acc:d.acc||{}}}
 function rptSave(d){const all=store.get(RPT_KEY)||{};all[rptKey()]=d;const ks=Object.keys(all);if(ks.length>60)for(const k of ks.slice(0,ks.length-60))delete all[k];store.set(RPT_KEY,all)}
 function rptModel(){
   const R=rptInit(),po=state.sheets.find(s=>s.wf),S=nccSheets(),out={ok:false,rows:[],groups:[]};
@@ -2492,16 +2493,75 @@ function rptTable(m,mode,d){
     L.push({k:"g",tt:rptRoman(++gi),work:g+":"});
     let i=0;
     for(const x of rows){
+      const df=mode==="man"?(L._df||(L._df=rptDiff(m,d))):null;
       const m1=mode==="man"?(d.rows[x.code]||{}):null;
       const why=mode==="sum"?x.wf
         :mode==="det"?[`Tiến độ: ${x.wf}${!x.done&&x.late?" (quá hạn)":""}`,`Nhận hàng: ${x.rc||"chưa có thông tin"}`,`Duyệt: ${x.st||"chưa có thông tin"}`,`Thanh toán: ${x.pays||"chưa có phiếu thanh toán"}`].join("\n")
-        :(m1.why!==undefined?m1.why:rptManWhy(x)); // mẫu nhập tay: điền sẵn theo tình trạng thực tế, người dùng sửa được
+        :(m1.why!==undefined?m1.why:rptAuto(x).why); // mẫu nhập tay: điền sẵn theo Odoo, người dùng sửa được
       const cat=mode==='man'?why:(rptManWhy(x)||x.wf);
-      L.push({k:"r",tt:++i,code:x.code,group:g,work:`${x.code} - ${x.sup||"(chưa có NCC)"}${x.amt?" - "+fmtN(x.amt)+"đ":""}`,res:mode==="man"?(m1.res!==undefined?m1.res:(x.got?"done":"open")):(x.done?"done":"open"),why,cat});
+      L.push({k:"r",tt:++i,code:x.code,group:g,work:`${x.code} - ${x.sup||"(chưa có NCC)"}${x.amt?" - "+fmtN(x.amt)+"đ":""}`,res:mode==="man"?(m1.res!==undefined?m1.res:rptAuto(x).res):(x.done?"done":"open"),why,cat,dif:df?df.get(x.code)||null:null});
     }
     if(mode==="man")(d.custom[g]||[]).forEach((c,j)=>L.push({k:"r",tt:++i,custom:true,group:g,ci:j,work:c.t||"",res:c.res||"",why:c.why||"",cat:c.why||""}));
   }
   return L;
+}
+/* So sánh nội dung nhập tay / upload với dữ liệu Odoo (PO có ở cả hai). PO chưa có nội dung nhập tay thì luôn lấy theo Odoo. */
+const rptAuto=x=>({res:x.got?"done":"open",why:rptManWhy(x)});
+const rptNorm=t=>String(t??"").replace(/\s+/g," ").trim().toLowerCase();
+const rptSig=a=>a.res+"|"+rptNorm(a.why);
+const RES_LAB={done:"Đã hoàn thành",open:"Chưa hoàn thành","":"(chưa chọn)"};
+function rptDiff(m,d){
+  const out=new Map();
+  for(const x of m.rows){
+    const s=d.rows[x.code];if(!s)continue;const a=rptAuto(x),f=[];
+    if(s.res!==undefined&&s.res!==a.res)f.push("res");
+    if(s.why!==undefined&&rptNorm(s.why)!==rptNorm(a.why))f.push("why");
+    if(!f.length)continue;
+    if(d.acc&&d.acc[x.code]===rptSig(a))continue; // đã chấp nhận sai khác này, Odoo chưa đổi
+    out.set(x.code,{x,s,a,f});
+  }
+  return out;
+}
+const rptDiffText=it=>[it.f.includes("res")?`Kết quả: ${RES_LAB[it.s.res]} → Odoo: ${RES_LAB[it.a.res]}`:"",it.f.includes("why")?`Lý do: “${String(it.s.why||"").replace(/\s*\n\s*/g," / ")||"(trống)"}” → Odoo: “${String(it.a.why||"").replace(/\s*\n\s*/g," / ")||"(trống)"}”`:""].filter(Boolean).join("; ");
+function rptResolve(items,choice){
+  const d=rptData();d.acc=d.acc||{};
+  for(const it of items){const s=d.rows[it.x.code];if(!s)continue;
+    if(choice==="odoo"){for(const f of it.f)delete s[f];if(s.res===undefined&&s.why===undefined)delete d.rows[it.x.code];delete d.acc[it.x.code]}
+    else d.acc[it.x.code]=rptSig(it.a)}
+  rptSave(d);
+}
+function rptCompareDialog(){
+  const m=rptModel(),d=rptData();if(!m.ok)return toast(m.err,true);
+  const items=[...rptDiff(m,d).values()],nIn=m.rows.filter(x=>d.rows[x.code]).length;
+  if(!items.length){toast(`Dữ liệu nhập tay / upload khớp với Odoo ✔ (so sánh ${nIn} PO). PO chưa có nội dung nhập tay đang lấy theo Odoo.`);renderReport();return}
+  const dlg=document.createElement("dialog");dlg.style.cssText="max-width:min(1100px,96vw);width:96vw;padding:16px;border:1px solid var(--line);border-radius:12px;background:var(--card);color:var(--ink)";
+  dlg.innerHTML=`<h3 style="margin:0 0 6px">⚠ ${items.length} PO khác với Odoo</h3>
+    <div class="sub" style="margin-bottom:10px">Các PO này có nội dung nhập tay / upload khác dữ liệu Odoo vừa đồng bộ (đã so sánh ${nIn} PO có nội dung nhập tay). Chọn <b>Cập nhật theo Odoo</b> để lấy giá trị Odoo, hoặc <b>Giữ nhập tay</b> để chấp nhận (sẽ không báo lại cho đến khi Odoo đổi tiếp). PO chưa nhập tay luôn lấy theo Odoo.</div>
+    <div style="max-height:56vh;overflow:auto"><table class="rpt"><thead><tr><th>PO – Công ty</th><th>Nhập tay / Upload</th><th>Odoo</th><th style="width:210px">Chọn</th></tr></thead><tbody>${items.map((it,i)=>`<tr>
+      <td><a class="ol" href="#" data-code="${esc(it.x.code)}" title="Mở PO trên Odoo">${esc(it.x.code)}</a><div class="sub">${esc(it.x.sup)}</div></td>
+      <td style="white-space:pre-line">${esc(RES_LAB[it.s.res!==undefined?it.s.res:it.a.res])}${it.s.why!==undefined?"\n"+esc(it.s.why):""}</td>
+      <td style="white-space:pre-line">${esc(RES_LAB[it.a.res])}${it.a.why?"\n"+esc(it.a.why):""}<div class="sub" style="margin-top:4px">${esc(rptDiffText(it))}</div></td>
+      <td><label style="display:block"><input type="radio" name="cmp${i}" value="odoo"> Cập nhật theo Odoo</label><label style="display:block"><input type="radio" name="cmp${i}" value="keep" checked> Giữ nhập tay (accept)</label></td></tr>`).join("")}</tbody></table></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"><button class="btn" id="cmpAllOdoo">Cập nhật tất cả theo Odoo</button><button class="btn" id="cmpAllKeep">Giữ tất cả nhập tay</button><span class="grow" style="flex:1"></span><button class="btn primary" id="cmpApply">Áp dụng lựa chọn</button><button class="btn" id="cmpClose">Xử lý sau</button></div>`;
+  document.body.appendChild(dlg);
+  const done=()=>{dlg.close();dlg.remove();renderReport()};
+  dlg.querySelector("#cmpClose").onclick=()=>{dlg.close();dlg.remove();renderReport()};
+  dlg.querySelector("#cmpAllOdoo").onclick=()=>{rptResolve(items,"odoo");toast("Đã cập nhật "+items.length+" PO theo Odoo.");done()};
+  dlg.querySelector("#cmpAllKeep").onclick=()=>{rptResolve(items,"keep");toast("Đã giữ nội dung nhập tay của "+items.length+" PO.");done()};
+  dlg.querySelector("#cmpApply").onclick=()=>{
+    const pick=v=>items.filter((_,i)=>dlg.querySelector(`input[name=cmp${i}]:checked`).value===v);
+    const o=pick("odoo"),k=pick("keep");rptResolve(o,"odoo");rptResolve(k,"keep");toast(`Đã cập nhật ${o.length} PO theo Odoo, giữ nhập tay ${k.length} PO.`);done()};
+  dlg.querySelector(".rpt").addEventListener("click",()=>{}); // liên kết PO dùng bộ xử lý chung của trang
+  dlg.addEventListener("close",()=>{dlg.remove()});
+  dlg.showModal();
+}
+/* Bấm Đồng bộ: yêu cầu GitHub chạy đồng bộ Odoo, khi dữ liệu mới về thì so sánh với nội dung nhập tay / upload */
+function rptSyncCompare(){
+  clearTimeout(state._rptCmpT);
+  if(ghReady()&&state.src==="github"){
+    state.rptCmp=true;requestSync(true).then(ok=>{if(!ok){state.rptCmp=false;rptCompareDialog()}});
+    state._rptCmpT=setTimeout(()=>{if(state.rptCmp){state.rptCmp=false;toast("Chưa thấy dữ liệu Odoo mới (có thể Odoo không có thay đổi), so sánh với dữ liệu hiện có.");rptCompareDialog()}},120000);
+  }else{toast("Chưa kết nối GitHub nên so sánh với dữ liệu đang mở.");rptCompareDialog()}
 }
 /* Dòng tổng hợp: số PO hoàn thành / chưa hoàn thành và lý do chưa hoàn thành, tính từ đúng dữ liệu đang hiển thị (kể cả dữ liệu vừa upload) */
 function rptSummary(L){
@@ -2524,14 +2584,15 @@ function renderReport(auto){
     if(x.k==="g")return `<tr class="g"><td class="c">${x.tt}</td><td>${esc(x.work.replace(/:$/,""))}:${man?` <button class="btn sm" data-rcadd="${esc(x.work.replace(/:$/,""))}" title="Thêm một dòng công việc tự nhập vào nhóm này">＋ Dòng</button>`:""}</td><td></td><td></td><td></td></tr>`;
     const work=x.custom?`<input class="cell" data-rct="${esc(x.group)}|${x.ci}" value="${esc(x.work)}" placeholder="Nội dung công việc" style="width:100%">`
       :`<a class="ol" href="#" data-code="${esc(x.code)}" title="Mở PO này trên Odoo để kiểm tra">${esc(x.code)}</a>${esc(x.work.slice(x.code.length))}`;
-    const why=man?`<textarea data-rw="${esc(x.custom?"@"+x.group+"|"+x.ci:x.code)}" placeholder="Lý do – giải pháp">${esc(x.why)}</textarea>`:`<span style="white-space:pre-line">${esc(x.why)}</span>`;
+    const why=man?`<textarea data-rw="${esc(x.custom?"@"+x.group+"|"+x.ci:x.code)}" placeholder="Lý do – giải pháp">${esc(x.why)}</textarea>${x.dif?`<div class="sub" style="color:var(--warn);margin-top:4px">⚠ Khác Odoo – ${esc(rptDiffText(x.dif))} <button class="btn sm" data-rdo="${esc(x.code)}">Cập nhật theo Odoo</button> <button class="btn sm" data-rdk="${esc(x.code)}">Giữ nhập tay</button></div>`:""}`:`<span style="white-space:pre-line">${esc(x.why)}</span>`;
     return `<tr><td class="c">${x.tt}${x.custom?` <b class="rm" data-rcdel="${esc(x.group)}|${x.ci}" title="Xóa dòng này" style="cursor:pointer;color:var(--bad)">×</b>`:""}</td><td>${work}</td><td class="c">${tick(x,"done")}</td><td class="c">${tick(x,"open")}</td><td>${why}</td></tr>`}).join("");
-  const sm=m.ok?rptSummary(L):null,sumRow=sm&&sm.total?`<tr class="g"><td colspan="5" id="rpSum" style="background:var(--soft)">${esc(rptSummaryText(sm))}</td></tr>`:"";
+  const dc=man&&m.ok?rptDiff(m,d).size:0,sumLine=q=>rptSummaryText(q)+(dc?` ⚠ ${dc} PO khác Odoo (xem ghi chú ở từng dòng).`:"");
+  const sm=m.ok?rptSummary(L):null,sumRow=sm&&sm.total?`<tr class="g"><td colspan="5" id="rpSum" style="background:var(--soft)">${esc(sumLine(sm))}</td></tr>`:"";
   const syncBar=man?`<div class="note" style="margin:0 0 10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-    <span>${d.hold?"⏸ <b>Đang giữ dữ liệu nhập tay / đã upload</b> – dữ liệu Odoo mới sẽ không ghi đè cho đến khi bạn bấm Đồng bộ.":"🔄 <b>Đang theo dữ liệu Odoo/GitHub</b> – PO chưa chỉnh tay tự cập nhật theo Odoo."}</span>
+    <span>✍ <b>Nội dung nhập tay / upload được giữ nguyên.</b> PO chưa có nội dung nhập tay lấy theo Odoo. Bấm Đồng bộ để lấy dữ liệu Odoo mới và so sánh; PO khác nhau sẽ được báo để bạn chọn cập nhật theo Odoo hoặc giữ nhập tay.</span>
     <span class="grow"></span>
-    <button class="btn sm" id="rpSync" title="Lấy dữ liệu mới nhất từ Odoo/GitHub và bỏ nội dung nhập tay / upload của các PO trong kỳ này">🔄 Đồng bộ từ Odoo/GitHub</button>
-    <button class="btn sm" id="rpHold" title="Giữ nguyên nội dung đang hiển thị (nhập tay / upload), không cho dữ liệu Odoo mới thay đổi" ${d.hold?"disabled":""}>⏸ Chờ đồng bộ (giữ dữ liệu hiện tại)</button></div>`:"";
+    <button class="btn sm" id="rpSync" title="Yêu cầu Odoo/GitHub đồng bộ rồi so sánh với nội dung nhập tay / upload">🔄 Đồng bộ Odoo/GitHub & so sánh</button>
+    <button class="btn sm" id="rpCmp" title="So sánh ngay với dữ liệu Odoo đang có trên dashboard">🔍 So sánh ngay</button></div>`:"";
   const totD=m.rows.filter(x=>x.done).length;
   $("#main").innerHTML=`<div class="toolbar" style="flex-wrap:wrap;gap:8px">
     <label class="sub">Từ ngày <input type="date" id="rpFrom" value="${rptYmd(R.from)}"></label>
@@ -2558,7 +2619,7 @@ function renderReport(auto){
   <h2 class="sec">NGƯỜI VIẾT</h2><input id="rpAuth" class="cell" style="width:100%;max-width:420px" value="${esc(d.author)}" placeholder="Họ tên người lập báo cáo">
   <div class="note" style="margin-top:12px">Nội dung nhập tay (kết quả, lý do, kế hoạch, đề xuất, người viết) lưu theo từng kỳ trong trình duyệt này; dùng “Xuất Excel” để gửi hoặc lưu, “Nhập Excel” để nạp lại file đã xuất.</div>`;
   const pg=()=>rptData(),$m=$("#main");
-  const liveSum=()=>{const c=$("#rpSum");if(c)c.textContent=rptSummaryText(rptSummary(rptTable(m,mode,pg())))}; // dòng tổng hợp cập nhật ngay, không tải lại trang
+  const liveSum=()=>{const c=$("#rpSum");if(c){const dd=pg(),L2=rptTable(m,mode,dd),n=man?rptDiff(m,dd).size:0;c.textContent=rptSummaryText(rptSummary(L2))+(n?` ⚠ ${n} PO khác Odoo (xem ghi chú ở từng dòng).`:"")}}; // dòng tổng hợp cập nhật ngay, không tải lại trang
   const setRange=(f,t)=>{R.from=f;R.to=t;renderReport()};
   // gõ ngày: chờ ngừng gõ ~0,7 giây rồi mới cập nhật bảng (ô ngày báo thay đổi cả khi mới gõ dở năm), bỏ qua năm chưa gõ xong
   let rpT=0;const rpDate=(fn)=>e=>{const v=rptParse(e.target.value);clearTimeout(rpT);if(!v||v.getFullYear()<2000)return;rpT=setTimeout(()=>fn(v),700)};
@@ -2579,12 +2640,11 @@ function renderReport(auto){
   $("#rpPlan").oninput=e=>{const dd=pg();dd.plan=e.target.value;rptSave(dd)};$("#rpProp").oninput=e=>{const dd=pg();dd.prop=e.target.value;rptSave(dd)};$("#rpAuth").oninput=e=>{const dd=pg();dd.author=e.target.value;rptSave(dd)};
   $("#rpPlanAuto").onclick=()=>{const dd=pg(),open=m.ok?m.rows.filter(x=>!x.done):[];if(!open.length)return toast("Không có PO chưa hoàn thành trong danh sách.",true);
     dd.plan=(dd.plan?dd.plan.trimEnd()+"\n":"")+open.map(x=>`- ${x.code} (${x.group}): tiếp tục xử lý, hiện ở bước “${x.wf}”`).join("\n");rptSave(dd);renderReport()};
-  const rpS=$("#rpSync");if(rpS)rpS.onclick=async()=>{
-    const dd=pg();if((dd.hold||Object.keys(dd.rows).length)&&!confirm("Đồng bộ lại sẽ thay kết quả và lý do của các PO trong kỳ này bằng dữ liệu mới nhất từ Odoo/GitHub, bỏ nội dung bạn đã nhập tay hoặc upload. (Dòng tự thêm, Kế hoạch, Đề xuất, Người viết được giữ.) Tiếp tục?"))return;
-    dd.rows={};dd.hold=false;rptSave(dd);renderReport();
-    if(ghReady()&&state.src==="github")requestSync(true);else if(!$("#btnRefresh").hidden)refresh();else toast("Đã đặt lại theo dữ liệu đang mở (chưa kết nối GitHub nên chưa lấy dữ liệu Odoo mới).");};
-  const rpH=$("#rpHold");if(rpH)rpH.onclick=()=>{const dd=pg();for(const x of rptTable(m,"man",dd))if(x.k==="r"&&!x.custom)dd.rows[x.code]={res:x.res,why:x.why};dd.hold=true;rptSave(dd);renderReport();toast("Đã giữ dữ liệu hiện tại của kỳ này. Bấm “Đồng bộ từ Odoo/GitHub” khi muốn cập nhật lại.")};
-  scrollTo(sx,sy);
+  const rpS=$("#rpSync");if(rpS)rpS.onclick=rptSyncCompare;
+  const rpC=$("#rpCmp");if(rpC)rpC.onclick=rptCompareDialog;
+  const rdiff=()=>rptDiff(m,pg());
+  $m.querySelectorAll("[data-rdo]").forEach(b=>b.onclick=()=>{const it=rdiff().get(b.dataset.rdo);if(it){rptResolve([it],"odoo");renderReport()}});
+  $m.querySelectorAll("[data-rdk]").forEach(b=>b.onclick=()=>{const it=rdiff().get(b.dataset.rdk);if(it){rptResolve([it],"keep");renderReport()}});
   $("#rpExp").onclick=()=>rptExport().catch(e=>toast("Không xuất được: "+e.message,true));
   $("#rpImp").onclick=()=>$("#rpFile").click();
   $("#rpFile").onchange=async e=>{const f=e.target.files[0];e.target.value="";if(f)try{await rptImport(f)}catch(err){toast("Không nhập được: "+err.message,true)}};
@@ -2645,12 +2705,12 @@ async function rptImport(file){
     if(/^[IVXL]+$/.test(a)){cur=b.split(":")[0].trim();continue}
     if(/^\d+$/.test(a)&&b){
       const res=c?"done":dd?"open":"",po=RPT_PO.exec(b);
-      if(po){const code=po[0].toUpperCase();d.rows[code]={res,why:e};n++}
+      if(po){const code=po[0].toUpperCase(),v={};if(res)v.res=res;if(e)v.why=e;if(Object.keys(v).length)d.rows[code]=v;else delete d.rows[code];n++}
       else if(cur){(d.custom[cur]=d.custom[cur]||[]).push({t:b,res,why:e});n++}
     }
   }
-  d.hold=true;rptSave(d);R.mode="man";state.active="report";renderTabs();renderReport();
-  toast(`Đã nhập báo cáo kỳ ${fmtD(R.from)} – ${fmtD(R.to)}: ${n} dòng công việc. Kiểu “Mẫu nhập tay” đang hiển thị dữ liệu vừa nhập.`);
+  rptSave(d);R.mode="man";state.active="report";renderTabs();renderReport();
+  toast(`Đã nhập báo cáo kỳ ${fmtD(R.from)} – ${fmtD(R.to)}: ${n} dòng công việc. Bấm “Đồng bộ & so sánh” để đối chiếu với Odoo; PO không có trong file lấy theo Odoo.`);
 }
 /* ---- Hàng việc: nút lọc tự động theo workflow. Mỗi nút = một điều kiện tính từ dữ liệu hiện có (không cấu hình tay), có số đếm; bấm để lọc đúng danh sách việc cần làm ---- */
 let _qc=null;
