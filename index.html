@@ -2422,7 +2422,7 @@ const rptRoman=n=>{const t=[[10,"X"],[9,"IX"],[5,"V"],[4,"IV"],[1,"I"]];let s=""
 function rptInit(){if(!state.rpt){const m=rptMonday(TODAY);state.rpt={from:m,to:rptAdd(m,6),mode:"sum",inc:{chg:true,due:true,open:false}}}return state.rpt}
 const rptKey=()=>{const R=rptInit();return rptYmd(R.from)+"|"+rptYmd(R.to)};
 function rptData(){const all=store.get(RPT_KEY)||{},d=all[rptKey()]||{};const R=rptInit();
-  return {rows:d.rows||{},custom:d.custom||{},plan:d.plan||"",planFrom:d.planFrom||rptYmd(rptAdd(R.from,7)),planTo:d.planTo||rptYmd(rptAdd(R.to,7)),prop:d.prop||"",author:d.author||""}}
+  return {rows:d.rows||{},custom:d.custom||{},plan:d.plan||"",planFrom:d.planFrom||rptYmd(rptAdd(R.from,7)),planTo:d.planTo||rptYmd(rptAdd(R.to,7)),prop:d.prop||"",author:d.author||"",hold:!!d.hold}}
 function rptSave(d){const all=store.get(RPT_KEY)||{};all[rptKey()]=d;const ks=Object.keys(all);if(ks.length>60)for(const k of ks.slice(0,ks.length-60))delete all[k];store.set(RPT_KEY,all)}
 function rptModel(){
   const R=rptInit(),po=state.sheets.find(s=>s.wf),S=nccSheets(),out={ok:false,rows:[],groups:[]};
@@ -2472,12 +2472,23 @@ function rptTable(m,mode,d){
       const why=mode==="sum"?x.wf
         :mode==="det"?[`Tiến độ: ${x.wf}${!x.done&&x.late?" (quá hạn)":""}`,`Nhận hàng: ${x.rc||"chưa có thông tin"}`,`Duyệt: ${x.st||"chưa có thông tin"}`,`Thanh toán: ${x.pays||"chưa có phiếu thanh toán"}`].join("\n")
         :(m1.why!==undefined?m1.why:rptManWhy(x)); // mẫu nhập tay: điền sẵn theo tình trạng thực tế, người dùng sửa được
-      L.push({k:"r",tt:++i,code:x.code,group:g,work:`${x.code} - ${x.sup||"(chưa có NCC)"}${x.amt?" - "+fmtN(x.amt)+"đ":""}`,res:mode==="man"?(m1.res!==undefined?m1.res:(x.got?"done":"open")):(x.done?"done":"open"),why});
+      const cat=mode==='man'?why:(rptManWhy(x)||x.wf);
+      L.push({k:"r",tt:++i,code:x.code,group:g,work:`${x.code} - ${x.sup||"(chưa có NCC)"}${x.amt?" - "+fmtN(x.amt)+"đ":""}`,res:mode==="man"?(m1.res!==undefined?m1.res:(x.got?"done":"open")):(x.done?"done":"open"),why,cat});
     }
-    if(mode==="man")(d.custom[g]||[]).forEach((c,j)=>L.push({k:"r",tt:++i,custom:true,group:g,ci:j,work:c.t||"",res:c.res||"",why:c.why||""}));
+    if(mode==="man")(d.custom[g]||[]).forEach((c,j)=>L.push({k:"r",tt:++i,custom:true,group:g,ci:j,work:c.t||"",res:c.res||"",why:c.why||"",cat:c.why||""}));
   }
   return L;
 }
+/* Dòng tổng hợp: số PO hoàn thành / chưa hoàn thành và lý do chưa hoàn thành, tính từ đúng dữ liệu đang hiển thị (kể cả dữ liệu vừa upload) */
+function rptSummary(L){
+  let done=0,open=0,none=0;const why=new Map();
+  for(const x of L){if(x.k!=="r")continue;
+    if(x.res==="done")done++;
+    else if(x.res==="open"){open++;const w=String(x.cat||"").replace(/\s*\n\s*/g," / ").trim()||"chưa ghi lý do";why.set(w,(why.get(w)||0)+1)}
+    else none++}
+  return {done,open,none,total:done+open+none,why:[...why].sort((a,b)=>b[1]-a[1])};
+}
+const rptSummaryText=q=>`TỔNG HỢP: ${q.total} PO – ${q.done} đã hoàn thành – ${q.open} chưa hoàn thành${q.none?` – ${q.none} chưa chọn kết quả`:""}.${q.open?` Chưa hoàn thành do: ${q.why.map(([w,n])=>`${w} (${n})`).join("; ")}.`:""}`;
 function renderReport(){
   const R=rptInit(),m=rptModel(),d=rptData(),mode=R.mode,L=m.ok?rptTable(m,mode,d):[];
   const poSi=state.sheets.findIndex(s=>s.wf),man=mode==="man";
@@ -2488,6 +2499,12 @@ function renderReport(){
       :`<a class="ol" href="#" data-rpo="${esc(x.code)}" title="Mở PO này ở tab PO">${esc(x.code)}</a>${esc(x.work.slice(x.code.length))}`;
     const why=man?`<textarea data-rw="${esc(x.custom?"@"+x.group+"|"+x.ci:x.code)}" placeholder="Lý do – giải pháp">${esc(x.why)}</textarea>`:`<span style="white-space:pre-line">${esc(x.why)}</span>`;
     return `<tr><td class="c">${x.tt}${x.custom?` <b class="rm" data-rcdel="${esc(x.group)}|${x.ci}" title="Xóa dòng này" style="cursor:pointer;color:var(--bad)">×</b>`:""}</td><td>${work}</td><td class="c">${tick(x,"done")}</td><td class="c">${tick(x,"open")}</td><td>${why}</td></tr>`}).join("");
+  const sm=m.ok?rptSummary(L):null,sumRow=sm&&sm.total?`<tr class="g"><td colspan="5" style="background:var(--soft)">${esc(rptSummaryText(sm))}</td></tr>`:"";
+  const syncBar=man?`<div class="note" style="margin:0 0 10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+    <span>${d.hold?"⏸ <b>Đang giữ dữ liệu nhập tay / đã upload</b> – dữ liệu Odoo mới sẽ không ghi đè cho đến khi bạn bấm Đồng bộ.":"🔄 <b>Đang theo dữ liệu Odoo/GitHub</b> – PO chưa chỉnh tay tự cập nhật theo Odoo."}</span>
+    <span class="grow"></span>
+    <button class="btn sm" id="rpSync" title="Lấy dữ liệu mới nhất từ Odoo/GitHub và bỏ nội dung nhập tay / upload của các PO trong kỳ này">🔄 Đồng bộ từ Odoo/GitHub</button>
+    <button class="btn sm" id="rpHold" title="Giữ nguyên nội dung đang hiển thị (nhập tay / upload), không cho dữ liệu Odoo mới thay đổi" ${d.hold?"disabled":""}>⏸ Chờ đồng bộ (giữ dữ liệu hiện tại)</button></div>`:"";
   const totD=m.rows.filter(x=>x.done).length;
   $("#main").innerHTML=`<div class="toolbar" style="flex-wrap:wrap;gap:8px">
     <label class="sub">Từ ngày <input type="date" id="rpFrom" value="${rptYmd(R.from)}"></label>
@@ -2497,6 +2514,7 @@ function renderReport(){
     <span class="grow"></span>
     <button class="btn" id="rpExp">⬇ Xuất Excel</button><button class="btn" id="rpImp">⬆ Nhập Excel</button><input type="file" id="rpFile" accept=".xlsx,.xlsm" hidden>
   </div>
+  ${syncBar}
   <div class="note" style="margin:0 0 10px">Lấy PO từ tab PO theo <b>nhóm NCC</b> (cột “Nhóm NCC” của tab Công nợ NCC) có:
     <label><input type="checkbox" data-inc="chg" ${R.inc.chg?"checked":""}> cập nhật tiến độ trong kỳ</label> ·
     <label><input type="checkbox" data-inc="due" ${R.inc.due?"checked":""}> ngày nhận hàng dự kiến trong kỳ</label> ·
@@ -2504,7 +2522,7 @@ function renderReport(){
     ${m.ok?`— <b>${m.rows.length}</b> PO (${totD} đã hoàn thành, ${m.rows.length-totD} chưa)`:""}</div>
   ${m.ok?(m.rows.length?`<h2 class="sec">I. CÔNG VIỆC ĐÃ LÀM TRONG TUẦN TỪ NGÀY ${fmtD(R.from)} ĐẾN ${fmtD(R.to)}:</h2>
   <div class="tablewrap"><table class="rpt"><thead><tr><th rowspan="2" style="width:48px">TT</th><th rowspan="2">CÔNG VIỆC</th><th colspan="2">KẾT QUẢ</th><th rowspan="2" style="width:30%">LÝ DO – GIẢI PHÁP</th></tr>
-    <tr><th style="width:96px">Đã hoàn thành</th><th style="width:96px">Chưa hoàn thành</th></tr></thead><tbody>${body}</tbody></table></div>`
+    <tr><th style="width:96px">Đã hoàn thành</th><th style="width:96px">Chưa hoàn thành</th></tr></thead><tbody>${body}${sumRow}</tbody></table></div>`
     :`<div class="card sub">Không có PO nào trong kỳ này theo các điều kiện đã chọn. Thử mở rộng khoảng ngày hoặc tick “tất cả PO chưa hoàn thành”.</div>`)
     :`<div class="card">${esc(m.err)}</div>`}
   <h2 class="sec">KẾ HOẠCH CHO TUẦN TỪ NGÀY <input type="date" id="rpPF" value="${esc(d.planFrom)}"> ĐẾN <input type="date" id="rpPT" value="${esc(d.planTo)}"> <button class="btn sm" id="rpPlanAuto" title="Điền sẵn danh sách PO chưa hoàn thành ở trên">Gợi ý từ PO chưa xong</button></h2>
@@ -2533,6 +2551,11 @@ function renderReport(){
   $("#rpPlan").oninput=e=>{const dd=pg();dd.plan=e.target.value;rptSave(dd)};$("#rpProp").oninput=e=>{const dd=pg();dd.prop=e.target.value;rptSave(dd)};$("#rpAuth").oninput=e=>{const dd=pg();dd.author=e.target.value;rptSave(dd)};
   $("#rpPlanAuto").onclick=()=>{const dd=pg(),open=m.ok?m.rows.filter(x=>!x.done):[];if(!open.length)return toast("Không có PO chưa hoàn thành trong danh sách.",true);
     dd.plan=(dd.plan?dd.plan.trimEnd()+"\n":"")+open.map(x=>`- ${x.code} (${x.group}): tiếp tục xử lý, hiện ở bước “${x.wf}”`).join("\n");rptSave(dd);renderReport()};
+  const rpS=$("#rpSync");if(rpS)rpS.onclick=async()=>{
+    const dd=pg();if((dd.hold||Object.keys(dd.rows).length)&&!confirm("Đồng bộ lại sẽ thay kết quả và lý do của các PO trong kỳ này bằng dữ liệu mới nhất từ Odoo/GitHub, bỏ nội dung bạn đã nhập tay hoặc upload. (Dòng tự thêm, Kế hoạch, Đề xuất, Người viết được giữ.) Tiếp tục?"))return;
+    dd.rows={};dd.hold=false;rptSave(dd);renderReport();
+    if(ghReady()&&state.src==="github")requestSync(true);else if(!$("#btnRefresh").hidden)refresh();else toast("Đã đặt lại theo dữ liệu đang mở (chưa kết nối GitHub nên chưa lấy dữ liệu Odoo mới).");};
+  const rpH=$("#rpHold");if(rpH)rpH.onclick=()=>{const dd=pg();for(const x of rptTable(m,"man",dd))if(x.k==="r"&&!x.custom)dd.rows[x.code]={res:x.res,why:x.why};dd.hold=true;rptSave(dd);renderReport();toast("Đã giữ dữ liệu hiện tại của kỳ này. Bấm “Đồng bộ từ Odoo/GitHub” khi muốn cập nhật lại.")};
   $("#rpExp").onclick=()=>rptExport().catch(e=>toast("Không xuất được: "+e.message,true));
   $("#rpImp").onclick=()=>$("#rpFile").click();
   $("#rpFile").onchange=async e=>{const f=e.target.files[0];e.target.value="";if(f)try{await rptImport(f)}catch(err){toast("Không nhập được: "+err.message,true)}};
@@ -2552,6 +2575,7 @@ async function rptExport(){
     if(x.k==="g")add(()=>[C("A",x.tt,8),C("B",x.work,5),C("C","",4),C("D","",4),C("E","",3)]);
     else add(()=>[C("A",x.tt,4),C("B",x.work,3),C("C",x.res==="done"?"✓":"",4),C("D",x.res==="open"?"✓":"",4),C("E",x.why||"",3)]);
   }
+  if(m.rows.length){const q=rptSummary(L),t=rptSummaryText(q);add(()=>[C("A",t,5),C("B","",5),C("C","",5),C("D","",5),C("E","",5)],Math.max(30,Math.ceil(t.length/110)*16));merges.push(`A${n}:E${n}`)}
   add(()=>[]);
   const block=(title,text,minLines)=>{add(()=>[C("A",title,1)]);merges.push(`A${n}:E${n}`);const lines=Math.max(minLines,String(text||"").split("\n").length+1);add(()=>[C("A",text||"",7)],lines*15);merges.push(`A${n}:E${n}`)};
   block(`KẾ HOẠCH CHO TUẦN TỪ NGÀY ${fmtD(rptParse(d.planFrom)||rptAdd(R.from,7))} ĐẾN ${fmtD(rptParse(d.planTo)||rptAdd(R.to,7))}`,d.plan,4);
@@ -2596,7 +2620,7 @@ async function rptImport(file){
       else if(cur){(d.custom[cur]=d.custom[cur]||[]).push({t:b,res,why:e});n++}
     }
   }
-  rptSave(d);R.mode="man";state.active="report";renderTabs();renderReport();
+  d.hold=true;rptSave(d);R.mode="man";state.active="report";renderTabs();renderReport();
   toast(`Đã nhập báo cáo kỳ ${fmtD(R.from)} – ${fmtD(R.to)}: ${n} dòng công việc. Kiểu “Mẫu nhập tay” đang hiển thị dữ liệu vừa nhập.`);
 }
 /* ---- Hàng việc: nút lọc tự động theo workflow. Mỗi nút = một điều kiện tính từ dữ liệu hiện có (không cấu hình tay), có số đếm; bấm để lọc đúng danh sách việc cần làm ---- */
