@@ -669,6 +669,7 @@ function wfFloor(sh,r,wf){
 }
 function wfOf(sh,r){const n=r.v[sh.noteIdx];const base=n!=null&&String(n).trim()!==""?wfCanon(n):wfDerive(sh,r);const w=wfFloor(sh,r,base);r.raised=w!==base;return w}
 const seqOf=(sh,r)=>sh.payIdx!=null&&isPay(r.v[sh.payIdx])?WF_PRE:WF_DEBT;
+const WF_PAYSTEPS=["Chờ làm TT","Chờ gửi UNC","Đã gửi UNC"],PAY_STUCK=2; // bước thanh toán: đứng yên ≥2 ngày lên mức Cao, ≥3 ngày lên Khẩn / Làm ngay
 const WF_POST_BOTH=["Cần lập hóa đơn","Chờ KT xác nhận công nợ"],WF_POST_DEBT=["Chờ làm TT","Chờ gửi UNC","Đã gửi UNC"]; // bước sau khi hàng về (đơn trả trước: Chờ làm TT/UNC nằm TRƯỚC nhận hàng nên không tính)
 function wfReceived(sh,r){const rc=sh.rcIdx!=null?wfn(r.v[sh.rcIdx]):"";return rc==="đã nhận hết"||WF_POST_BOTH.includes(r.wf)||(WF_POST_DEBT.includes(r.wf)&&seqOf(sh,r)===WF_DEBT)}
 const cellVal=(sh,r,i)=>sh.wf&&i===sh.noteIdx?r.wf:r.v[i];
@@ -2107,7 +2108,7 @@ function collectItems(){
     const wf=sh.wf;
     if(sh.pay&&r.done)return;
     if(wf&&r.done)return; // PO đã “Hoàn thành” thì thoát khỏi danh sách xử lý dù trễ hay không
-    const stuck=wf?(stuckDays(sh,r)||0):0,stalled=wf&&stuck>=STUCK(); // đứng yên ≥ ngưỡng ở một bước (kể cả PO đã nhận hàng, không còn tính trễ)
+    const stuck=wf?(stuckDays(sh,r)||0):0,ps=wf&&WF_PAYSTEPS.includes(r.wf),stalled=wf&&stuck>=(ps?PAY_STUCK:STUCK()); // đứng yên ≥ ngưỡng ở một bước (kể cả PO đã nhận hàng, không còn tính trễ)
     if(!r.st&&!stalled)return;
     const due=dueOf(sh,r);const late=r.st&&due instanceof Date?(sh.pay?bdLate(due):Math.round((TODAY-sod(due))/DAY)):0;
     const amt=sh.money?+r.v[sh.money.idx]||0:0;
@@ -2117,6 +2118,7 @@ function collectItems(){
     if(r.st==="soon")lvl="soon";
     else if(r.st==="overdue")lvl=(late>7||amt>=5e7||(important&&mine))?"urgent":"high";
     else lvl=(stuck>=2*STUCK()||amt>=5e7)?"urgent":"high";
+    if(ps&&mine){if(stuck>=PAY_STUCK+1)lvl="urgent";else if(stuck>=PAY_STUCK&&lvl==="soon")lvl="high"} // trạng thái thanh toán dừng ≥2 ngày: Cao; ≥3 ngày: Khẩn
     if(wf&&mine&&r.wf==="Chờ báo giá"){lvl="urgent";tier=0}
     else if(wf&&mine&&sh.payIdx!=null&&isPay(r.v[sh.payIdx])&&r.st==="overdue"){
       const k=WF_PRE.indexOf(r.wf);
@@ -2162,7 +2164,7 @@ function renderPriority(){
     {k:"high",t:"Cao – quá hạn / đứng yên",c:"var(--warn)",d:"Quá hạn từ 1 đến 7 ngày, hoặc PO đã nhận hàng nhưng đứng yên ≥ "+STUCK()+" ngày ở một bước (hóa đơn, KT, thanh toán)"},
     {k:"soon",t:"Sắp đến hạn (3 ngày tới)",c:"var(--brand)",d:"Hạn từ hôm nay đến 3 ngày tới, chưa hoàn thành"}];
   const row=x=>{
-    const blk=x.wfs||(x.s.blockIdx!=null?x.r.v[x.s.blockIdx]:null),stk=x.wfs&&x.stuck>=STUCK();
+    const blk=x.wfs||(x.s.blockIdx!=null?x.r.v[x.s.blockIdx]:null),stk=x.wfs&&x.stuck>=(WF_PAYSTEPS.includes(x.wfs)?PAY_STUCK:STUCK());
     return `<li class="click" data-go="${x.i}" data-q="${esc(String(x.r.v[x.s.title]??""))}"><span class="tag">${esc(x.s.name)}</span><div>${olLink(x.s,x.i,x.r,`<b>${esc(x.r.v[x.s.title])}</b>`)}<div class="sub">${esc(x.s.sub!=null?x.r.v[x.s.sub]:"")}${x.amt?" · "+fmtN(x.amt):""}${stk?` · <span style="color:var(--bad)">⏱ ở bước này ${x.stuck} ngày</span>`:""}</div>${blk?`<span class="chip" style="--c:${colorFor(blk)}">${esc(blk)}</span>`:""}</div>${x.st==="stalled"?`<span class="late" style="color:var(--warn)">đứng yên<div class="sub">${x.stuck} ngày</div></span>`:`<span class="late" style="${x.late<=0?"color:var(--brand)":""}">${x.late>0?`trễ ${x.late} ngày`:(x.late<0?`còn ${-x.late} ngày`:"hôm nay")}<div class="sub">${x.due instanceof Date?"hạn "+fmtD(x.due):"chưa có hạn"}</div></span>`}</li>`};
   const ul=a=>`<ul class="attn">`+a.map(row).join("")+`</ul>`;
   const list=(a,n,key)=>ul(a.slice(0,n))+(a.length>n?tdD(key,"td-more",`… và ${a.length-n} dòng nữa`,ul(a.slice(n)),false):"");
@@ -2284,13 +2286,17 @@ function tdCompute0(){
       let u=0;const rs=[];
       if(late>0){u=Math.min(100,50+Math.min(late,10)*5);rs.push("trễ "+late+" ngày")}
       else if(r.st==="soon"){u=45;rs.push("sắp đến hạn"+(due instanceof Date?" "+fmtDS(due):""))}
-      if(stuck>=STUCK()){u=Math.max(u,30+Math.min(stuck-STUCK(),10)*3);rs.push("ở bước này "+stuck+" ngày")}
+      const ps=sh.wf&&WF_PAYSTEPS.includes(step),thr=ps?PAY_STUCK:STUCK(),pre=sh.wf&&sh.payIdx!=null&&isPay(r.v[sh.payIdx]);
+      if(stuck>=thr){u=Math.max(u,30+Math.min(stuck-thr,10)*3);rs.push("ở bước này "+stuck+" ngày")}
       // Quan trọng (0-100): NCC quan trọng + giá trị đơn
-      const nag=wait&&!sh.pay&&(late>0||stuck>=STUCK());if(nag){u=Math.max(u,50);rs.push("🔔 cần đi nhắc")}
+      const nag=wait&&!sh.pay&&(late>0||stuck>=thr);if(nag){u=Math.max(u,50);rs.push("🔔 cần đi nhắc")}
+      let force=false; // thanh toán: dừng ≥2 ngày -> gấp (Cao); ≥3 ngày -> gấp & quan trọng (Làm ngay); đơn trả trước chờ làm TT/UNC trễ ≥1 ngày -> Làm ngay
+      if(ps&&stuck>=PAY_STUCK){u=Math.max(u,50);if(stuck>=PAY_STUCK+1){u=Math.max(u,60);force=true;rs.push("thanh toán dừng "+stuck+" ngày")}}
+      if(pre&&(step==="Chờ làm TT"||step==="Chờ gửi UNC")&&late>=1){u=Math.max(u,60);force=true;rs.push("TT trước trễ "+late+" ngày")}
       let im=imp.on?50:0;if(imp.on)rs.push("NCC quan trọng");
       const mb=tdMrp&&sh.wf?tdMrp.po[t0(r,sh)]:null;
       if(mb){im=Math.min(100,im+(mb.mo>=10?35:mb.mo>=3?25:15));rs.push("cấp NVL cho "+mb.mo+" lệnh SX đang thiếu")}
-      const ab=amt>=1e8?40:amt>=5e7?30:amt>=1e7?15:amt>=1e6?5:0;im=Math.min(100,im+ab);if(amt>=5e7)im=Math.max(im,50); // đơn từ 50 triệu luôn là quan trọng
+      const ab=amt>=1e8?40:amt>=5e7?30:amt>=1e7?15:amt>=1e6?5:0;im=Math.min(100,im+ab);if(amt>=5e7||force)im=Math.max(im,50); // đơn từ 50 triệu luôn là quan trọng
       if(ab>=15)rs.push(fmtBig(amt));
       // Dễ (0-100): còn ít bước thì dễ; việc đang chờ người khác không tính
       const k0=seq.indexOf(step),rem=k0<0?seq.length:seq.length-1-k0,ease=wait?0:Math.max(0,100-rem*9);
