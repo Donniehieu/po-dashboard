@@ -624,6 +624,8 @@ function colorFor(v){
   let h=0;for(const ch of String(v))h=(h*31+ch.charCodeAt(0))>>>0;return PALETTE[h%PALETTE.length];
 }
 /* ---- Quy trình PO (cột Note) ---- */
+let _ci=null,_tdc=null,_qn=null,_ver=0; // cache: danh sách ưu tiên, việc hôm nay, số đếm hàng việc; xóa bằng bump() mỗi khi dữ liệu / trạng thái đổi
+const bump=()=>{_ci=null;_tdc=null;_qn=null;_ver++};
 const WF_DEBT=["Chờ báo giá","Chờ gửi duyệt PO","Chờ duyệt PO","Chờ gửi NCC","Đã gửi NCC","Chờ nhận hàng","Cần lập hóa đơn","Chờ KT xác nhận công nợ","Chờ làm TT","Chờ gửi UNC","Đã gửi UNC","Hoàn thành"];
 const WF_PRE=["Chờ báo giá","Chờ gửi duyệt PO","Chờ duyệt PO","Chờ gửi NCC","Đã gửi NCC","Chờ làm TT","Chờ gửi UNC","Đã gửi UNC","Chờ nhận hàng","Cần lập hóa đơn","Chờ KT xác nhận công nợ","Hoàn thành"];
 const WF_ALL=WF_PRE,WF_DONE="Hoàn thành";
@@ -667,6 +669,8 @@ function wfFloor(sh,r,wf){
 }
 function wfOf(sh,r){const n=r.v[sh.noteIdx];const base=n!=null&&String(n).trim()!==""?wfCanon(n):wfDerive(sh,r);const w=wfFloor(sh,r,base);r.raised=w!==base;return w}
 const seqOf=(sh,r)=>sh.payIdx!=null&&isPay(r.v[sh.payIdx])?WF_PRE:WF_DEBT;
+const WF_POST_BOTH=["Cần lập hóa đơn","Chờ KT xác nhận công nợ"],WF_POST_DEBT=["Chờ làm TT","Chờ gửi UNC","Đã gửi UNC"]; // bước sau khi hàng về (đơn trả trước: Chờ làm TT/UNC nằm TRƯỚC nhận hàng nên không tính)
+function wfReceived(sh,r){const rc=sh.rcIdx!=null?wfn(r.v[sh.rcIdx]):"";return rc==="đã nhận hết"||WF_POST_BOTH.includes(r.wf)||(WF_POST_DEBT.includes(r.wf)&&seqOf(sh,r)===WF_DEBT)}
 const cellVal=(sh,r,i)=>sh.wf&&i===sh.noteIdx?r.wf:r.v[i];
 /* Cách hiển thị từng bảng: đổi tên cột (chỉ nhãn hiển thị, tên gốc trong Excel và logic đồng bộ giữ nguyên), thứ tự cột, cột không hiển thị */
 const colLabel=c=>c.label||c.name;
@@ -829,7 +833,7 @@ function payBadges(sh,r){
   return h;
 }
 function setStatus(sh){
-  _qc=null;
+  _qc=null;bump();
   for(const r of sh.rows){
     r.st=null;r.done=null;
     if(sh.pay){
@@ -841,7 +845,7 @@ function setStatus(sh){
     if(sh.wf){
       r.wf=wfOf(sh,r);r.done=r.wf===WF_DONE; // đã “Hoàn thành” thì không bao giờ tính là trễ
       const d0=dueOf(sh,r);
-      if(!r.done&&d0 instanceof Date){const d=sod(d0);if(d<TODAY)r.st="overdue";else if(d-TODAY<=3*DAY)r.st="soon"}
+      if(!r.done&&d0 instanceof Date&&!wfReceived(sh,r)){const d=sod(d0);if(d<TODAY)r.st="overdue";else if(d-TODAY<=3*DAY)r.st="soon"} // hàng đã về thì hạn nhận hàng hết ý nghĩa: không tính trễ/sắp đến hạn, chỉ cảnh báo khi đứng yên lâu ở một bước
       r._t=null;continue;
     }
     if(sh.progIdx!=null){r.done=isDoneVal(r.v[sh.progIdx])}
@@ -1301,6 +1305,7 @@ function showVal(v){
 const sameVal=(a,b)=>(a==null&&b==null)||(a instanceof Date&&b instanceof Date?+a===+b:a===b);
 const pkey=(si,n,c)=>si+"|"+n+"|"+c;
 function setCell(si,r,ci,val,keyOv){
+  bump();
   const sh=state.sheets[si];const old=r.v[ci];
   if(sameVal(old,val))return false;
   if(state.stale){toast('Đang cập nhật dữ liệu mới nhất từ GitHub, chưa sửa được. Nếu mất mạng, bản đang xem chỉ để đọc.',true);return false}
@@ -2095,28 +2100,34 @@ function nccOnEdit(si,r,ci){
 
 /* ---- Nhắc việc & ưu tiên ---- */
 function collectItems(){
+  if(_ci)return _ci;
+  let imp=null;try{imp=new Map(tdCompute().tasks.map(t=>[t.key,t.important]))}catch(e){} // NCC quan trọng: dùng chung với tab Việc hôm nay
   const out=[];
   state.sheets.forEach((sh,i)=>sh.rows.forEach(r=>{
     const wf=sh.wf;
     if(sh.pay&&r.done)return;
     if(wf&&r.done)return; // PO đã “Hoàn thành” thì thoát khỏi danh sách xử lý dù trễ hay không
-    const quote=wf&&r.wf==="Chờ báo giá";
-    if(!r.st&&!quote)return;
-    const due=dueOf(sh,r);const late=due instanceof Date?(sh.pay?bdLate(due):Math.round((TODAY-sod(due))/DAY)):0;
+    const stuck=wf?(stuckDays(sh,r)||0):0,stalled=wf&&stuck>=STUCK(); // đứng yên ≥ ngưỡng ở một bước (kể cả PO đã nhận hàng, không còn tính trễ)
+    if(!r.st&&!stalled)return;
+    const due=dueOf(sh,r);const late=r.st&&due instanceof Date?(sh.pay?bdLate(due):Math.round((TODAY-sod(due))/DAY)):0;
     const amt=sh.money?+r.v[sh.money.idx]||0:0;
-    let lvl=r.st==="soon"?"soon":(late>7||amt>=5e7?"urgent":"high"),tier=2;
-    if(!r.st)lvl="urgent";
-    if(quote){lvl="urgent";tier=0}
-    else if(wf&&sh.payIdx!=null&&isPay(r.v[sh.payIdx])&&r.st==="overdue"){
+    const wait=!!sh.pay||(wf&&TD_WAIT.has(r.wf)),nag=wait&&!sh.pay&&(late>0||stalled),mine=!wait||nag; // mine = việc bạn làm được / cần đi nhắc; còn lại là đang chờ người khác
+    const important=!!((imp&&imp.get(sh.name+"|"+String(r.v[sh.title]??"")))||amt>=5e7);
+    let lvl,tier=2;
+    if(r.st==="soon")lvl="soon";
+    else if(r.st==="overdue")lvl=(late>7||amt>=5e7||(important&&mine))?"urgent":"high";
+    else lvl=(stuck>=2*STUCK()||amt>=5e7)?"urgent":"high";
+    if(wf&&mine&&r.wf==="Chờ báo giá"){lvl="urgent";tier=0}
+    else if(wf&&mine&&sh.payIdx!=null&&isPay(r.v[sh.payIdx])&&r.st==="overdue"){
       const k=WF_PRE.indexOf(r.wf);
       if(k>=0&&k<WF_PRE.indexOf("Đã gửi UNC")){lvl="urgent";tier=1} // trả trước, đang kẹt trước khi gửi UNC
     }
-    out.push({s:sh,i,r,due,late,amt,lvl,tier,st:r.st||"quote",wfs:wf?r.wf:null});
+    out.push({s:sh,i,r,due,late,stuck,amt,lvl,tier,mine,st:r.st||"stalled",wfs:wf?r.wf:null});
   }));
   const rk={urgent:0,high:1,soon:2};
   const dk=x=>x.due instanceof Date?+sod(x.due):Infinity;
-  out.sort((a,b)=>a.tier-b.tier||(a.tier===0?dk(a)-dk(b):a.tier===1?(b.late-a.late||b.amt-a.amt):(rk[a.lvl]-rk[b.lvl]||(b.late-a.late)||(b.amt-a.amt))));
-  return out;
+  out.sort((a,b)=>a.tier-b.tier||(a.tier===0?dk(a)-dk(b):a.tier===1?(b.late-a.late||b.amt-a.amt):(rk[a.lvl]-rk[b.lvl]||(b.late-a.late)||(b.stuck-a.stuck)||(b.amt-a.amt))));
+  return _ci=out;
 }
 function updateBanner(){
   const b=$("#banner");if(!state.sheets.length){b.hidden=true;return}
@@ -2140,31 +2151,36 @@ $("#btnNotify").onclick=async()=>{
   toast(p==="granted"?"Đã bật nhắc việc. Thông báo chỉ hiện khi bạn đang mở trang này.":"Bạn chưa cho phép thông báo trong trình duyệt.",p!=="granted");
   if(p==="granted")notifyDaily(true);
 };
-function updateChrome(){updateSavebar();scheduleAutoSave();updateBanner();const t=document.querySelector('#tabs [data-i="priority"] .n');if(t)t.textContent=collectItems().length}
+function updateChrome(){updateSavebar();scheduleAutoSave();updateBanner();const t=document.querySelector('#tabs [data-i="priority"] .n');if(t)t.textContent=collectItems().filter(x=>x.mine).length}
 
 function goSheet(si,patch){const sh=state.sheets[si];sh.ui.noteGrp=null;sh.ui.filters={};sh.ui.cf={};sh.ui.special=null;sh.ui.queue=null;sh.ui.range=null;sh.ui.search="";sh.ui.shown=100;Object.assign(sh.ui,patch||{});state.active=si;renderTabs();render();scrollTo(0,0)}
 
 function renderPriority(){
-  const it=collectItems();
+  const it=collectItems(),mine=it.filter(x=>x.mine),wait=it.filter(x=>!x.mine);
   const groups=[
-    {k:"urgent",t:"Khẩn – xử lý ngay",c:"var(--bad)",d:"Thứ tự: (1) PO Chờ báo giá, ngày nhận dự kiến gần nhất lên trước; (2) PO trả trước đã trễ và chưa gửi UNC, trễ nhiều nhất lên trước; (3) còn lại quá hạn hơn 7 ngày hoặc từ 50 triệu"},
-    {k:"high",t:"Cao – quá hạn",c:"var(--warn)",d:"Quá hạn từ 1 đến 7 ngày"},
+    {k:"urgent",t:"Khẩn – xử lý ngay",c:"var(--bad)",d:"Việc của bạn. Thứ tự: (1) PO Chờ báo giá đã trễ/đứng yên, ngày nhận dự kiến gần nhất lên trước; (2) PO trả trước đã trễ và chưa gửi UNC; (3) còn lại: quá hạn hơn 7 ngày, từ 50 triệu, hoặc NCC quan trọng đã quá hạn"},
+    {k:"high",t:"Cao – quá hạn / đứng yên",c:"var(--warn)",d:"Quá hạn từ 1 đến 7 ngày, hoặc PO đã nhận hàng nhưng đứng yên ≥ "+STUCK()+" ngày ở một bước (hóa đơn, KT, thanh toán)"},
     {k:"soon",t:"Sắp đến hạn (3 ngày tới)",c:"var(--brand)",d:"Hạn từ hôm nay đến 3 ngày tới, chưa hoàn thành"}];
-  let html=`<div class="note" style="margin:0 0 14px">Một dòng được tính là “trễ” khi ngày hạn đã qua mà chưa hoàn thành (với sheet PO: cột Note chưa là “Hoàn thành”; PO đã Hoàn thành không bao giờ tính là trễ). Mức ưu tiên chỉ dựa vào số ngày trễ và giá trị đơn, không có số liệu nào được tự thêm.</div>`;
+  const row=x=>{
+    const blk=x.wfs||(x.s.blockIdx!=null?x.r.v[x.s.blockIdx]:null),stk=x.wfs&&x.stuck>=STUCK();
+    return `<li class="click" data-go="${x.i}" data-q="${esc(String(x.r.v[x.s.title]??""))}"><span class="tag">${esc(x.s.name)}</span><div>${olLink(x.s,x.i,x.r,`<b>${esc(x.r.v[x.s.title])}</b>`)}<div class="sub">${esc(x.s.sub!=null?x.r.v[x.s.sub]:"")}${x.amt?" · "+fmtN(x.amt):""}${stk?` · <span style="color:var(--bad)">⏱ ở bước này ${x.stuck} ngày</span>`:""}</div>${blk?`<span class="chip" style="--c:${colorFor(blk)}">${esc(blk)}</span>`:""}</div>${x.st==="stalled"?`<span class="late" style="color:var(--warn)">đứng yên<div class="sub">${x.stuck} ngày</div></span>`:`<span class="late" style="${x.late<=0?"color:var(--brand)":""}">${x.late>0?`trễ ${x.late} ngày`:(x.late<0?`còn ${-x.late} ngày`:"hôm nay")}<div class="sub">${x.due instanceof Date?"hạn "+fmtD(x.due):"chưa có hạn"}</div></span>`}</li>`};
+  const ul=a=>`<ul class="attn">`+a.map(row).join("")+`</ul>`;
+  const list=(a,n,key)=>ul(a.slice(0,n))+(a.length>n?tdD(key,"td-more",`… và ${a.length-n} dòng nữa`,ul(a.slice(n)),false):"");
+  let html=`<div class="td-bar"><span class="sub">Việc của bạn chia 3 nhóm; việc đang chờ người khác để riêng ở dưới.</span><span class="grow"></span><button class="btn" id="prOpenAll" title="Mở rộng tất cả các nhóm">▾ Mở tất cả</button><button class="btn" id="prCloseAll" title="Thu gọn tất cả các nhóm">▸ Thu gọn tất cả</button></div>`;
+  html+=`<div class="note" style="margin:0 0 14px">Một dòng được tính là “trễ” khi ngày hạn đã qua mà chưa hoàn thành (với sheet PO: Note chưa là “Hoàn thành”). PO <b>đã nhận hàng</b> (đã nhận hết, hoặc ở bước Cần lập hóa đơn / Chờ KT / Chờ làm TT…) không còn tính trễ theo ngày nhận dự kiến; chúng chỉ hiện khi <b>đứng yên ≥ ${STUCK()} ngày</b> ở một bước. Việc đang chờ NCC, người duyệt, kế toán… tách riêng, chỉ lên nhóm của bạn khi đã trễ hoặc đứng yên lâu (cần đi nhắc).</div>`;
   {const qs=[];state.sheets.forEach((sh,si)=>{if(sh.ext)return;for(const q of queuesFor(sh)){const n=queueCount(sh,q);if(n)qs.push({si,sh,q,n})}});
    if(qs.length)html+=`<div class="qbar"><span class="sub">Hàng việc theo workflow:</span>`+qs.map(x=>`<button class="qb ${x.q.tone||""}" data-qgo="${x.si}|${x.q.k}" title="${esc(x.sh.name+": "+x.q.h)}">${esc(x.q.l)} <span class="sub">· ${esc(x.sh.name)}</span> <b>${x.n}</b></button>`).join("")+`</div>`}
-  if(!it.length)html+=`<div class="card">Hiện không có dòng nào quá hạn hoặc sắp đến hạn. 🎉</div>`;
+  if(!it.length)html+=`<div class="card">Hiện không có dòng nào quá hạn, đứng yên hoặc sắp đến hạn. 🎉</div>`;
   else{
     html+=`<div class="grid pgrid">`;
     for(const g of groups){
-      const list=it.filter(x=>x.lvl===g.k);const sum=list.reduce((a,x)=>a+x.amt,0);
-      html+=`<div class="card"><div class="lvl"><i style="background:${g.c}"></i>${g.t}<span class="tag">${list.length}</span>${sum?`<span class="sub" style="font-weight:500">· ${fmtBig(sum)}</span>`:""}</div><div class="sub" style="margin-bottom:8px">${g.d}</div>`;
-      if(!list.length)html+=`<div class="sub">Không có.</div>`;
-      else html+=`<ul class="attn">`+list.slice(0,12).map(x=>{
-        const blk=x.wfs||(x.s.blockIdx!=null?x.r.v[x.s.blockIdx]:null);
-        return `<li class="click" data-go="${x.i}" data-q="${esc(String(x.r.v[x.s.title]??""))}"><span class="tag">${esc(x.s.name)}</span><div>${olLink(x.s,x.i,x.r,`<b>${esc(x.r.v[x.s.title])}</b>`)}<div class="sub">${esc(x.s.sub!=null?x.r.v[x.s.sub]:"")}${x.amt?" · "+fmtN(x.amt):""}${x.wfs&&stuckDays(x.s,x.r)>=STUCK()?` · <span style="color:var(--bad)">⏱ ở bước này ${stuckDays(x.s,x.r)} ngày</span>`:""}</div>${blk?`<span class="chip" style="--c:${colorFor(blk)}">${esc(blk)}</span>`:""}</div><span class="late" style="${x.late<=0?"color:var(--brand)":""}">${x.late>0?`trễ ${x.late} ngày`:(x.late<0?`còn ${-x.late} ngày`:"hôm nay")}<div class="sub">${x.due instanceof Date?"hạn "+fmtD(x.due):"chưa có hạn"}</div></span></li>`}).join("")+`</ul>`+(list.length>12?`<div class="note">… và ${list.length-12} dòng nữa. Mở sheet và bấm “Quá hạn” để xem đủ.</div>`:"");
-      html+=`</div>`;
+      const l=mine.filter(x=>x.lvl===g.k),sum=l.reduce((a,x)=>a+x.amt,0);
+      html+=`<div class="card">`+tdD("pri:"+g.k,"td-g",`<span class="lvl"><i style="background:${g.c}"></i>${g.t}<span class="tag">${l.length}</span>${sum?`<span class="sub" style="font-weight:500">· ${fmtBig(sum)}</span>`:""}</span>`,`<div class="sub" style="margin-bottom:8px">${g.d}</div>`+(l.length?list(l,12,"pri:more:"+g.k):`<div class="sub">Không có.</div>`),true)+`</div>`;
     }
+    html+=`</div>`;
+    html+=`<h2 class="sec">⏳ Đang chờ người khác <span class="tag">${wait.length}</span></h2><div class="card"><div class="sub" style="margin-bottom:8px">Chờ NCC báo giá/xác nhận, người duyệt, hàng về, kế toán hoặc phiếu thanh toán — chưa phải việc bạn làm ngay. Vẫn chia theo mức Khẩn / Cao / Sắp đến hạn để biết cái nào sắp thành việc của bạn.</div>`;
+    if(!wait.length)html+=`<div class="sub">Không có.</div>`;
+    else html+=groups.map(g=>{const l=wait.filter(x=>x.lvl===g.k);if(!l.length)return "";return tdD("pri:w:"+g.k,"td-wg",`<i style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${g.c}"></i> <b>${g.t.replace(/ –.*$/,"")}</b> <span class="tag">${l.length}</span>`,list(l,12,"pri:wmore:"+g.k),g.k==="urgent")}).join("");
     html+=`</div>`;
     // kẹt ở đâu
     const kept=new Map();
@@ -2205,7 +2221,10 @@ function renderPriority(){
   $("#main").innerHTML=html;
   const m=$("#main");
   m.querySelectorAll("[data-qgo]").forEach(b=>b.onclick=()=>{const [si,k]=b.dataset.qgo.split("|");goSheet(+si,{queue:k})});
-  m.querySelectorAll("[data-go]").forEach(li=>li.onclick=()=>goSheet(+li.dataset.go,{search:li.dataset.q.toLowerCase()}));
+  m.querySelectorAll("[data-go]").forEach(li=>li.onclick=ev=>{if(ev.target.closest("a.ol"))return;goSheet(+li.dataset.go,{search:li.dataset.q.toLowerCase()})});
+  {const dets=()=>[...m.querySelectorAll("details[data-tdd]")],setAll=on=>{const mp=tdOpenMap();dets().forEach(x=>{x.open=on;mp[x.dataset.tdd]=on});store.set("qlcv:tdOpen",mp)};
+   if($("#prOpenAll")){$("#prOpenAll").onclick=()=>setAll(true);$("#prCloseAll").onclick=()=>setAll(false)}
+   setTimeout(()=>dets().forEach(x=>x.addEventListener("toggle",()=>{const mp=tdOpenMap();if(mp[x.dataset.tdd]!==x.open){mp[x.dataset.tdd]=x.open;store.set("qlcv:tdOpen",mp)}})),80)}
   m.querySelectorAll("[data-goblk]").forEach(b=>b.onclick=()=>{const si=+b.dataset.goblk,sh=state.sheets[si];const ci=sh.wf?sh.noteIdx:sh.blockIdx;goSheet(si,{special:b.dataset.done==="1"?null:"overdue",filters:{[ci]:b.dataset.v==="(Trống)"?"":b.dataset.v}})});
   m.querySelectorAll("[data-gof]").forEach(tr=>tr.onclick=()=>goSheet(+tr.dataset.gof,{filters:{[tr.dataset.c]:tr.dataset.v}}));
 }
@@ -2226,10 +2245,14 @@ async function tdLoadMrp(){ // data/mrp-block.json do GitHub Actions (scripts/mr
   if(tdMrpTried)return;tdMrpTried=true;
   try{const g=await ghFetchPath(dataDir()+"mrp-block.json","mrp:gh");if(g&&g.buf){tdMrp=JSON.parse(new TextDecoder().decode(g.buf))}}catch(e){}
   if(!tdMrp)try{const r=await fetch("data/mrp-block.json",{cache:"no-store"});if(r.ok)tdMrp=await r.json()}catch(e){}
-  if(tdMrp&&state.active==="today")renderToday();
+  if(tdMrp){bump();if(state.active==="today")renderToday()}
 }
 const tdPins=()=>store.get("qlcv:impPin")||{};
 function tdCompute(){
+  const run=tdRun();if(_tdc&&_tdc.v===_ver&&_tdc.t===run.t)return _tdc.d;
+  const d=tdCompute0();_tdc={v:_ver,t:run.t,d};return d;
+}
+function tdCompute0(){
   const sup=new Map();try{supplierRows().out.forEach(o=>sup.set(o.k,o))}catch(e){}
   const pins=tdPins(),impCache=new Map(),slow=new Map(); // slow: số PO của NCC đã quá hạn mà hàng chưa về hết (gần đúng “làm chậm sản xuất”)
   state.sheets.forEach(sh=>{if(!sh.wf||sh.rcIdx==null)return;const sc=sh.cols.find(c=>/^nhà cung cấp$/i.test(c.name.trim()));if(!sc)return;
@@ -2263,22 +2286,25 @@ function tdCompute(){
       else if(r.st==="soon"){u=45;rs.push("sắp đến hạn"+(due instanceof Date?" "+fmtDS(due):""))}
       if(stuck>=STUCK()){u=Math.max(u,30+Math.min(stuck-STUCK(),10)*3);rs.push("ở bước này "+stuck+" ngày")}
       // Quan trọng (0-100): NCC quan trọng + giá trị đơn
-      const nag=wait&&!sh.pay&&(late>0||stuck>=STUCK());if(nag){u=Math.max(u,40);rs.push("🔔 cần đi nhắc")}
+      const nag=wait&&!sh.pay&&(late>0||stuck>=STUCK());if(nag){u=Math.max(u,50);rs.push("🔔 cần đi nhắc")}
       let im=imp.on?50:0;if(imp.on)rs.push("NCC quan trọng");
       const mb=tdMrp&&sh.wf?tdMrp.po[t0(r,sh)]:null;
       if(mb){im=Math.min(100,im+(mb.mo>=10?35:mb.mo>=3?25:15));rs.push("cấp NVL cho "+mb.mo+" lệnh SX đang thiếu")}
-      const ab=amt>=1e8?40:amt>=5e7?30:amt>=1e7?15:amt>=1e6?5:0;im=Math.min(100,im+ab);if(ab>=15)rs.push(fmtBig(amt));
+      const ab=amt>=1e8?40:amt>=5e7?30:amt>=1e7?15:amt>=1e6?5:0;im=Math.min(100,im+ab);if(amt>=5e7)im=Math.max(im,50); // đơn từ 50 triệu luôn là quan trọng
+      if(ab>=15)rs.push(fmtBig(amt));
       // Dễ (0-100): còn ít bước thì dễ; việc đang chờ người khác không tính
       const k0=seq.indexOf(step),rem=k0<0?seq.length:seq.length-1-k0,ease=wait?0:Math.max(0,100-rem*9);
       const score=Math.round(.4*u+.4*im+.2*ease);
-      tasks.push({sh,si,r,k,imp,amt,late,stuck,step,wait,nag,u,im,ease,score,rs,urgent:u>=40,important:im>=50,rem,pay:!!sh.pay,code:String(r.v[sh.title]??"")});
+      tasks.push({sh,si,r,k,imp,amt,late,stuck,step,wait,nag,u,im,ease,score,rs,urgent:u>=50,important:im>=50,rem,pay:!!sh.pay,code:String(r.v[sh.title]??"")});
     }
   });
   const run=tdRun();let dirty=false;
   tasks.forEach(t=>{
     t.key=t.sh.name+"|"+t.code;t.wr=tdWfRank(t);t.in=!t.wait||t.nag;if(!t.in)return;
     t.q0=t.urgent&&t.important?1:t.important?2:t.urgent?3:4; // mục theo rule hiện tại
-    if(run.snap[t.key]==null){run.snap[t.key]=t.q0;dirty=true} // chốt vị trí tới lần chạy rule kế tiếp (2 tiếng)
+    run.stp=run.stp||{};
+    if(run.snap[t.key]==null||(run.stp[t.key]!=null&&run.stp[t.key]!==t.step)){run.snap[t.key]=t.q0;delete run.ov[t.key];dirty=true} // chốt vị trí tới lần chạy rule kế tiếp (2 tiếng); việc đổi bước quy trình thì xếp lại ngay
+    if(run.stp[t.key]!==t.step){run.stp[t.key]=t.step;dirty=true}
     t.moved=run.ov[t.key]!=null;t.q=t.moved?run.ov[t.key]:run.snap[t.key];
   });
   if(dirty)store.set("qlcv:tdRun",run);
@@ -2346,16 +2372,16 @@ function renderToday(){
   html+=`<h2 class="sec">📌 NCC quan trọng <span class="tag">${il.filter(x=>x.on).length}/${il.length}</span></h2><div class="card"><div class="sub" style="margin-bottom:8px">App tự đoán: NCC phân loại “Đơn hàng” đang có PO chạy, hoặc có PO hàng về trễ. Đây là <b>ước đoán chưa kiểm chứng</b> — bạn chỉ cần ghim/bỏ ghim vài NCC lệch. Ghim có hiệu lực từ lần xếp lại kế tiếp. Lưu trên trình duyệt này.</div><div class="scroll-x"><table class="mini"><thead><tr><th>NCC</th><th>Phân loại</th><th style="text-align:right">Việc mở</th><th>Quan trọng?</th><th>Lý do</th><th></th></tr></thead><tbody>`+
     il.slice(0,40).map(x=>`<tr><td>${esc(x.k)}</td><td>${esc(x.cls||"—")}</td><td class="num">${x.n}</td><td>${x.on?`<span class="chip" style="--c:var(--bad)">Quan trọng</span>`:`<span class="chip" style="--c:#64748b">Thường</span>`}</td><td class="sub">${esc(x.why||"—")}</td><td><button class="btn" data-tdpin="${esc(x.k)}|${x.on?-1:1}">${x.on?"Bỏ quan trọng":"Ghim quan trọng"}</button>${x.pin?` <button class="btn" data-tdpin="${esc(x.k)}|0">Về tự động</button>`:""}</td></tr>`).join("")+`</tbody></table></div></div>`;
   $("#main").innerHTML=html;
-  const m=$("#main"),moveTo=(key,q)=>{const st=tdRun();st.ov[key]=q;store.set("qlcv:tdRun",st);renderToday()};
+  const m=$("#main"),moveTo=(key,q)=>{const st=tdRun();st.ov[key]=q;store.set("qlcv:tdRun",st);bump();renderToday()};
   m.querySelectorAll("[data-tdgo]").forEach(e=>e.onclick=ev=>{if(ev.target.closest("a.ol,select"))return;ev.preventDefault();goSheet(+e.dataset.tdgo,{search:String(e.dataset.q).toLowerCase()})});
-  m.querySelectorAll("[data-tdpin]").forEach(b=>b.onclick=()=>{const [k,v]=b.dataset.tdpin.split("|"),pp=tdPins();if(+v===0)delete pp[k];else pp[k]=+v;store.set("qlcv:impPin",pp);renderToday()});
+  m.querySelectorAll("[data-tdpin]").forEach(b=>b.onclick=()=>{const [k,v]=b.dataset.tdpin.split("|"),pp=tdPins();if(+v===0)delete pp[k];else pp[k]=+v;store.set("qlcv:impPin",pp);bump();renderToday()});
   m.querySelectorAll("[data-tdview]").forEach(b=>b.onclick=()=>{store.set("qlcv:tdView",b.dataset.tdview);renderToday()});
   if($("#tdTop"))$("#tdTop").onchange=e=>{store.set("qlcv:tdTop",+e.target.value);renderToday()};
   const dets=()=>[...m.querySelectorAll("details[data-tdd]")];
   const setAll=on=>{const mp=tdOpenMap();dets().forEach(x=>{x.open=on;mp[x.dataset.tdd]=on});store.set("qlcv:tdOpen",mp)};
   $("#tdOpenAll").onclick=()=>setAll(true);$("#tdCloseAll").onclick=()=>setAll(false);
   setTimeout(()=>dets().forEach(x=>x.addEventListener("toggle",()=>{const mp=tdOpenMap();if(mp[x.dataset.tdd]!==x.open){mp[x.dataset.tdd]=x.open;store.set("qlcv:tdOpen",mp)}})),80); // gắn sau khi trình duyệt phát xong sự kiện toggle ban đầu
-  $("#tdRerun").onclick=()=>{store.set("qlcv:tdRun",null);renderToday();updateChrome()};
+  $("#tdRerun").onclick=()=>{store.set("qlcv:tdRun",null);bump();renderToday();updateChrome()};
   m.querySelectorAll("select[data-tdmv]").forEach(sel=>sel.onchange=()=>{if(sel.value!=="")moveTo(sel.dataset.tdmv,+sel.value)});
   // kéo thả: kéo một việc thả vào thẻ của mục khác (hoặc vào ô “Để lượt sau”)
   m.querySelectorAll("li[data-tdk]").forEach(li=>{li.ondragstart=e=>{e.dataTransfer.setData("text/plain",li.dataset.tdk);e.dataTransfer.effectAllowed="move";li.classList.add("dragging")};li.ondragend=()=>li.classList.remove("dragging")});
@@ -2369,7 +2395,7 @@ setInterval(()=>{if(state.active==="today"&&state.sheets.length){const st=store.
 /* ============ Giao diện ============ */
 function renderTabs(){
   const t=$("#tabs");t.hidden=false;
-  const pc=collectItems().length,on=k=>state.active===k?"on":"";
+  const pc=collectItems().filter(x=>x.mine).length,on=k=>state.active===k?"on":"";
   // Thứ tự: Tổng quan, Ưu tiên, CV theo ngày, Nhà cung cấp, Công nợ NCC, Công nợ Ms Thủy, Công nợ Hiếu, PO, Phiếu thanh toán, Bảng kê TT, (sheet khác), Lịch sử
   const rankSheet=sh=>{const n=norm(sh.name);return sh.ext?13:/^cv theo ngày/.test(n)?3:IS_DS(sh.name)?5:/^công nợ ms thủy/.test(n)?6:/^công nợ hiếu/.test(n)?7:sh.wf?8:sh.pay?9:/^bảng kê tt vận chuyển/.test(n)?10:/^bảng kê tt đơn hàng/.test(n)?11:12};
   const items=[{r:0,h:`<button data-i="overview" class="${on("overview")}">Tổng quan</button>`},{r:0.5,h:`<button data-i="today" class="${on("today")}">🎯 Việc hôm nay<span class="n">${tdCount()}</span></button>`},{r:1,h:`<button data-i="priority" class="${on("priority")}">⚠ Ưu tiên xử lý<span class="n">${pc}</span></button>`},{r:20,h:`<button data-i="history" class="${on("history")}">🕘 Lịch sử</button>`}];
@@ -2764,7 +2790,7 @@ const QUEUES={
 };
 const queuesFor=sh=>sh.wf?QUEUES.po:sh.pay?QUEUES.pay:IS_DS(sh.name)?QUEUES.ncc:sh.bank?QUEUES.bank:[];
 const queueDef=(sh,k)=>queuesFor(sh).find(q=>q.k===k)||null;
-const queueCount=(sh,q)=>{let n=0;for(const r of sh.rows)if(q.t(sh,r))n++;return n};
+const queueCount=(sh,q)=>{_qn=_qn||new Map();const k=sh.name+"|"+q.k;if(_qn.has(k))return _qn.get(k);let n=0;for(const r of sh.rows)if(q.t(sh,r))n++;_qn.set(k,n);return n};
 function queueBar(sh){
   const L=queuesFor(sh);if(!L.length)return "";
   return `<div class="qbar"><span class="sub">Hàng việc:</span>`+L.map(q=>{const n=queueCount(sh,q);
