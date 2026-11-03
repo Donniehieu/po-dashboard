@@ -2137,8 +2137,8 @@ function updateBanner(){
   b.hidden=false;
   if(!od.length&&!sn.length){b.className="banner ok";b.textContent="✔ Không có việc quá hạn hoặc sắp đến hạn (tính đến "+fmtD(TODAY)+")";b.onclick=null;document.title=BASE_TITLE;return}
   b.className="banner";
-  b.innerHTML=`<span>⚠ Hôm nay ${fmtD(TODAY)}:</span><span style="color:var(--bad)">${od.length} quá hạn${urg.length?` (${urg.length} khẩn)`:""}</span><span style="color:var(--warn)">${sn.length} sắp đến hạn</span><span class="grow"></span><span class="sub">Bấm để xem ưu tiên xử lý →</span>`;
-  b.onclick=()=>{state.active="priority";renderTabs();render();scrollTo(0,0)};
+  b.innerHTML=`<span>⚠ Hôm nay ${fmtD(TODAY)}:</span><span style="color:var(--bad)">${od.length} quá hạn${urg.length?` (${urg.length} khẩn)`:""}</span><span style="color:var(--warn)">${sn.length} sắp đến hạn</span><span class="grow"></span><span class="sub">Bấm để xem việc hôm nay →</span>`;
+  b.onclick=()=>{state.active="today";renderTabs();render();scrollTo(0,0)};
   document.title=(od.length?`(${od.length}) `:"")+BASE_TITLE;
 }
 function notifyDaily(force){
@@ -2153,37 +2153,16 @@ $("#btnNotify").onclick=async()=>{
   toast(p==="granted"?"Đã bật nhắc việc. Thông báo chỉ hiện khi bạn đang mở trang này.":"Bạn chưa cho phép thông báo trong trình duyệt.",p!=="granted");
   if(p==="granted")notifyDaily(true);
 };
-function updateChrome(){updateSavebar();scheduleAutoSave();updateBanner();const t=document.querySelector('#tabs [data-i="priority"] .n');if(t)t.textContent=collectItems().filter(x=>x.mine).length}
+function updateChrome(){updateSavebar();scheduleAutoSave();updateBanner();const t=document.querySelector('#tabs [data-i="today"] .n');if(t)t.textContent=tdCount()}
 
 function goSheet(si,patch){const sh=state.sheets[si];sh.ui.noteGrp=null;sh.ui.filters={};sh.ui.cf={};sh.ui.special=null;sh.ui.queue=null;sh.ui.range=null;sh.ui.search="";sh.ui.shown=100;Object.assign(sh.ui,patch||{});state.active=si;renderTabs();render();scrollTo(0,0)}
 
-function renderPriority(){
-  const it=collectItems(),mine=it.filter(x=>x.mine),wait=it.filter(x=>!x.mine);
-  const groups=[
-    {k:"urgent",t:"Khẩn – xử lý ngay",c:"var(--bad)",d:"Việc của bạn. Thứ tự: (1) PO Chờ báo giá đã trễ/đứng yên, ngày nhận dự kiến gần nhất lên trước; (2) PO trả trước đã trễ và chưa gửi UNC; (3) còn lại: quá hạn hơn 7 ngày, từ 50 triệu, hoặc NCC quan trọng đã quá hạn"},
-    {k:"high",t:"Cao – quá hạn / đứng yên",c:"var(--warn)",d:"Quá hạn từ 1 đến 7 ngày, hoặc PO đã nhận hàng nhưng đứng yên ≥ "+STUCK()+" ngày ở một bước (hóa đơn, KT, thanh toán)"},
-    {k:"soon",t:"Sắp đến hạn (3 ngày tới)",c:"var(--brand)",d:"Hạn từ hôm nay đến 3 ngày tới, chưa hoàn thành"}];
-  const row=x=>{
-    const blk=x.wfs||(x.s.blockIdx!=null?x.r.v[x.s.blockIdx]:null),stk=x.wfs&&x.stuck>=(WF_PAYSTEPS.includes(x.wfs)?PAY_STUCK:STUCK());
-    return `<li class="click" data-go="${x.i}" data-q="${esc(String(x.r.v[x.s.title]??""))}"><span class="tag">${esc(x.s.name)}</span><div>${olLink(x.s,x.i,x.r,`<b>${esc(x.r.v[x.s.title])}</b>`)}<div class="sub">${esc(x.s.sub!=null?x.r.v[x.s.sub]:"")}${x.amt?" · "+fmtN(x.amt):""}${stk?` · <span style="color:var(--bad)">⏱ ở bước này ${x.stuck} ngày</span>`:""}</div>${blk?`<span class="chip" style="--c:${colorFor(blk)}">${esc(blk)}</span>`:""}</div>${x.st==="stalled"?`<span class="late" style="color:var(--warn)">đứng yên<div class="sub">${x.stuck} ngày</div></span>`:`<span class="late" style="${x.late<=0?"color:var(--brand)":""}">${x.late>0?`trễ ${x.late} ngày`:(x.late<0?`còn ${-x.late} ngày`:"hôm nay")}<div class="sub">${x.due instanceof Date?"hạn "+fmtD(x.due):"chưa có hạn"}</div></span>`}</li>`};
-  const ul=a=>`<ul class="attn">`+a.map(row).join("")+`</ul>`;
-  const list=(a,n,key)=>ul(a.slice(0,n))+(a.length>n?tdD(key,"td-more",`… và ${a.length-n} dòng nữa`,ul(a.slice(n)),false):"");
-  let html=`<div class="td-bar"><span class="sub">Việc của bạn chia 3 nhóm; việc đang chờ người khác để riêng ở dưới.</span><span class="grow"></span><button class="btn" id="prOpenAll" title="Mở rộng tất cả các nhóm">▾ Mở tất cả</button><button class="btn" id="prCloseAll" title="Thu gọn tất cả các nhóm">▸ Thu gọn tất cả</button></div>`;
-  html+=`<div class="note" style="margin:0 0 14px">Một dòng được tính là “trễ” khi ngày hạn đã qua mà chưa hoàn thành (với sheet PO: Note chưa là “Hoàn thành”). PO <b>đã nhận hàng</b> (đã nhận hết, hoặc ở bước Cần lập hóa đơn / Chờ KT / Chờ làm TT…) không còn tính trễ theo ngày nhận dự kiến; chúng chỉ hiện khi <b>đứng yên ≥ ${STUCK()} ngày</b> ở một bước. Việc đang chờ NCC, người duyệt, kế toán… tách riêng, chỉ lên nhóm của bạn khi đã trễ hoặc đứng yên lâu (cần đi nhắc).</div>`;
+/* ---- Phân tích cuối tab Việc hôm nay (chuyển từ tab Ưu tiên xử lý cũ): hàng việc theo workflow, đơn quá hạn kẹt ở đâu, việc theo trạng thái ---- */
+function tdInsights(){
+  const it=collectItems();let html="";
   {const qs=[];state.sheets.forEach((sh,si)=>{if(sh.ext)return;for(const q of queuesFor(sh)){const n=queueCount(sh,q);if(n)qs.push({si,sh,q,n})}});
    if(qs.length)html+=`<div class="qbar"><span class="sub">Hàng việc theo workflow:</span>`+qs.map(x=>`<button class="qb ${x.q.tone||""}" data-qgo="${x.si}|${x.q.k}" title="${esc(x.sh.name+": "+x.q.h)}">${esc(x.q.l)} <span class="sub">· ${esc(x.sh.name)}</span> <b>${x.n}</b></button>`).join("")+`</div>`}
-  if(!it.length)html+=`<div class="card">Hiện không có dòng nào quá hạn, đứng yên hoặc sắp đến hạn. 🎉</div>`;
-  else{
-    html+=`<div class="grid pgrid">`;
-    for(const g of groups){
-      const l=mine.filter(x=>x.lvl===g.k),sum=l.reduce((a,x)=>a+x.amt,0);
-      html+=`<div class="card">`+tdD("pri:"+g.k,"td-g",`<span class="lvl"><i style="background:${g.c}"></i>${g.t}<span class="tag">${l.length}</span>${sum?`<span class="sub" style="font-weight:500">· ${fmtBig(sum)}</span>`:""}</span>`,`<div class="sub" style="margin-bottom:8px">${g.d}</div>`+(l.length?list(l,12,"pri:more:"+g.k):`<div class="sub">Không có.</div>`),true)+`</div>`;
-    }
-    html+=`</div>`;
-    html+=`<h2 class="sec">⏳ Đang chờ người khác <span class="tag">${wait.length}</span></h2><div class="card"><div class="sub" style="margin-bottom:8px">Chờ NCC báo giá/xác nhận, người duyệt, hàng về, kế toán hoặc phiếu thanh toán — chưa phải việc bạn làm ngay. Vẫn chia theo mức Khẩn / Cao / Sắp đến hạn để biết cái nào sắp thành việc của bạn.</div>`;
-    if(!wait.length)html+=`<div class="sub">Không có.</div>`;
-    else html+=groups.map(g=>{const l=wait.filter(x=>x.lvl===g.k);if(!l.length)return "";return tdD("pri:w:"+g.k,"td-wg",`<i style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${g.c}"></i> <b>${g.t.replace(/ –.*$/,"")}</b> <span class="tag">${l.length}</span>`,list(l,12,"pri:wmore:"+g.k),g.k==="urgent")}).join("");
-    html+=`</div>`;
+  if(it.length){
     // kẹt ở đâu
     const kept=new Map();
     for(const x of it.filter(x=>x.st==="overdue")){
@@ -2220,13 +2199,10 @@ function renderPriority(){
     html+=`<h2 class="sec">Việc đang chờ xử lý theo trạng thái</h2><div class="card scroll-x"><table class="mini"><thead><tr><th>Sheet</th><th>Cột</th><th>Trạng thái</th><th style="text-align:right">Số dòng</th><th style="text-align:right">Giá trị</th></tr></thead><tbody>`+
       rows.slice(0,40).map(x=>`<tr class="click" data-gof="${x.i}" data-c="${x.c.idx}" data-v="${esc(x.v)}"><td>${esc(x.s.name)}</td><td>${esc(x.c.name)}</td><td><span class="chip" style="--c:${colorFor(x.v)}">${esc(x.v)}</span></td><td class="num">${x.n}</td><td class="num">${x.s.money?fmtBig(x.sum):""}</td></tr>`).join("")+`</tbody></table><div class="note">Các lý do khác ở trên; tiếp theo là PO theo bước quy trình từ “Chờ báo giá” đến “Chờ KT xác nhận công nợ” (không gồm PO đã Hoàn thành). Bấm một dòng để mở sheet đã lọc sẵn.</div></div>`;
   }
-  $("#main").innerHTML=html;
-  const m=$("#main");
+  return html;
+}
+function tdInsightsBind(m){
   m.querySelectorAll("[data-qgo]").forEach(b=>b.onclick=()=>{const [si,k]=b.dataset.qgo.split("|");goSheet(+si,{queue:k})});
-  m.querySelectorAll("[data-go]").forEach(li=>li.onclick=ev=>{if(ev.target.closest("a.ol"))return;goSheet(+li.dataset.go,{search:li.dataset.q.toLowerCase()})});
-  {const dets=()=>[...m.querySelectorAll("details[data-tdd]")],setAll=on=>{const mp=tdOpenMap();dets().forEach(x=>{x.open=on;mp[x.dataset.tdd]=on});store.set("qlcv:tdOpen",mp)};
-   if($("#prOpenAll")){$("#prOpenAll").onclick=()=>setAll(true);$("#prCloseAll").onclick=()=>setAll(false)}
-   setTimeout(()=>dets().forEach(x=>x.addEventListener("toggle",()=>{const mp=tdOpenMap();if(mp[x.dataset.tdd]!==x.open){mp[x.dataset.tdd]=x.open;store.set("qlcv:tdOpen",mp)}})),80)}
   m.querySelectorAll("[data-goblk]").forEach(b=>b.onclick=()=>{const si=+b.dataset.goblk,sh=state.sheets[si];const ci=sh.wf?sh.noteIdx:sh.blockIdx;goSheet(si,{special:b.dataset.done==="1"?null:"overdue",filters:{[ci]:b.dataset.v==="(Trống)"?"":b.dataset.v}})});
   m.querySelectorAll("[data-gof]").forEach(tr=>tr.onclick=()=>goSheet(+tr.dataset.gof,{filters:{[tr.dataset.c]:tr.dataset.v}}));
 }
@@ -2236,7 +2212,7 @@ const TD_WAIT=new Set(["Chờ báo giá","Chờ duyệt PO","Đã gửi NCC","Ch
 const TD_WHO={"Chờ báo giá":"NCC báo giá","Chờ duyệt PO":"người duyệt PO","Đã gửi NCC":"NCC xác nhận","Chờ nhận hàng":"hàng về","Chờ KT xác nhận công nợ":"kế toán","Đã gửi UNC":"NCC/KT xác nhận"};
 const t0=(r,sh)=>String(r.v[sh.title]??"").trim();
 const TD_EVERY=2*3600*1000; // cứ 2 tiếng chạy lại rule một lần; trong lúc đó việc nằm yên, ai kéo tay thì giữ tới lượt sau
-const tdTop=()=>+store.get("qlcv:tdTop")||5; // số việc “Làm ngay” hiện ra
+const tdTop=()=>+store.get("qlcv:tdTop")||8; // số việc “Làm ngay” hiện ra
 const TD_STAGE=["🚚 Trễ nhập hàng","📦 Chờ nhập hàng","📤 Chờ gửi NCC","📝 Chờ gửi duyệt PO","💬 Chờ báo giá","🧾 Chờ KT xác nhận công nợ","🧮 Chờ lập hóa đơn","💳 Chờ làm TT","… Bước khác"];
 const tdWfRank=t=>{const x=t.step;return x==="Chờ nhận hàng"?(t.late>0?0:1):x==="Chờ gửi NCC"?2:x==="Chờ gửi duyệt PO"?3:x==="Chờ báo giá"?4:x==="Chờ KT xác nhận công nợ"?5:x==="Cần lập hóa đơn"?6:x==="Chờ làm TT"?7:8};
 const TD_QN=["Để lượt sau","Làm ngay","Lên lịch","Gộp theo NCC","Để sau"],TD_QC=["#7c3aed","var(--bad)","var(--brand)","var(--warn)","#64748b"];
@@ -2332,14 +2308,14 @@ function tdD(key,cls,sum,body,def){const o=tdOpenMap()[key],op=o===undefined?def
 function renderToday(){
   tdLoadMrp();
   const d=tdCompute(),run=d.run,top=tdTop();
-  const view=store.get("qlcv:tdView")||"matrix",{q0,q1,q2,q3,q4,waiting}=view==="flow"?d.f:d.m,hm=t=>new Date(t).toLocaleTimeString("vi-VN",{hour:"2-digit",minute:"2-digit"});
+  const view=store.get("qlcv:tdView")||"flow",{q0,q1,q2,q3,q4,waiting}=view==="flow"?d.f:d.m,hm=t=>new Date(t).toLocaleTimeString("vi-VN",{hour:"2-digit",minute:"2-digit"});
   const cut=q1.slice(0,top),rest=q1.slice(top),remind=waiting.filter(t=>(t.pay?t.late:t.stuck)>=STUCK());
-  let html=`<div class="td-bar"><button class="btn td-tg ${view==="matrix"?"on":""}" data-tdview="matrix">▦ Theo 4 mục</button><button class="btn td-tg ${view==="flow"?"on":""}" data-tdview="flow">⛓ Theo workflow</button><span class="grow"></span><span class="sub">${view==="matrix"?`Việc “Làm ngay” hiện <select id="tdTop">${[5,8,10,15,30].map(n=>`<option${n===top?" selected":""}>${n}</option>`).join("")}</select> · `:""}Xếp lần cuối ${hm(run.t)}, lần kế ${hm(run.t+TD_EVERY)}</span><button class="btn" id="tdOpenAll" title="Mở rộng tất cả các nhóm">▾ Mở tất cả</button><button class="btn" id="tdCloseAll" title="Thu gọn tất cả các nhóm">▸ Thu gọn tất cả</button><button class="btn" id="tdRerun" title="Bỏ các việc đã kéo tay và tính lại toàn bộ theo rule">🔄 Xếp lại ngay</button></div>`;
+  let html=`<div class="td-bar"><button class="btn td-tg ${view==="matrix"?"on":""}" data-tdview="matrix">▦ Theo 4 mục</button><button class="btn td-tg ${view==="flow"?"on":""}" data-tdview="flow">⛓ Theo workflow</button><span class="grow"></span><span class="sub">Việc “Làm ngay” hiện <select id="tdTop">${[5,8,10,15,30].map(n=>`<option${n===top?" selected":""}>${n}</option>`).join("")}</select> · Xếp lần cuối ${hm(run.t)}, lần kế ${hm(run.t+TD_EVERY)}</span><button class="btn" id="tdOpenAll" title="Mở rộng tất cả các nhóm">▾ Mở tất cả</button><button class="btn" id="tdCloseAll" title="Thu gọn tất cả các nhóm">▸ Thu gọn tất cả</button><button class="btn" id="tdRerun" title="Bỏ các việc đã kéo tay và tính lại toàn bộ theo rule">🔄 Xếp lại ngay</button></div>`;
   html+=view==="matrix"?`<div class="note" style="margin:0 0 14px">🎯 <b>Việc hôm nay ${fmtD(TODAY)} · theo 4 mục</b> — bản DEMO trên dữ liệu thật. Điểm = 40% <b>Gấp</b> + 40% <b>Quan trọng</b> + 20% <b>Dễ</b>; trong mỗi mục việc xếp theo điểm. Việc đang chờ người khác để riêng ở “Đang chờ”. Mỗi 2 tiếng rule chạy lại một lần; kéo thả một việc sang mục khác (hoặc chọn ⇄) thì giữ tới lần chạy kế tiếp.</div>`:`<div class="note" style="margin:0 0 14px">⛓ <b>Việc hôm nay ${fmtD(TODAY)} · theo workflow</b> — cùng phân loại gấp / quan trọng, nhưng xếp theo quy trình: <b>quan trọng & gấp → gấp mà không quan trọng → quan trọng mà không gấp → không quan trọng, không gấp</b>. Trong mỗi nhóm: <b>trễ nhập hàng → chờ nhập hàng → chờ gửi NCC → chờ gửi duyệt PO → chờ báo giá → chờ KT xác nhận công nợ → chờ lập hóa đơn → chờ làm TT</b>; cùng bước thì trễ nhiều và điểm quan trọng cao lên trước. Việc đang chờ người khác chỉ vào các nhóm này khi đã trễ hoặc đứng yên từ ${STUCK()} ngày (🔔 cần đi nhắc). Kéo thả vẫn dùng chung với tab 4 mục.</div>`;
   html+=`<div class="td-sum"><span class="chip" style="--c:var(--bad)">Làm ngay ${q1.length}</span><span class="chip" style="--c:var(--brand)">Lên lịch ${q2.length}</span><span class="chip" style="--c:var(--warn)">Gộp theo NCC ${q3.length}</span><span class="chip" style="--c:#64748b">Để sau ${q4.length}</span><span class="chip" style="--c:#7c3aed">Đang chờ ${waiting.length}${q0.length?` · hoãn ${q0.length}`:""}</span></div>`;
   const ul=a=>`<ul class="attn">`+a.map(t=>tdRow(t)).join("")+`</ul>`;
   const list=(a,n,id)=>a.length?ul(a.slice(0,n))+(a.length>n?tdD(view+":more:"+id,"td-more",`… và ${a.length-n} việc nữa`,ul(a.slice(n)),false):""):`<div class="sub">Không có (kéo việc vào đây).</div>`;
-  const card=(q,color,title,tag,desc,body)=>`<div class="card" data-tdq="${q}">`+tdD(view+":card:"+q,"td-g",`<span class="lvl"><i style="background:${color}"></i>${title}<span class="tag">${tag}</span></span>`,`<div class="sub" style="margin-bottom:8px">${desc}</div>${body}`,true)+`</div>`;
+  const card=(q,color,title,tag,desc,body)=>`<div class="card" data-tdq="${q}">`+tdD(view+":card:"+q,"td-g",`<span class="lvl"><i style="background:${color}"></i>${title}<span class="tag">${tag}</span></span>`,`<div class="sub" style="margin-bottom:8px">${desc}</div>${body}`,q===1)+`</div>`;
   if(view==="matrix"){
     const g=new Map();q3.forEach(t=>{const o=g.get(t.k)||{k:t.k,ts:[]};o.ts.push(t);g.set(t.k,o)});
     const gl=[...g.values()].sort((a,b)=>b.ts.length-a.ts.length||b.ts[0].score-a.ts[0].score);
@@ -2356,29 +2332,31 @@ function renderToday(){
     html+=`<div class="td-flow">`;
     for(const [q,t1,t2] of SEC){
       const a=QL[q];let body=a.length?"":`<div class="sub">Không có (kéo việc vào đây).</div>`;
-      TD_STAGE.forEach((lb,i)=>{const b=a.filter(t=>t.wr===i);if(!b.length)return;
-        body+=tdD(view+":st:"+q+":"+i,"td-stage",`<b>${lb}</b> <span class="tag">${b.length}</span>`,b.length>6?ul(b.slice(0,6))+tdD(view+":more:"+q+":"+i,"td-more",`… và ${b.length-6} việc nữa`,ul(b.slice(6)),false):ul(b),true)});
-      html+=card(q,TD_QC[q],t1,a.length,t2,body);
+      const stg=(arr,pfx)=>{let o="";TD_STAGE.forEach((lb,i)=>{const b=arr.filter(t=>t.wr===i);if(!b.length)return;o+=tdD(view+":st:"+pfx+":"+i,"td-stage",`<b>${lb}</b> <span class="tag">${b.length}</span>`,b.length>6?ul(b.slice(0,6))+tdD(view+":more:"+pfx+":"+i,"td-more",`… và ${b.length-6} việc nữa`,ul(b.slice(6)),false):ul(b),true)});return o};
+      if(q===1)body+=stg(a.slice(0,top),"1")+(a.length>top?tdD(view+":more:1","td-more",`Xếp hàng chờ (${a.length-top})`,stg(a.slice(top),"1r"),false):"");else body+=stg(a,String(q));
+      html+=card(q,TD_QC[q],t1,q===1?`${Math.min(top,a.length)}/${a.length}`:a.length,t2,body);
     }
     html+=`</div>`;
   }
   // hàng chờ lượt sau
   html+=`<div class="card td-snooze" data-tdq="0" style="margin-top:14px"><div class="lvl"><i style="background:#7c3aed"></i>💤 Để lượt sau<span class="tag">${q0.length}</span></div><div class="sub">Kéo việc vào đây để tạm ẩn; tới lần xếp lại kế tiếp (${hm(run.t+TD_EVERY)}) việc tự quay về mục theo rule.</div>${q0.length?tdD(view+":more:0","td-more",`Xem ${q0.length} việc đã hoãn`,ul(q0),false):""}</div>`;
   // đang chờ
-  html+=`<h2 class="sec">⏳ Đang chờ người khác <span class="tag">${waiting.length}</span></h2><div class="card"><div class="sub" style="margin-bottom:8px">Chờ NCC, người duyệt, kế toán hoặc hàng về và chưa trễ — không phải việc của bạn hôm nay. Khi trễ hoặc đứng yên từ ${STUCK()} ngày sẽ nhảy lên 4 mục ở trên.</div>`;
+  html+=`<div class="card"><details class="td-g" data-tdd="today:wait"${tdOpenMap()["today:wait"]?" open":""}><summary><span class="lvl">⏳ Đang chờ người khác <span class="tag">${waiting.length}</span></span></summary><div class="sub" style="margin-bottom:8px">Chờ NCC, người duyệt, kế toán hoặc hàng về và chưa trễ — không phải việc của bạn hôm nay. Khi trễ hoặc đứng yên từ ${STUCK()} ngày sẽ nhảy lên 4 mục ở trên.</div>`;
   if(!waiting.length)html+=`<div class="sub">Không có.</div>`;
   else{
     const by=new Map();waiting.forEach(t=>{const k=t.pay?"Phiếu thanh toán · kế toán":t.step+" · "+(TD_WHO[t.step]||"");const o=by.get(k)||[];o.push(t);by.set(k,o)});
     html+=[...by].map(([k,a])=>{const rm=a.filter(t=>(t.pay?t.late:t.stuck)>=STUCK());return tdD(view+":wg:"+k,"td-wg",`<b>${esc(k)}</b> <span class="tag">${a.length}</span>${rm.length?` <span class="chip" style="--c:var(--bad)">cần nhắc ${rm.length}</span>`:""}`,`<ul class="attn">${a.map(t=>{const age=t.pay?t.late:t.stuck;return tdRow(t,age>=STUCK()?` · <span style="color:var(--bad)">⏱ chờ ${age} ngày, cần nhắc</span>`:"")}).join("")}</ul>`,rm.length>0)}).join("");
   }
-  html+=`</div>`;
+  html+=`</details></div>`;
   // NCC quan trọng
   const ik=new Map();d.tasks.forEach(t=>{if(!ik.has(t.k))ik.set(t.k,d.impOf(t.k))});
   const il=[...ik].map(([k,v])=>({k,...v,n:d.tasks.filter(t=>t.k===k).length})).sort((a,b)=>(b.on-a.on)||b.n-a.n);
-  html+=`<h2 class="sec">📌 NCC quan trọng <span class="tag">${il.filter(x=>x.on).length}/${il.length}</span></h2><div class="card"><div class="sub" style="margin-bottom:8px">App tự đoán: NCC phân loại “Đơn hàng” đang có PO chạy, hoặc có PO hàng về trễ. Đây là <b>ước đoán chưa kiểm chứng</b> — bạn chỉ cần ghim/bỏ ghim vài NCC lệch. Ghim có hiệu lực từ lần xếp lại kế tiếp. Lưu trên trình duyệt này.</div><div class="scroll-x"><table class="mini"><thead><tr><th>NCC</th><th>Phân loại</th><th style="text-align:right">Việc mở</th><th>Quan trọng?</th><th>Lý do</th><th></th></tr></thead><tbody>`+
-    il.slice(0,40).map(x=>`<tr><td>${esc(x.k)}</td><td>${esc(x.cls||"—")}</td><td class="num">${x.n}</td><td>${x.on?`<span class="chip" style="--c:var(--bad)">Quan trọng</span>`:`<span class="chip" style="--c:#64748b">Thường</span>`}</td><td class="sub">${esc(x.why||"—")}</td><td><button class="btn" data-tdpin="${esc(x.k)}|${x.on?-1:1}">${x.on?"Bỏ quan trọng":"Ghim quan trọng"}</button>${x.pin?` <button class="btn" data-tdpin="${esc(x.k)}|0">Về tự động</button>`:""}</td></tr>`).join("")+`</tbody></table></div></div>`;
+  html+=`<div class="card" style="margin-top:14px"><details class="td-g" data-tdd="today:ncc"${tdOpenMap()["today:ncc"]?" open":""}><summary><span class="lvl">📌 NCC quan trọng <span class="tag">${il.filter(x=>x.on).length}/${il.length}</span></span></summary><div class="sub" style="margin-bottom:8px">App tự đoán: NCC phân loại “Đơn hàng” đang có PO chạy, hoặc có PO hàng về trễ. Đây là <b>ước đoán chưa kiểm chứng</b> — bạn chỉ cần ghim/bỏ ghim vài NCC lệch. Ghim có hiệu lực từ lần xếp lại kế tiếp. Lưu trên trình duyệt này.</div><div class="scroll-x"><table class="mini"><thead><tr><th>NCC</th><th>Phân loại</th><th style="text-align:right">Việc mở</th><th>Quan trọng?</th><th>Lý do</th><th></th></tr></thead><tbody>`+
+    il.slice(0,40).map(x=>`<tr><td>${esc(x.k)}</td><td>${esc(x.cls||"—")}</td><td class="num">${x.n}</td><td>${x.on?`<span class="chip" style="--c:var(--bad)">Quan trọng</span>`:`<span class="chip" style="--c:#64748b">Thường</span>`}</td><td class="sub">${esc(x.why||"—")}</td><td><button class="btn" data-tdpin="${esc(x.k)}|${x.on?-1:1}">${x.on?"Bỏ quan trọng":"Ghim quan trọng"}</button>${x.pin?` <button class="btn" data-tdpin="${esc(x.k)}|0">Về tự động</button>`:""}</td></tr>`).join("")+`</tbody></table></div></details></div>`;
+  html+=`<div class="card" style="margin-top:14px">`+tdD("today:insight","td-g",`<span class="lvl">📊 Phân tích: hàng việc theo workflow · đơn quá hạn kẹt ở đâu · việc theo trạng thái</span>`,tdInsights(),false)+`</div>`;
   $("#main").innerHTML=html;
   const m=$("#main"),moveTo=(key,q)=>{const st=tdRun();st.ov[key]=q;store.set("qlcv:tdRun",st);bump();renderToday()};
+  tdInsightsBind(m);
   m.querySelectorAll("[data-tdgo]").forEach(e=>e.onclick=ev=>{if(ev.target.closest("a.ol,select"))return;ev.preventDefault();goSheet(+e.dataset.tdgo,{search:String(e.dataset.q).toLowerCase()})});
   m.querySelectorAll("[data-tdpin]").forEach(b=>b.onclick=()=>{const [k,v]=b.dataset.tdpin.split("|"),pp=tdPins();if(+v===0)delete pp[k];else pp[k]=+v;store.set("qlcv:impPin",pp);bump();renderToday()});
   m.querySelectorAll("[data-tdview]").forEach(b=>b.onclick=()=>{store.set("qlcv:tdView",b.dataset.tdview);renderToday()});
@@ -2404,7 +2382,7 @@ function renderTabs(){
   const pc=collectItems().filter(x=>x.mine).length,on=k=>state.active===k?"on":"";
   // Thứ tự: Tổng quan, Ưu tiên, CV theo ngày, Nhà cung cấp, Công nợ NCC, Công nợ Ms Thủy, Công nợ Hiếu, PO, Phiếu thanh toán, Bảng kê TT, (sheet khác), Lịch sử
   const rankSheet=sh=>{const n=norm(sh.name);return sh.ext?13:/^cv theo ngày/.test(n)?3:IS_DS(sh.name)?5:/^công nợ ms thủy/.test(n)?6:/^công nợ hiếu/.test(n)?7:sh.wf?8:sh.pay?9:/^bảng kê tt vận chuyển/.test(n)?10:/^bảng kê tt đơn hàng/.test(n)?11:12};
-  const items=[{r:0,h:`<button data-i="overview" class="${on("overview")}">Tổng quan</button>`},{r:0.5,h:`<button data-i="today" class="${on("today")}">🎯 Việc hôm nay<span class="n">${tdCount()}</span></button>`},{r:1,h:`<button data-i="priority" class="${on("priority")}">⚠ Ưu tiên xử lý<span class="n">${pc}</span></button>`},{r:20,h:`<button data-i="history" class="${on("history")}">🕘 Lịch sử</button>`}];
+  const items=[{r:0,h:`<button data-i="overview" class="${on("overview")}">Tổng quan</button>`},{r:0.5,h:`<button data-i="today" class="${on("today")}">🎯 Việc hôm nay<span class="n">${tdCount()}</span></button>`},{r:20,h:`<button data-i="history" class="${on("history")}">🕘 Lịch sử</button>`}];
   if(state.sheets.some(s=>s.wf))items.push({r:3.5,h:`<button data-i="report" class="${on("report")}">📝 Báo cáo công việc</button>`});
   if(state.sheets.some(s=>s.wf))items.push({r:4,h:`<button data-i="suppliers" class="${on("suppliers")}">🏭 Nhà cung cấp</button>`});
   state.sheets.forEach((s,i)=>items.push({r:rankSheet(s),h:`<button data-i="${i}" class="${on(i)}">${esc(s.name)}<span class="n">${s.rows.length}</span></button>`}));
@@ -2416,7 +2394,7 @@ function render(){
   const same=state._rt===state.active,v=same?captureView():null;
   renderMain();state._rt=state.active;if(v)restoreView(v);
 }
-function renderMain(){state.active==="report"?renderReport(true):state.active==="today"?renderToday():state.active==="overview"?renderOverview():state.active==="priority"?renderPriority():state.active==="history"?renderHistory():state.active==="suppliers"?renderSuppliers():renderSheet(state.sheets[state.active])}
+function renderMain(){state.active==="report"?renderReport(true):state.active==="today"?renderToday():state.active==="overview"?renderOverview():state.active==="priority"?(state.active="today",renderToday()):state.active==="history"?renderHistory():state.active==="suppliers"?renderSuppliers():renderSheet(state.sheets[state.active])}
 
 function sheetStats(sh){
   const o={rows:sh.rows.length};
