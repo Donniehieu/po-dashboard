@@ -362,3 +362,9 @@ Vì số PAY **đổi tên** thành chuỗi chứa `BNK` khi được thanh toá
 - ✅ Tab “🎯 Việc hôm nay”: chấm điểm gấp/quan trọng/dễ, 4 mục, “Đang chờ”, NCC quan trọng tự đoán + ghim tay, kéo thả giữa các mục, chạy lại rule mỗi 2 tiếng, chế độ “Theo workflow”.
 - 🟡 Cần dùng thử vài ngày để so sánh hai chế độ (4 mục và workflow) rồi chọn cách nào hiệu quả thật; rule “NCC quan trọng” là ước đoán.
 - ✅ Mục 2 (PO chặn lệnh sản xuất): script `scripts/mrp_sync.py` (repo po-data) chạy trong workflow đồng bộ Odoo, mỗi giờ một lần (chạy tay thì tính ngay), ghi `data/mrp-block.json`; dashboard đọc file này và cộng điểm quan trọng cho PO cấp NVL cho lệnh sản xuất đang thiếu. Liên kết suy ra qua sản phẩm nên chỉ là ước lượng — 🟡 cần xem vài PO có dòng “cấp NVL cho … lệnh SX” xem đúng chưa.
+
+## Liên kết giữa các tab / tự nâng bước (đã làm)
+- ✅ Đơn trả trước: KHÔNG tự nâng lên Chờ làm TT khi có PAY; đủ điều kiện Hoàn thành chỉ thông báo cho người dùng xác nhận (chỉ tại bước Chờ KT xác nhận công nợ). Có test hồi quy `tests/test_prepay_rules.py` ở repo po-data.
+- ✅ Dashboard: móc chung sau khi sửa ô (`LINK_RULES`), tab 🔎 PO 360° và nút nâng bước theo quy tắc.
+- ⬜ Cần xem log lần chạy thật: dòng “Chờ làm TT (đã có PAY)” và “PO đã thanh toán, tự Hoàn thành”.
+- ⬜ Chưa làm: nhận biết “Đã gửi UNC” từ Odoo (tệp đính kèm / tin nhắn UNC), nhãn PO “Chờ phê duyệt” -> “Chờ duyệt PO”.
