@@ -51,6 +51,12 @@ a.btn{display:inline-block;white-space:nowrap;text-decoration:none;color:inherit
 nav.tabs{display:flex;gap:6px;overflow-x:auto;padding:10px 20px 0;background:var(--card);border-bottom:1px solid var(--line);position:sticky;top:var(--hdrh,0px);z-index:19}
 nav.tabs button{border:0;background:none;padding:9px 12px;border-bottom:3px solid transparent;color:var(--mute);font-weight:600;white-space:nowrap}
 nav.tabs button.on{color:var(--brand);border-bottom-color:var(--brand)}
+nav.tabs .tmore{margin-left:auto}
+.tmenu{position:fixed;z-index:60;display:none;flex-direction:column;min-width:230px;padding:6px;background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:0 12px 36px rgba(15,23,42,.22)}
+.tmenu.open{display:flex}
+.tmenu button{text-align:left;border:0;background:none;padding:8px 12px;border-radius:8px;font:inherit;color:var(--ink);cursor:pointer;white-space:nowrap}
+.tmenu button:hover{background:var(--soft)}.tmenu button.on{color:var(--brand);font-weight:700}
+.tmenu .n{background:var(--soft);border-radius:10px;padding:1px 7px;font-size:11px;margin-left:6px;color:var(--mute)}
 nav.tabs .n{background:var(--soft);border-radius:10px;padding:1px 7px;font-size:11px;margin-left:6px;color:var(--mute)}
 main{padding:18px 20px 60px;max-width:1500px;margin:0 auto}
 .drop{margin:8vh auto;max-width:620px;text-align:center;border:2px dashed var(--line);border-radius:16px;padding:48px 24px;background:var(--card)}
@@ -153,7 +159,6 @@ li.dragging{opacity:.4}[draggable=true]{cursor:grab}
 @media(max-width:760px){.ov2{grid-template-columns:1fr}}
 .p360s{display:flex;flex-wrap:wrap;gap:6px}.p360s span{padding:3px 9px;border-radius:12px;font-size:12px;background:var(--soft);color:var(--mute)}.p360s .on{background:var(--brand);color:#fff;font-weight:700}.p360s .past{opacity:.55}
 .td-sum{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 14px}
-.td-grid{align-items:start}
 .td-score{font-weight:800;font-size:18px;text-align:right;color:var(--brand)}
 .td-why{margin-top:2px}
 .td-more{margin-top:8px}.td-more summary,.td-wg summary{cursor:pointer;color:var(--brand);font-weight:600;padding:4px 0}
@@ -179,7 +184,6 @@ dialog label{display:block;margin:10px 0 4px;font-weight:600;font-size:13px}
 dialog input{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;font:inherit;background:var(--card);color:var(--ink)}
 .lvl{display:flex;align-items:center;gap:8px;margin:0 0 8px;font-weight:700}
 .lvl i{width:10px;height:10px;border-radius:50%;display:inline-block}
-.pgrid{grid-template-columns:repeat(auto-fit,minmax(380px,1fr));align-items:start}
 .attn li.click{cursor:pointer}.attn li.click:hover{background:var(--soft)}
 table.mini td,table.mini th{padding:6px 10px;position:static;cursor:default}
 table.mini th{text-align:center!important;vertical-align:middle!important}
@@ -197,15 +201,10 @@ table.hist td{vertical-align:top}
 .hl{color:var(--brand);text-decoration:none;cursor:pointer;border-bottom:1px dashed var(--brand)}.hl:hover{background:var(--soft)}
 .ol:hover{background:var(--soft)}
 .micbtn{border:1px solid var(--line);background:var(--card);border-radius:8px;padding:4px 8px;margin-left:4px;font-size:15px}
-.micbtn.rec,#vmic.rec{background:var(--bad);color:#fff;animation:pulse 1s infinite}
 @keyframes pulse{50%{opacity:.55}}
-.mp-h{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid var(--line)}
-.mp-b{overflow:auto;padding:8px;display:flex;flex-direction:column;gap:8px}
 .msg{border:1px solid var(--line);border-left:4px solid var(--c);border-radius:10px;padding:9px 11px;background:var(--bg)}
-.msg .mh{display:flex;justify-content:space-between;gap:8px;align-items:center}
 .msg .ma{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
 .tplrow{display:flex;gap:6px;flex-wrap:wrap;width:100%;align-items:center}.tplsel{flex:1 1 220px;min-width:0;max-width:100%;padding:5px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink);font:inherit;font-size:12px}
-#vtxt{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;font:inherit;background:var(--card);color:var(--ink)}
 @media (max-width:700px){
   body{font-size:15px}
   header.top{position:static;padding:10px 12px;gap:8px}
@@ -217,7 +216,7 @@ table.hist td{vertical-align:top}
   .banner,.savebar{padding:9px 12px}
   .kpis{grid-template-columns:repeat(2,1fr)}
   .kpi .v{font-size:21px}
-  .panels,.pgrid{grid-template-columns:minmax(0,1fr)}
+  .panels{grid-template-columns:minmax(0,1fr)}
   .toolbar input[type=search]{min-width:0;flex:1 1 100%}
   .tablewrap{max-height:72vh}
   td.txt{max-width:200px}
@@ -909,8 +908,8 @@ async function loadFromGitHub(silent){
   try{
     if(!silent)toast("Đang tải dữ liệu từ GitHub…");
     const keep=state.active;
-    const fc0=await ghFileCommit().catch(()=>null); // lấy mốc commit trước khi tải file để không bỏ sót thay đổi
-    const f=await ghFetchFile();
+    const pc0=ghFileCommit().catch(()=>null),pf=ghFetchFile(); // hai yêu cầu chạy song song (mốc commit được gửi đi trước file) thay vì nối đuôi nhau
+    const [fc0,f]=await Promise.all([pc0,pf]);
     state.sha=f.sha;state.handle=null;state.stale=false;state.histQ=store.get(histQKey())||[];
     await loadBuffer(f.buf,f.name,{src:"github",keepView:true});
     ods.fileSha=fc0?fc0.sha:null;
@@ -1010,29 +1009,6 @@ async function nsLoad(activate,opts){
     if(got.kind==="xlsx")nsConvertOnce(sh,gh); // lần đầu đọc từ Excel (chậm): đề nghị chuyển sang JSON nén
   }catch(e){console.error(e);toast("Không mở được Netsuite Data: "+e.message,true)}
   finally{nsLoading=false}
-}
-/* Sau khi mở file chính: nếu đã có bản lưu trên máy thì nạp ngầm luôn (tab hiện sẵn, bấm vào là xem, không phải chờ) */
-async function nsPreload(){
-  if(state.nsSheet||nsLoading)return;
-  const loc=await kvGet("ns:local");let got=null;
-  if(loc&&loc.gz&&loc.pinned)got={buf:loc.gz,src:"nhập tay (chưa lên GitHub)",ts:loc.ts};
-  if(!got&&ghReady()){const c=await kvGet(nsKeyGh());if(c&&c.buf)got={buf:c.buf,src:"bản đã lưu trên máy (từ GitHub)",ts:c.ts,gh:true}}
-  if(!got&&loc&&loc.gz)got={buf:loc.gz,src:"bản lưu trên máy này",ts:loc.ts};
-  if(!got)return;
-  nsLoading=true;
-  try{const sh=await nsBuildJson(got.buf,{src:got.src,ts:got.ts});if(!state.nsSheet){nsInstall(sh);renderTabs()}}
-  catch(e){console.warn("Netsuite preload:",e);return}
-  finally{nsLoading=false}
-  if(got.gh&&state.src==="github"&&(!got.ts||Date.now()-got.ts>864e5))nsSilentCheck(); // tối đa 1 lần/ngày, im lặng
-}
-async function nsSilentCheck(){ // hỏi GitHub có bản mới không (ETag: không đổi thì không tải lại); có bản mới thì thay ngầm
-  try{
-    const prev=await kvGet(nsKeyGh()),j=await ghFetchPath(nsJsonPath(),nsKeyGh());
-    if(!j||!prev||j.sha===prev.sha)return;
-    const sh=await nsBuildJson(j.buf,{src:"GitHub",ts:j.ts});nsInstall(sh);
-    const wasActive=state.active===state.sheets.indexOf(sh);renderTabs();if(wasActive)render();
-    toast("Netsuite Data trên GitHub vừa có bản mới và đã được cập nhật.");
-  }catch(e){console.warn("Netsuite check:",e)}
 }
 async function nsConvertOnce(sh,gh){
   try{
@@ -1152,6 +1128,7 @@ async function loadBuffer(buf,name,opts={}){
     renderTabs();render();updateChrome();notifyDaily();if(view)restoreView(view);
     if(state.rptCmp){state.rptCmp=false;clearTimeout(state._rptCmpT);setTimeout(()=>{if(state.active==="report")rptCompareDialog()},500)}
     try{applyRemindLog()}catch(e){console.error(e)}
+    if(opts.boot)return; // lần mở nhanh từ bản lưu trong máy: bỏ các việc cần mạng/ghi dữ liệu, lần tải thật từ GitHub ngay sau đó sẽ làm
     const a1=nccAddMissing()+bankAddMissing(),a2=nccEnforceAll(true);
     if(a1||a2){renderTabs();render();updateChrome();if(a2)toast(`Đã tự động cập nhật “TT trước” cho ${a2} PO theo Phân loại NCC (cột này chỉ do hệ thống tick).`)}
     if(state.src==="github"&&ghReady())loadRemoteHistory();
@@ -2316,7 +2293,7 @@ function renderToday(){
   const view=store.get("qlcv:tdView")||"flow",{q0,q1,q2,q3,q4,waiting}=view==="flow"?d.f:d.m,hm=t=>new Date(t).toLocaleTimeString("vi-VN",{hour:"2-digit",minute:"2-digit"});
   const cut=q1.slice(0,top),rest=q1.slice(top),remind=waiting.filter(t=>(t.pay?t.late:t.stuck)>=STUCK());
   let html=`<div class="td-bar"><button class="btn td-tg ${view==="matrix"?"on":""}" data-tdview="matrix">▦ Theo 4 mục</button><button class="btn td-tg ${view==="flow"?"on":""}" data-tdview="flow">⛓ Theo workflow</button><span class="grow"></span><span class="sub">Việc “Làm ngay” hiện <select id="tdTop">${TD_TOPS.map(n=>`<option${n===top?" selected":""}>${n}</option>`).join("")}</select> · Xếp lần cuối ${hm(run.t)}, lần kế ${hm(run.t+TD_EVERY)}</span><button class="btn" id="tdOpenAll" title="Mở rộng tất cả các nhóm">▾ Mở tất cả</button><button class="btn" id="tdCloseAll" title="Thu gọn tất cả các nhóm">▸ Thu gọn tất cả</button><button class="btn" id="tdRerun" title="Bỏ các việc đã kéo tay và tính lại toàn bộ theo rule">🔄 Xếp lại ngay</button></div>`;
-  html+=view==="matrix"?`<div class="note" style="margin:0 0 14px">🎯 <b>Việc hôm nay ${fmtD(TODAY)} · theo 4 mục</b> — bản DEMO trên dữ liệu thật. Điểm = 40% <b>Gấp</b> + 40% <b>Quan trọng</b> + 20% <b>Dễ</b>; trong mỗi mục việc xếp theo điểm. Việc đang chờ người khác để riêng ở “Đang chờ”. Mỗi 2 tiếng rule chạy lại một lần; kéo thả một việc sang mục khác (hoặc chọn ⇄) thì giữ tới lần chạy kế tiếp.</div>`:`<div class="note" style="margin:0 0 14px">⛓ <b>Việc hôm nay ${fmtD(TODAY)} · theo workflow</b> — cùng phân loại gấp / quan trọng, nhưng xếp theo quy trình: <b>quan trọng & gấp → gấp mà không quan trọng → quan trọng mà không gấp → không quan trọng, không gấp</b>. Trong mỗi nhóm: <b>trễ nhập hàng → chờ nhập hàng → chờ gửi NCC → chờ gửi duyệt PO → chờ báo giá → chờ KT xác nhận công nợ → chờ lập hóa đơn → chờ làm TT</b>; cùng bước thì trễ nhiều và điểm quan trọng cao lên trước. Việc đang chờ người khác chỉ vào các nhóm này khi đã trễ hoặc đứng yên từ ${STUCK()} ngày (🔔 cần đi nhắc). Kéo thả vẫn dùng chung với tab 4 mục.</div>`;
+  html+=`<div class="sub" style="margin:0 0 10px">🎯 <b>${fmtD(TODAY)}</b> · ${view==="matrix"?"theo 4 mục, xếp theo điểm":"theo workflow, xếp theo bước quy trình"} · kéo thả để chuyển mục · tự xếp lại mỗi 2 tiếng</div>`+tdD("today:help","td-more","Cách tính và cách dùng",`<div class="note">${view==="matrix"?`Điểm = 40% <b>Gấp</b> + 40% <b>Quan trọng</b> + 20% <b>Dễ</b>; trong mỗi mục việc xếp theo điểm. Việc đang chờ người khác để riêng ở “Đang chờ”. Mỗi 2 tiếng rule chạy lại một lần; kéo thả một việc sang mục khác (hoặc chọn ⇄) thì giữ tới lần chạy kế tiếp.`:`cùng phân loại gấp / quan trọng, nhưng xếp theo quy trình: <b>quan trọng & gấp → gấp mà không quan trọng → quan trọng mà không gấp → không quan trọng, không gấp</b>. Trong mỗi nhóm: <b>trễ nhập hàng → chờ nhập hàng → chờ gửi NCC → chờ gửi duyệt PO → chờ báo giá → chờ KT xác nhận công nợ → chờ lập hóa đơn → chờ làm TT</b>; cùng bước thì trễ nhiều và điểm quan trọng cao lên trước. Việc đang chờ người khác chỉ vào các nhóm này khi đã trễ hoặc đứng yên từ ${STUCK()} ngày (🔔 cần đi nhắc). Kéo thả vẫn dùng chung với tab 4 mục.`}</div>`,false);
   html+=`<div class="td-sum"><span class="chip" style="--c:var(--bad)">Làm ngay ${q1.length}</span><span class="chip" style="--c:var(--brand)">Lên lịch ${q2.length}</span><span class="chip" style="--c:var(--warn)">Gộp theo NCC ${q3.length}</span><span class="chip" style="--c:#64748b">Để sau ${q4.length}</span><span class="chip" style="--c:#7c3aed">Đang chờ ${waiting.length}${q0.length?` · hoãn ${q0.length}`:""}</span></div>`;
   {const sg=[];state.sheets.forEach((sh,si)=>{if(sh.wf)sh.rows.forEach(r=>{if(sugDone(sh,r))sg.push({si,sh,r})})});
    if(sg.length)html+=`<div class="note" style="margin:0 0 14px;border-color:var(--ok)">💡 <b>${sg.length} PO thanh toán trước chờ bạn xác nhận Hoàn thành</b> (đã nhận hết hàng, đã xuất hóa đơn, đang ở Chờ KT xác nhận công nợ): ${sg.slice(0,6).map(x=>`<a href="#" data-po360="${esc(String(x.r.v[x.sh.title]))}">${esc(String(x.r.v[x.sh.title]))}</a>`).join(", ")}${sg.length>6?", …":""} <button class="btn" id="tdSugGo" data-si="${sg[0].si}">Mở danh sách xác nhận</button></div>`}
@@ -2471,9 +2448,11 @@ function renderPo360(){
 }
 
 /* ============ Giao diện ============ */
+document.addEventListener("click",e=>{const m=$("#tmenu");if(m&&!e.target.closest("#tmenu,#tMore"))m.classList.remove("open")});
+document.addEventListener("keydown",e=>{if(e.key==="Escape"){const m=$("#tmenu");if(m)m.classList.remove("open")}});
 function renderTabs(){
   const t=$("#tabs");t.hidden=false;
-  const pc=collectItems().filter(x=>x.mine).length,on=k=>state.active===k?"on":"";
+  const on=k=>state.active===k?"on":"";
   // Thứ tự: Tổng quan, Ưu tiên, CV theo ngày, Nhà cung cấp, Công nợ NCC, Công nợ Ms Thủy, Công nợ Hiếu, PO, Phiếu thanh toán, Bảng kê TT, (sheet khác), Lịch sử
   const rankSheet=sh=>{const n=norm(sh.name);return sh.ext?13:/^cv theo ngày/.test(n)?3:IS_DS(sh.name)?5:/^công nợ ms thủy/.test(n)?6:/^công nợ hiếu/.test(n)?7:sh.wf?8:sh.pay?9:/^bảng kê tt vận chuyển/.test(n)?10:/^bảng kê tt đơn hàng/.test(n)?11:12};
   const items=[{r:0,h:`<button data-i="overview" class="${on("overview")}">Tổng quan</button>`},{r:0.5,h:`<button data-i="today" class="${on("today")}">🎯 Việc hôm nay<span class="n">${tdCount()}</span></button>`},{r:20,h:`<button data-i="history" class="${on("history")}">🕘 Lịch sử</button>`}];
@@ -2482,8 +2461,16 @@ function renderTabs(){
   if(state.sheets.some(s=>s.wf))items.push({r:4,h:`<button data-i="suppliers" class="${on("suppliers")}">🏭 Nhà cung cấp</button>`});
   state.sheets.forEach((s,i)=>items.push({r:rankSheet(s),h:`<button data-i="${i}" class="${on(i)}">${esc(s.name)}<span class="n">${s.rows.length}</span></button>`}));
   if(!state.nsSheet&&state.sheets.length)items.push({r:13,h:`<button data-i="nsload" title="Dữ liệu từ NetSuite (file riêng Netsuite_data.xlsx, tải khi bấm lần đầu)">📊 Netsuite Data</button>`});
-  t.innerHTML=items.map((x,k)=>({...x,k})).sort((a,b)=>a.r-b.r||a.k-b.k).map(x=>x.h).join("");
-  t.querySelectorAll("button").forEach(b=>b.onclick=()=>{const v=b.dataset.i;if(v==="nsload"){nsLoad(true);return}state.active=(v==="overview"||v==="priority"||v==="today"||v==="po360"||v==="history"||v==="suppliers"||v==="report")?v:+v;renderTabs();render();scrollTo(0,0)});
+  // Tab hay dùng nằm trên thanh; tab ít dùng gom vào “Khác ▾” cho thanh gọn (chọn một tab trong đó thì nút “Khác” hiện tên tab đang mở)
+  const MINOR=new Set([6,7,10,11,12,13,20]),all=items.map((x,k)=>({...x,k})).sort((a,b)=>a.r-b.r||a.k-b.k),main=all.filter(x=>!MINOR.has(x.r)),minor=all.filter(x=>MINOR.has(x.r));
+  const minorOn=minor.find(x=>/class="on"/.test(x.h)),lbl=h=>h.replace(/<span class="n">[^<]*<\/span>/,"").replace(/<[^>]+>/g,"").trim();
+  t.innerHTML=main.map(x=>x.h).join("")+(minor.length?`<button type="button" class="tmore ${minorOn?"on":""}" id="tMore" aria-haspopup="true">${minorOn?esc(lbl(minorOn.h)):"Khác"} ▾</button>`:"");
+  let mn=$("#tmenu");if(!mn){mn=document.createElement("div");mn.id="tmenu";mn.className="tmenu";document.body.appendChild(mn)}
+  mn.innerHTML=minor.map(x=>x.h).join("");mn.classList.remove("open");
+  const goTab=v=>{if(v==="nsload"){nsLoad(true);return}state.active=(v==="overview"||v==="priority"||v==="today"||v==="po360"||v==="history"||v==="suppliers"||v==="report")?v:+v;renderTabs();render();scrollTo(0,0)};
+  t.querySelectorAll("button[data-i]").forEach(b=>b.onclick=()=>goTab(b.dataset.i));
+  mn.querySelectorAll("button[data-i]").forEach(b=>b.onclick=()=>{mn.classList.remove("open");goTab(b.dataset.i)});
+  const mb=$("#tMore");if(mb)mb.onclick=e=>{e.stopPropagation();if(mn.classList.toggle("open")){const r=mb.getBoundingClientRect();mn.style.left=Math.max(8,Math.min(r.left,innerWidth-mn.offsetWidth-8))+"px";mn.style.top=(r.bottom+4)+"px"}};
 }
 function render(){
   const same=state._rt===state.active,v=same?captureView():null;
@@ -2510,7 +2497,7 @@ function renderOverview(){
     ${kpi("Sắp đến hạn (3 ngày)",fmtN(totSoon),"chưa hoàn thành",totSoon?"warn":"ok")}
   </div>`;
   // thẻ từng sheet
-  html+=`<h2 class="sec">Các sheet trong file</h2><div class="grid sheetcards">`;
+  let cards="";
   sheets.forEach((s,i)=>{
     const x=st[i];
     let line="";
@@ -2518,9 +2505,9 @@ function renderOverview(){
     let extra=[];
     if(x.sum!=null&&s.money)extra.push(`${/^(tổng|giá trị)/i.test(colLabel(s.money))?"":"Tổng "}${esc(colLabel(s.money))}: <b>${fmtBig(x.sum)}</b>`);
     if(x.overdue)extra.push(`<span class="late">${x.overdue} quá hạn</span>`);
-    html+=`<div class="card sc" data-i="${i}"><h4>${esc(s.name)}</h4><div class="sub">${x.rows} dòng · ${s.cols.length} cột</div>${line}<div class="sub" style="margin-top:6px">${extra.join(" · ")}</div></div>`;
+    cards+=`<div class="card sc" data-i="${i}"><h4>${esc(s.name)}</h4><div class="sub">${x.rows} dòng · ${s.cols.length} cột</div>${line}<div class="sub" style="margin-top:6px">${extra.join(" · ")}</div></div>`;
   });
-  html+=`</div>`;
+  html+=`<div class="card" style="margin-top:14px">`+tdD("ov:sheets","td-g",`<span class="lvl">Các sheet trong file<span class="tag">${sheets.length}</span></span>`,`<div class="grid sheetcards">${cards}</div>`,false)+`</div>`;
   // cần chú ý
   const items=[];
   sheets.forEach((s,i)=>s.rows.forEach(r=>{if(r.st==="overdue")items.push({s,i,r})}));
@@ -3401,7 +3388,6 @@ function bulkBar(sh){
 /* chế độ xem đã lưu */
 const viewsKey=sh=>"qlcv:views:"+sh.name;
 const viewsOf=sh=>store.get(viewsKey(sh))||[];
-function snapView(u){return{filters:{...u.filters},cf:Object.fromEntries(Object.entries(u.cf).map(([k,f])=>[k,{...f,vals:f.vals?[...f.vals]:null}])),search:u.search,special:u.special,queue:u.queue||null,sort:u.sort}}
 function applyView(sh,v){
   const u=sh.ui;u.filters={...(v.filters||{})};u.cf=Object.fromEntries(Object.entries(v.cf||{}).map(([k,f])=>[k,{...f,vals:f.vals?new Set(f.vals):null}]));
   u.search=v.search||"";u.special=v.special||null;u.queue=v.queue||null;u.sort=v.sort||null;u.range=null;u.shown=100;
@@ -3534,7 +3520,7 @@ async function kvSet(k,v){try{const db=await idbOpen();await new Promise(res=>{c
 const ghCacheKey=()=>{const c=ghCfg();return `gh:${c.owner}/${c.repo}/${c.path}@${c.branch||"main"}`};
 async function bootCache(){
   const c=await kvGet(ghCacheKey());
-  if(c&&c.buf){try{state.histQ=store.get(histQKey())||[];await loadBuffer(c.buf,c.name,{src:"github"});state.sha=c.sha;state.stale=true;setSaveState("Bản lưu trong máy, đang cập nhật…","warn")}catch(e){}}
+  if(c&&c.buf){try{state.histQ=store.get(histQKey())||[];await loadBuffer(c.buf,c.name,{src:"github",boot:true});state.sha=c.sha;state.stale=true;setSaveState("Bản lưu trong máy, đang cập nhật…","warn")}catch(e){}}
 }
 
 /* ---- Mở Odoo để tìm đơn hàng ---- */
@@ -3605,36 +3591,7 @@ function noteCol(sh){
   const g=sh.cols.find(c=>/^ghi chú$/i.test(String(c.name).trim()));if(g)return g;
   return sh.wf?null:sh.cols.find(c=>/^note$/i.test(String(c.name).trim())); // sheet PO: Note là trạng thái quy trình nên không ghi chú tự do vào đó
 }
-function voiceNote(si,rn){
-  const sh=state.sheets[si],r=sh.rows.find(x=>x.n===rn),nc=noteCol(sh);
-  if(!r||!nc){toast(sh.wf?"Chưa có cột “Ghi chú” trong Excel. Bấm “🔄 Đồng bộ Odoo” một lần để tạo cột này (cột Note dùng cho trạng thái quy trình).":"Sheet này không có cột Note/Ghi chú để ghi.",true);return}
-  const d=$("#vdlg"),ta=$("#vtxt"),mic=$("#vmic");
-  $("#vtitle").textContent="Ghi chú cho "+(r.v[sh.title]??"");
-  ta.value="";$("#vsave").disabled=false;
-  let rc=null;
-  const stop=()=>{if(rc){try{rc.stop()}catch(e){}}};
-  const start=()=>{stop();mic.classList.add("rec");rc=listen(t=>{ta.value=t},()=>{rc=null;mic.classList.remove("rec")});if(!rc)mic.classList.remove("rec")};
-  mic.onclick=()=>rc?stop():start();
-  $("#vcancel").onclick=()=>{stop();d.close()};
-  $("#vsave").onclick=()=>{
-    const t=ta.value.trim();if(!t){toast("Chưa có nội dung để lưu",true);return}
-    stop();
-    const cur=r.v[nc.idx]==null?"":String(r.v[nc.idx]).trim();
-    const nv=(cur?cur+" | ":"")+fmtD(TODAY).slice(0,5)+": "+t;
-    state.via="giọng nói";setCell(si,r,nc.idx,nv);state.via="dashboard";setStatus(sh);
-    d.close();updateChrome();if(typeof state.active==="number")render();
-    toast("Đã thêm ghi chú vào đơn "+(r.v[sh.title]??"")+(state.auto?"":". Bấm “Lưu vào Excel” để ghi."));
-  };
-  d.showModal();if(SR)start();
-}
 
-(function(){
-  const w=document.createElement("div");
-  w.innerHTML=`<dialog id="vdlg"><h3 id="vtitle">Ghi chú</h3><p class="sub">Bấm micro rồi đọc nội dung. Có thể sửa lại chữ trước khi lưu.</p><textarea id="vtxt" rows="4" placeholder="Nội dung ghi chú…"></textarea><div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap"><button class="btn" id="vmic">🎤 Đọc</button><span class="grow"></span><button class="btn" id="vcancel">Hủy</button><button class="btn primary" id="vsave">Lưu ghi chú</button></div></dialog>`;
-  while(w.firstChild)document.body.appendChild(w.firstChild);
-  $("#fileRemindLog").onchange=async e=>{const f=e.target.files[0];e.target.value="";if(!f)return;
-    try{const j=JSON.parse(await f.text());const n=applyRemindLog(Array.isArray(j)?j:[]);if(!n)toast("Không có dòng nhật ký mới nào khớp với phiếu/PO trong file này.")}catch(err){toast("Không đọc được file nhật ký: "+err.message,true)}};
-})();
 
 $("#fileRemindLog").onchange=async e=>{const f=e.target.files[0];e.target.value="";if(!f)return;
   try{const j=JSON.parse(await f.text());const n=applyRemindLog(Array.isArray(j)?j:[]);if(!n)toast("Không có dòng nhật ký mới nào khớp với phiếu/PO trong file này.")}catch(err){toast("Không đọc được file nhật ký: "+err.message,true)}};
