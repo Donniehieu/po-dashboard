@@ -1099,9 +1099,10 @@ async function checkRemovals(){
         const g=await ghFetchPath(p,"dl:"+p);
         if(g){let log=[];try{log=JSON.parse(new TextDecoder().decode(new Uint8Array(g.buf)))}catch(e){}
           for(const e of Array.isArray(log)?log:[]){
-            const k="po|"+e.time+"|"+e.key;if(seen.has(k))continue;
+            const k=(e.kind==="PAY"?"payx|":"po|")+e.time+"|"+e.key;if(seen.has(k))continue;
             const d=e.data||{};
-            found.push({k,kind:"PO",key:e.key,sup:d["Nhà cung cấp"]||"",amount:d["Tổng"],note:d["Note"]||"",when:e.time,why:"đã bị xóa hoặc hủy trên Odoo (dòng đã được xóa khỏi tab PO)",silent:first&&Date.now()-parseVN(e.time)>864e5});
+            const isPay=e.kind==="PAY";
+            found.push({k,kind:isPay?"PAY":"PO",key:e.key,sup:d["Nhà cung cấp"]||"",amount:isPay?d["Số tiền"]:d["Tổng"],note:isPay?"":d["Note"]||"",when:e.time,why:isPay?"phiếu "+(e.why||"đã hủy")+" trên Odoo (đã được dọn khỏi tab Phiếu thanh toán)":"đã bị xóa hoặc hủy trên Odoo (dòng đã được xóa khỏi tab PO)",silent:first&&Date.now()-parseVN(e.time)>864e5});
           }}
       }catch(e){console.warn("deleted-log:",e.message)}
     }
@@ -1120,7 +1121,7 @@ async function checkRemovals(){
 }
 function showRemovals(list){
   const d=$("#dlgDel");
-  $("#delList").innerHTML=list.map(x=>`<li style="padding:9px 0;border-bottom:1px solid var(--line)"><span class="tag">${x.kind}</span> <b>${x.kind==="PAY"?`<a class="hl" href="#" data-delgo="${x.si}|${esc(x.key)}" title="Xem phiếu này ở tab Phiếu thanh toán">${esc(x.key)}</a>`:esc(x.key)}</b> — ${esc(x.why)}<div class="sub">${esc(x.sup||"")}${x.amount?" · "+fmtN(x.amount):""}${x.when?" · lúc "+esc(x.when):""}${x.note?" · Note cuối: "+esc(x.note):""}</div></li>`).join("");
+  $("#delList").innerHTML=list.map(x=>`<li style="padding:9px 0;border-bottom:1px solid var(--line)"><span class="tag">${x.kind}</span> <b>${x.kind==="PAY"&&x.si!=null?`<a class="hl" href="#" data-delgo="${x.si}|${esc(x.key)}" title="Xem phiếu này ở tab Phiếu thanh toán">${esc(x.key)}</a>`:esc(x.key)}</b> — ${esc(x.why)}<div class="sub">${esc(x.sup||"")}${x.amount?" · "+fmtN(x.amount):""}${x.when?" · lúc "+esc(x.when):""}${x.note?" · Note cuối: "+esc(x.note):""}</div></li>`).join("");
   $("#delTitle").textContent=`⚠ ${list.length} mục đã bị xóa/hủy trên Odoo`;
   $("#delList").querySelectorAll("[data-delgo]").forEach(a=>a.onclick=ev=>{ev.preventDefault();const [si,key]=a.dataset.delgo.split("|");d.close();goSheet(+si,{search:key.toLowerCase()})});
   $("#delOk").onclick=()=>d.close();
