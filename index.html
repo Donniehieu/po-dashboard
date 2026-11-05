@@ -146,6 +146,8 @@ h2.sec{font-size:15px;margin:22px 0 10px}
 .td-mv{font:inherit;font-size:12px;border:1px solid var(--line);border-radius:6px;background:var(--soft);color:var(--ink);padding:1px 2px;margin-top:4px}
 li.dragging{opacity:.4}[draggable=true]{cursor:grab}
 .td-drop{outline:2px dashed var(--brand);outline-offset:-4px;background:color-mix(in srgb,var(--brand) 6%,transparent)}
+.td-2c{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;align-items:start;margin-top:14px}.td-2c>.card{margin:0}@media(max-width:900px){.td-2c{grid-template-columns:minmax(0,1fr)}}
+.dbt-po{text-decoration:none;margin:2px 4px 2px 0;cursor:pointer}.dbt-sum{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.dbt-cols{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}@media(max-width:700px){.dbt-cols{grid-template-columns:minmax(0,1fr)}}
 .td-2x2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;align-items:start}
 .td-2x2>[data-tdq="1"]{grid-area:1/1}.td-2x2>[data-tdq="3"]{grid-area:1/2}.td-2x2>[data-tdq="2"]{grid-area:2/2}.td-2x2>[data-tdq="4"]{grid-area:2/1}
 @media(max-width:900px){.td-2x2{grid-template-columns:minmax(0,1fr)}.td-2x2>[data-tdq]{grid-area:auto}}
@@ -2143,7 +2145,10 @@ function goSheet(si,patch){const sh=state.sheets[si];sh.ui.noteGrp=null;sh.ui.fi
 function tdInsights(){
   const it=collectItems();let html="";
   {const qs=[];state.sheets.forEach((sh,si)=>{if(sh.ext)return;for(const q of queuesFor(sh)){const n=queueCount(sh,q);if(n)qs.push({si,sh,q,n})}});
-   if(qs.length)html+=`<div class="qbar"><span class="sub">Hàng việc theo workflow:</span>`+qs.map(x=>`<button class="qb ${x.q.tone||""}" data-qgo="${x.si}|${x.q.k}" title="${esc(x.sh.name+": "+x.q.h)}">${esc(x.q.l)} <span class="sub">· ${esc(x.sh.name)}</span> <b>${x.n}</b></button>`).join("")+`</div>`}
+   const STEPQ=new Set(["quote","approve","sendncc","recv","invoice","prett","unc","debt","sugdone"]); // hàng việc gắn với một bước quy trình (cột Note)
+   const btn=x=>`<button class="qb ${x.q.tone||""}" data-qgo="${x.si}|${x.q.k}" title="${esc(x.sh.name+": "+x.q.h)}">${esc(x.q.l)} <span class="sub">· ${esc(x.sh.name)}</span> <b>${x.n}</b></button>`;
+   const L=qs.filter(x=>x.sh.wf&&STEPQ.has(x.q.k)),R=qs.filter(x=>!(x.sh.wf&&STEPQ.has(x.q.k)));
+   if(qs.length)html+=`<div class="td-2c" style="margin-top:0;margin-bottom:12px"><div class="card"><div class="lvl">⛓ Hàng việc theo workflow <span class="tag">${L.length}</span></div><div class="sub" style="margin-bottom:8px">Theo bước quy trình ở cột Note của tab PO.</div><div class="qbar">${L.map(btn).join("")||`<span class="sub">Không có.</span>`}</div></div><div class="card"><div class="lvl">🧩 Ngoài quy trình <span class="tag">${R.length}</span></div><div class="sub" style="margin-bottom:8px">Trạng thái không thuộc các bước quy trình: quá hạn/sắp đến hạn, Note lệch Odoo, phiếu thanh toán, công nợ NCC, thông tin thanh toán.</div><div class="qbar">${R.map(btn).join("")||`<span class="sub">Không có.</span>`}</div></div></div>`}
   if(it.length){
     // kẹt ở đâu
     const kept=new Map();
@@ -2194,7 +2199,7 @@ const TD_WAIT=new Set(["Chờ báo giá","Chờ duyệt PO","Đã gửi NCC","Ch
 const TD_WHO={"Chờ báo giá":"NCC báo giá","Chờ duyệt PO":"người duyệt PO","Đã gửi NCC":"NCC xác nhận","Chờ nhận hàng":"hàng về","Chờ KT xác nhận công nợ":"kế toán","Đã gửi UNC":"NCC/KT xác nhận"};
 const t0=(r,sh)=>String(r.v[sh.title]??"").trim();
 const TD_EVERY=2*3600*1000; // cứ 2 tiếng chạy lại rule một lần; trong lúc đó việc nằm yên, ai kéo tay thì giữ tới lượt sau
-const TD_TOPS=[5,10,15,20,30,40],tdTop=()=>{const v=+store.get("qlcv:tdTop");return TD_TOPS.includes(v)?v:10}; // số việc “Làm ngay” hiện ra
+const TD_TOPS=[5,10,15,20,30,40,50,100,200],tdTop=()=>{const v=+store.get("qlcv:tdTop");return TD_TOPS.includes(v)?v:10}; // số việc “Làm ngay” hiện ra
 const TD_STAGE=["🚚 Trễ nhập hàng","📦 Chờ nhập hàng","📤 Chờ gửi NCC","📝 Chờ gửi duyệt PO","💬 Chờ báo giá","🧾 Chờ KT xác nhận công nợ","🧮 Chờ lập hóa đơn","💳 Chờ làm TT","📨 Chờ gửi UNC","🗒 Việc ghi chú thêm","… Bước khác"];
 const tdWfRank=t=>{const x=t.step;return x==="Chờ nhận hàng"?(t.late>0?0:1):x==="Chờ gửi NCC"?2:x==="Chờ gửi duyệt PO"?3:x==="Chờ báo giá"?4:x==="Chờ KT xác nhận công nợ"?5:x==="Cần lập hóa đơn"?6:x==="Chờ làm TT"?7:x==="Chờ gửi UNC"?8:(t.pay||WF_ALL.includes(x))?10:9}; // 9 = Note tự do ngoài quy trình (vd. “Chờ mua cưa bàn”)
 const TD_QN=["Để lượt sau","Làm ngay","Lên lịch","Gộp theo NCC","Để sau"],TD_QC=["#7c3aed","var(--bad)","var(--brand)","var(--warn)","#64748b"];
@@ -2322,16 +2327,18 @@ function renderToday(){
     }
     html+=`</div>`;
   }
-  // hàng chờ lượt sau
-  html+=`<div class="card td-snooze" data-tdq="0" style="margin-top:14px"><div class="lvl"><i style="background:#7c3aed"></i>💤 Để lượt sau<span class="tag">${q0.length}</span></div><div class="sub">Kéo việc vào đây để tạm ẩn; tới lần xếp lại kế tiếp (${hm(run.t+TD_EVERY)}) việc tự quay về mục theo rule.</div>${q0.length?tdD(view+":more:0","td-more",`Xem ${q0.length} việc đã hoãn`,ul(q0),false):""}</div>`;
-  // đang chờ
+  // hàng chờ lượt sau (trái) + đang chờ người khác (phải): lưới 2 cột như các mục trên; việc nhóm theo trạng thái
+  const stepKey=t=>t.pay?"Phiếu thanh toán":t.step,stepOrd=t=>t.pay?99:(t.wr??50);
+  const grpBy=(arr,keyf)=>{const by=new Map();arr.forEach(t=>{const k=keyf(t),o=by.get(k)||[];o.push(t);by.set(k,o)});return by};
+  html+=`<div class="td-2c"><div class="card td-snooze" data-tdq="0"><div class="lvl"><i style="background:#7c3aed"></i>💤 Để lượt sau<span class="tag">${q0.length}</span></div><div class="sub" style="margin-bottom:8px">Kéo việc vào đây để tạm ẩn; tới lần xếp lại kế tiếp (${hm(run.t+TD_EVERY)}) việc tự quay về mục theo rule.</div>`
+    +(q0.length?[...grpBy(q0,stepKey)].sort((x,y)=>stepOrd(x[1][0])-stepOrd(y[1][0])).map(([k,a])=>tdD(view+":s0:"+k,"td-wg",`<b>${esc(k)}</b> <span class="tag">${a.length}</span>`,ul(a),false)).join(""):`<div class="sub">Không có (kéo việc vào đây).</div>`)+`</div>`;
   html+=`<div class="card"><details class="td-g" data-tdd="today:wait"${tdOpenMap()["today:wait"]?" open":""}><summary><span class="lvl">⏳ Đang chờ người khác <span class="tag">${waiting.length}</span></span></summary><div class="sub" style="margin-bottom:8px">Chờ NCC, người duyệt, kế toán hoặc hàng về và chưa trễ — không phải việc của bạn hôm nay. Khi trễ hoặc đứng yên từ ${STUCK()} ngày sẽ nhảy lên 4 mục ở trên.</div>`;
   if(!waiting.length)html+=`<div class="sub">Không có.</div>`;
   else{
     const by=new Map();waiting.forEach(t=>{const k=t.pay?"Phiếu thanh toán · kế toán":t.step+" · "+(TD_WHO[t.step]||"");const o=by.get(k)||[];o.push(t);by.set(k,o)});
     html+=[...by].map(([k,a])=>{const rm=a.filter(t=>(t.pay?t.late:t.stuck)>=STUCK());return tdD(view+":wg:"+k,"td-wg",`<b>${esc(k)}</b> <span class="tag">${a.length}</span>${rm.length?` <span class="chip" style="--c:var(--bad)">cần nhắc ${rm.length}</span>`:""}`,`<ul class="attn">${a.map(t=>{const age=t.pay?t.late:t.stuck;return tdRow(t,age>=STUCK()?` · <span style="color:var(--bad)">⏱ chờ ${age} ngày, cần nhắc</span>`:"")}).join("")}</ul>`,rm.length>0)}).join("");
   }
-  html+=`</details></div>`;
+  html+=`</details></div></div>`;
   // NCC quan trọng
   const ik=new Map();d.tasks.forEach(t=>{if(!ik.has(t.k))ik.set(t.k,d.impOf(t.k))});
   const il=[...ik].map(([k,v])=>({k,...v,n:d.tasks.filter(t=>t.k===k).length})).sort((a,b)=>(b.on-a.on)||b.n-a.n);
@@ -2376,6 +2383,56 @@ function linkAfterEdit(si,r,ci){const sh=state.sheets[si];if(!sh)return;for(cons
 
 /* ---- 🔎 PO 360°: gom mọi dữ liệu liên quan một PO (PO, PAY/BNK, NCC, lệnh sản xuất, việc hôm nay, nhật ký) + gợi ý nâng bước.
    Quy tắc gợi ý khớp với script đồng bộ (pay_sync.py): chỉ nâng, không hạ. ---- */
+/* ---- Công nợ NCC: giá trị PO đã / chưa thanh toán theo từng NCC, liệt kê PO (bấm để mở trong tab PO) ---- */
+function nccDebtRows(){
+  const S=nccSheets();if(!S)return null;
+  const items=S.ds.rows.filter(r=>r.v[S.nc.idx]!=null&&String(r.v[S.nc.idx]).trim()).map(r=>({name:String(r.v[S.nc.idx]).trim(),row:r}));
+  const cache=new Map(items.map(it=>[it,NCC.cands(it.name)])),by=new Map(),memo=new Map();
+  state.sheets.forEach((sh,si)=>{if(!sh.wf)return;const ci=poSupplierOf(sh);if(ci==null)return;
+    sh.rows.forEach(r=>{
+      const sup=String(r.v[ci]??"").trim();if(!sup)return;
+      let key=memo.get(sup);
+      if(key===undefined){const f=NCC.find(sup,items,cache);key=f.hits.length?f.hits[0].name:null;memo.set(sup,key)}
+      const k=key||sup,o=by.get(k)||{name:k,inDs:!!key,cls:"",paid:[],unpaid:[]};
+      if(key&&!o.cls){const it=items.find(i=>i.name===key);o.cls=it?String(it.row.v[S.tc.idx]??"").trim():""}
+      const pi=poPayInfo(sh,r),amt=sh.money?+r.v[sh.money.idx]||0:0,code=String(r.v[sh.title]??"").trim();
+      (pi.paid?o.paid:o.unpaid).push({code,amt,wf:r.wf,state:pi.state});
+      by.set(k,o);
+    })});
+  const ps=state.sheets.find(x=>x.pay),psi=ps?state.sheets.indexOf(ps):-1;
+  if(ps&&ps.sub!=null&&ps.payStIdx!=null)ps.rows.forEach(r=>{ // số tiền theo phiếu PAY: Đã thanh toán / Chưa thanh toán (bỏ phiếu hủy, không còn trên Odoo)
+    const sup=String(r.v[ps.sub]??"").trim()||"(Chưa ghi NCC)",st=wfn(r.v[ps.payStIdx]);if(st!=="đã thanh toán"&&st!=="chưa thanh toán")return;
+    let key=memo.get(sup);if(key===undefined){const f=NCC.find(sup,items,cache);key=f.hits.length?f.hits[0].name:null;memo.set(sup,key)}
+    const k=key||sup,o=by.get(k)||{name:k,inDs:!!key,cls:"",paid:[],unpaid:[]};
+    if(key&&!o.cls){const it=items.find(i=>i.name===key);o.cls=it?String(it.row.v[S.tc.idx]??"").trim():""}
+    const amt=ps.money?+r.v[ps.money.idx]||0:0;
+    (o.pays=o.pays||{paid:[],unpaid:[]})[st==="đã thanh toán"?"paid":"unpaid"].push({no:String(r.v[ps.title]??"").trim(),amt});
+    by.set(k,o);
+  });
+  const sm=a=>(a||[]).reduce((t,x)=>t+x.amt,0);
+  const out=[...by.values()].map(o=>{o.pays=o.pays||{paid:[],unpaid:[]};return{...o,psi,vp:sm(o.pays.paid),vu:sm(o.pays.unpaid)}});
+  out.sort((a,b)=>b.vu-a.vu||b.vp-a.vp);return{S,out,psi};
+}
+function nccDebtHtml(sh){
+  const d=nccDebtRows();if(!d||!d.out.length)return "";
+  const {out}=d,tp=out.reduce((t,o)=>t+o.vp,0),tu=out.reduce((t,o)=>t+o.vu,0),np=out.reduce((t,o)=>t+o.paid.length,0),nu=out.reduce((t,o)=>t+o.unpaid.length,0),npp=out.reduce((t,o)=>t+o.pays.paid.length,0),npu=out.reduce((t,o)=>t+o.pays.unpaid.length,0);
+  const chips=(a,c)=>a.length?a.map(x=>`<a href="#" class="chip dbt-po" data-dpo="${esc(x.code)}" style="--c:${c}" title="${esc(x.wf+" · "+x.state)}">${esc(x.code)}</a>`).join(""):`<span class="sub">Không có.</span>`;
+  const pchips=(a,c)=>a.length?a.map(x=>`<a href="#" class="chip dbt-po" data-dpay="${esc(x.no)}" style="--c:${c}" title="Mở phiếu thanh toán trong tab Phiếu thanh toán">${esc(x.no)}${x.amt?" · "+fmtBig(x.amt):""}</a>`).join(""):`<span class="sub">Không có.</span>`;
+  return `<div class="card" style="margin-bottom:14px"><div class="td-bar" style="margin-bottom:8px"><span class="lvl" style="margin:0">💰 Giá trị công nợ theo NCC · đã / chưa thanh toán</span><span class="grow"></span><input id="dbtQ" placeholder="Lọc NCC…" style="min-width:160px"><button class="btn" id="dbtOpen">▾ Mở tất cả</button><button class="btn" id="dbtClose">▸ Thu gọn tất cả</button></div>
+    <div class="dbt-sum" style="margin-bottom:8px"><span class="chip" style="--c:var(--ok)">Đã thanh toán ${fmtBig(tp)} · ${npp} phiếu PAY · ${np} PO</span><span class="chip" style="--c:var(--bad)">Chưa thanh toán ${fmtBig(tu)} · ${npu} phiếu PAY · ${nu} PO</span><span class="sub">${out.length} NCC</span></div>
+    <div class="sub" style="margin-bottom:8px"><b>Giá trị lấy theo số tiền phiếu PAY</b> (tab Phiếu thanh toán, theo NCC): “Đã thanh toán” và “Chưa thanh toán” theo cột Trạng thái TT, bỏ phiếu đã hủy / không còn trên Odoo. Danh sách PO: PO đã Hoàn thành hoặc mọi phiếu PAY gắn với PO đã thanh toán = đã thanh toán, còn lại là chưa. Bấm mã PO để mở trong tab PO, bấm mã PAY để mở trong tab Phiếu thanh toán.</div>
+    <div id="dbtList">`+out.map(o=>tdD("dbt:"+o.name,"td-wg",`<b>${esc(o.name)}</b>${o.cls?` <span class="chip" style="--c:${colorFor(o.cls)}">${esc(o.cls)}</span>`:""}${o.inDs?"":` <span class="chip" style="--c:var(--warn)">chưa có trong Công nợ NCC</span>`} <span class="chip" style="--c:var(--ok)">đã TT ${fmtBig(o.vp)} · ${o.paid.length} PO</span> <span class="chip" style="--c:var(--bad)">chưa TT ${fmtBig(o.vu)} · ${o.unpaid.length} PO</span>`,
+      `<div class="dbt-cols" style="padding:6px 0 10px 18px"><div><div class="sub" style="margin-bottom:4px"><b>Đã thanh toán</b> · ${fmtN(o.vp)} · ${o.pays.paid.length} phiếu PAY · ${o.paid.length} PO</div><div style="margin-bottom:4px">${pchips(o.pays.paid,"var(--ok)")}</div><div>${chips(o.paid,"var(--ok)")}</div></div><div><div class="sub" style="margin-bottom:4px"><b>Chưa thanh toán</b> · ${fmtN(o.vu)} · ${o.pays.unpaid.length} phiếu PAY · ${o.unpaid.length} PO</div><div style="margin-bottom:4px">${pchips(o.pays.unpaid,"var(--bad)")}</div><div>${chips(o.unpaid,"var(--bad)")}</div></div></div>`,false)).join("")+`</div></div>`;
+}
+function nccDebtBind(){
+  const m=$("#nccDebt");if(!m)return;const d=nccDebtRows();
+  m.querySelectorAll("[data-dpo]").forEach(a=>a.onclick=ev=>{ev.preventDefault();ev.stopPropagation();if(d)goSheet(d.S.poSi,{search:a.dataset.dpo.toLowerCase()})});
+  m.querySelectorAll("[data-dpay]").forEach(a=>a.onclick=ev=>{ev.preventDefault();ev.stopPropagation();if(d&&d.psi>=0)goSheet(d.psi,{search:a.dataset.dpay.toLowerCase()})});
+  const dets=()=>[...m.querySelectorAll("details[data-tdd]")],setAll=on=>{const mp=tdOpenMap();dets().forEach(x=>{x.open=on;mp[x.dataset.tdd]=on});store.set("qlcv:tdOpen",mp)};
+  if($("#dbtOpen")){$("#dbtOpen").onclick=()=>setAll(true);$("#dbtClose").onclick=()=>setAll(false)}
+  if($("#dbtQ"))$("#dbtQ").oninput=e=>{const k=NCC.fold(e.target.value).trim();dets().forEach(x=>{x.hidden=!!k&&!NCC.fold(x.dataset.tdd).includes(k)})};
+  setTimeout(()=>dets().forEach(x=>x.addEventListener("toggle",()=>{const mp=tdOpenMap();if(mp[x.dataset.tdd]!==x.open){mp[x.dataset.tdd]=x.open;store.set("qlcv:tdOpen",mp)}})),80);
+}
 function po360Find(code){
   const k=String(code||"").trim().toUpperCase();if(!k)return null;
   for(let si=0;si<state.sheets.length;si++){const sh=state.sheets[si];if(!sh.wf)continue;const r=sh.rows.find(x=>String(x.v[sh.title]??"").trim().toUpperCase()===k);if(r)return{si,sh,r}}
@@ -2400,12 +2457,56 @@ function po360Plan(sh,r,pays){
   }
   return out;
 }
+/* thanh toán của một PO: Hoàn thành = đã thanh toán; chưa Hoàn thành thì xét các phiếu PAY gắn với PO (PO liên quan hoặc PAY ghi trong Note/Ghi chú) */
+function poPayInfo(sh,r){
+  const pays=po360Pays(sh,r),st=x=>wfn(x.p.v[x.ps.payStIdx]),live=pays.filter(x=>st(x)==="chưa thanh toán"||st(x)==="đã thanh toán"),np=live.filter(x=>st(x)==="đã thanh toán").length;
+  let state_,paid=false;
+  if(r.done){state_="Đã thanh toán";paid=true}
+  else if(live.length&&np===live.length){state_="Đã thanh toán";paid=true}
+  else if(np>0)state_="Thanh toán một phần";
+  else state_="Chưa thanh toán";
+  return{pays,live,paid,state:state_};
+}
+const poSupplierOf=sh=>{const c=sh.cols.find(c=>/^nhà cung cấp$/i.test(c.name.trim()));return c?c.idx:null};
+function po360ByNcc(q){ // PO của các NCC có tên chứa chuỗi tìm (không dấu, không phân biệt hoa thường)
+  const k=NCC.fold(q).trim();if(!k)return[];const out=[];
+  state.sheets.forEach((sh,si)=>{if(!sh.wf)return;const ci=poSupplierOf(sh);if(ci==null)return;
+    sh.rows.forEach(r=>{const n=String(r.v[ci]??"");if(n&&NCC.fold(n).includes(k))out.push({si,sh,r,sup:n.trim()})})});
+  return out;
+}
+function po360Mini(x){
+  const {si,sh,r}=x,code=String(r.v[sh.title]??""),seq=seqOf(sh,r),ci=seq.indexOf(r.wf),pi=poPayInfo(sh,r);
+  const due=dueOf(sh,r);
+  return `<div class="sub">Phiếu nhập kho: <b>${esc(String(r.v[sh.rcIdx]??"—"))}</b> · Hóa đơn: <b>${esc(String(r.v[sh.ivIdx]??"—"))}</b> · Odoo: ${esc(String(r.v[sh.stIdx]??"—"))}${due instanceof Date?" · hạn nhận "+fmtD(due):""}${r.v[sh.chgIdx] instanceof Date?" · đổi bước "+fmtD(r.v[sh.chgIdx]):""}</div>
+    <div class="p360s" style="margin:8px 0">${seq.map((s_,k)=>`<span class="${k===ci?"on":k<ci?"past":""}">${esc(s_)}</span>`).join("")}</div>
+    <div class="sub">Thanh toán: <b>${esc(pi.state)}</b>${pi.pays.length?" · "+pi.pays.map(({p,ps})=>`${esc(String(p.v[ps.title]??""))} (${esc(String(p.v[ps.payStIdx]??""))}${ps.money&&p.v[ps.money.idx]!=null?", "+fmtN(p.v[ps.money.idx]):""})`).join("; "):" · chưa có phiếu PAY gắn với PO"}</div>
+    <div style="margin-top:6px"><a href="#" data-po360="${esc(code)}">🔎 Xem 360° đầy đủ</a> · ${olLink(sh,si,r,"↗ Mở PO trên Odoo")}</div>`;
+}
+function paySumsOf(sup){ // tổng tiền phiếu PAY của NCC (tên khớp không dấu): đã thanh toán / chưa thanh toán
+  const ps=state.sheets.find(x=>x.pay),k=NCC.fold(sup).trim(),o={vp:0,vu:0,np:0,nu:0};
+  if(ps&&ps.sub!=null&&ps.payStIdx!=null)ps.rows.forEach(r=>{if(NCC.fold(String(r.v[ps.sub]??"")).trim()!==k)return;const st=wfn(r.v[ps.payStIdx]),a=ps.money?+r.v[ps.money.idx]||0:0;
+    if(st==="đã thanh toán"){o.vp+=a;o.np++}else if(st==="chưa thanh toán"){o.vu+=a;o.nu++}});
+  return o;
+}
+function po360NccHtml(q,list){
+  const by=new Map();list.forEach(x=>{const o=by.get(x.sup)||[];o.push(x);by.set(x.sup,o)});
+  let html=`<div class="sub" style="margin:0 0 8px">Tìm thấy <b>${list.length}</b> PO của <b>${by.size}</b> NCC khớp “${esc(q)}”. Bấm một PO để xem 360° tại chỗ, hoặc “Xem 360° đầy đủ”.</div>`;
+  for(const [sup,a] of by){
+    const infos=a.map(x=>({x,pi:poPayInfo(x.sh,x.r),amt:x.sh.money?+x.r.v[x.sh.money.idx]||0:0}));
+    const paid=infos.filter(i=>i.pi.paid),unpaid=infos.filter(i=>!i.pi.paid),ys=paySumsOf(sup);
+    html+=`<div class="card" style="margin-bottom:14px"><div class="lvl"><b>${esc(sup)}</b><span class="tag">${a.length} PO</span><span class="chip" style="--c:var(--ok)" title="Theo số tiền phiếu PAY">đã TT ${fmtBig(ys.vp)} · ${ys.np} PAY · ${paid.length} PO</span><span class="chip" style="--c:var(--bad)" title="Theo số tiền phiếu PAY">chưa TT ${fmtBig(ys.vu)} · ${ys.nu} PAY · ${unpaid.length} PO</span></div>`
+      +infos.sort((p,q2)=>(p.x.r.done-q2.x.r.done)||(q2.amt-p.amt)).map(i=>{const {x,pi}=i,code=String(x.r.v[x.sh.title]??"");
+        return tdD("p360:"+code,"td-grp",`<b>${esc(code)}</b> <span class="chip" style="--c:${colorFor(x.r.wf)}">${esc(x.r.wf)}</span> <span class="chip" style="--c:${pi.paid?"var(--ok)":"var(--bad)"}">${esc(pi.state)}</span> <span class="sub">${i.amt?fmtN(i.amt):""}</span>`,`<div style="padding:6px 0 10px 18px">${po360Mini(x)}</div>`,false)}).join("")+`</div>`;
+  }
+  return html;
+}
 function renderPo360(){
-  const q=state.po360||"",hit=po360Find(q),codes=[];
-  state.sheets.forEach(sh=>{if(sh.wf)sh.rows.forEach(r=>codes.push(String(r.v[sh.title]??"")))});
-  let html=`<div class="td-bar"><input id="po360In" list="po360L" placeholder="Nhập mã PO, ví dụ POKDQ00334" value="${esc(q)}" style="min-width:260px"><datalist id="po360L">${codes.map(c=>`<option value="${esc(c)}">`).join("")}</datalist><button class="btn" id="po360Go">🔎 Xem</button><span class="sub">Gom PO, phiếu thanh toán, NCC, lệnh sản xuất và việc hôm nay vào một chỗ.</span></div>`;
-  if(!q)html+=`<div class="note">Nhập mã PO (hoặc bấm 🔎 cạnh mã PO ở tab Việc hôm nay) để xem toàn bộ dữ liệu liên quan của PO đó.</div>`;
-  else if(!hit)html+=`<div class="card">Không thấy PO “${esc(q)}” trong tab PO.</div>`;
+  const q=state.po360||"",hit=po360Find(q),codes=[],sups=new Set(),byN=!hit&&q?po360ByNcc(q):[];
+  state.sheets.forEach(sh=>{if(sh.wf){const ci=poSupplierOf(sh);sh.rows.forEach(r=>{codes.push(String(r.v[sh.title]??""));if(ci!=null&&r.v[ci])sups.add(String(r.v[ci]).trim())})}});
+  let html=`<div class="td-bar"><input id="po360In" list="po360L" placeholder="Nhập mã PO (POKDQ00334) hoặc tên NCC" value="${esc(q)}" style="min-width:300px"><datalist id="po360L">${codes.map(c=>`<option value="${esc(c)}">`).join("")}${[...sups].map(c=>`<option value="${esc(c)}">`).join("")}</datalist><button class="btn" id="po360Go">🔎 Xem</button><span class="sub">Gom PO, phiếu thanh toán, NCC, lệnh sản xuất và việc hôm nay vào một chỗ.</span>${byN.length?`<span class="grow"></span><button class="btn" id="p360Open">▾ Mở tất cả</button><button class="btn" id="p360Close">▸ Thu gọn tất cả</button>`:""}</div>`;
+  if(!q)html+=`<div class="note">Nhập mã PO hoặc tên NCC (bấm 🔎 cạnh mã PO ở tab Việc hôm nay cũng được) để xem toàn bộ dữ liệu liên quan. Nhập tên NCC sẽ liệt kê các PO của NCC đó.</div>`;
+  else if(!hit&&byN.length)html+=po360NccHtml(q,byN);
+  else if(!hit)html+=`<div class="card">Không thấy PO hoặc NCC nào khớp “${esc(q)}”.</div>`;
   else{
     const {si,sh,r}=hit,code=String(r.v[sh.title]??""),seq=seqOf(sh,r),ci=seq.indexOf(r.wf),pays=po360Pays(sh,r),plan=po360Plan(sh,r,pays);
     const col=n=>sh.cols.find(c=>norm(c.name)===n),val=n=>{const c=col(n);return c?r.v[c.idx]:null},sup=String(val("nhà cung cấp")??""),amt=sh.money?+r.v[sh.money.idx]||0:0;
@@ -2438,6 +2539,12 @@ function renderPo360(){
   $("#main").innerHTML=html;
   const m=$("#main"),go=()=>{state.po360=$("#po360In").value.trim();renderPo360()};
   $("#po360Go").onclick=go;$("#po360In").onkeydown=e=>{if(e.key==="Enter")go()};$("#po360In").onchange=go;
+  if(byN.length){
+    m.querySelectorAll("a[data-po360]").forEach(a=>a.onclick=ev=>{ev.preventDefault();state.po360=a.dataset.po360;renderPo360();scrollTo(0,0)});
+    const dets=()=>[...m.querySelectorAll("details[data-tdd]")],setAll=on=>{const mp=tdOpenMap();dets().forEach(x=>{x.open=on;mp[x.dataset.tdd]=on});store.set("qlcv:tdOpen",mp)};
+    $("#p360Open").onclick=()=>setAll(true);$("#p360Close").onclick=()=>setAll(false);
+    setTimeout(()=>dets().forEach(x=>x.addEventListener("toggle",()=>{const mp=tdOpenMap();if(mp[x.dataset.tdd]!==x.open){mp[x.dataset.tdd]=x.open;store.set("qlcv:tdOpen",mp)}})),80);
+  }
   if(hit){
     const {si,sh,r}=hit;
     if($("#po360Done"))$("#po360Done").onclick=()=>{if(!confirm(`Xác nhận Hoàn thành ${r.v[sh.title]}? Hãy chắc KT đã xác nhận công nợ.`))return;if(setWf(si,r,WF_DONE,"duyệt hoàn thành")){setStatus(sh);updateChrome();toast(r.v[sh.title]+": đã duyệt hoàn thành");renderPo360()}};
@@ -2893,8 +3000,10 @@ function renderSheet(sh){
       <button class="btn sm" id="btnSaveView" title="Lưu bộ lọc/tìm kiếm hiện tại thành chế độ xem">💾 Lưu xem</button>
       <button class="btn sm" id="btnDelView" title="Xóa chế độ xem đang chọn">🗑</button>
     </div>
+    ${IS_DS(sh.name)?`<div id="nccDebt">${nccDebtHtml(sh)}</div>`:""}
     <div id="dyn"></div>
     <div class="src">Nguồn: sheet “${esc(sh.name)}”, tiêu đề ở dòng ${sh.hdrRow}, ${sh.rows.length} dòng dữ liệu.</div>`;
+  if(IS_DS(sh.name))nccDebtBind();
   $("#q").oninput=e=>{u.search=e.target.value.trim().toLowerCase();u.shown=100;renderDyn(sh)};
   const sp=$("#selProg");if(sp)sp.onchange=e=>{sh.progIdx=e.target.value===""?null:+e.target.value;u.special=null;setStatus(sh);renderDyn(sh);updateChrome()};
   const sd=$("#selDue");if(sd)sd.onchange=e=>{sh.dueIdx=e.target.value===""?null:+e.target.value;u.special=null;u.range=null;setStatus(sh);renderDyn(sh);updateChrome()};
