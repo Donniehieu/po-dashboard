@@ -1022,6 +1022,45 @@ async function nsConvertOnce(sh,gh){
     }else kvSet("ns:local",{gz,name:"netsuite",pinned:false,ts:Date.now()}); // ít nhất lần sau trên máy này mở nhanh
   }catch(e){toast("Chưa chuyển được sang JSON: "+e.message,true)}
 }
+/* Dọn dữ liệu: cùng một “Hàng hóa” thì chỉ giữ các dòng của N đơn hàng gần nhất (theo Ngày đơn hàng; cùng ngày thì mã đơn lớn hơn là mới hơn).
+   Dòng không có Hàng hóa giữ nguyên. Hỏi xác nhận kèm số liệu trước khi xóa; bản cũ nằm trong lịch sử GitHub và bản sao trên máy (ns:backup). */
+function nsPrunePlan(sh,keepN){
+  const col=re=>sh.cols.find(c=>re.test(norm(c.name)));
+  const ch=col(/^hàng hóa$/),co=col(/^số đơn hàng mua$/),cd=col(/^ngày đơn hàng$/);
+  if(!ch||!co||!cd)return null;
+  const by=new Map(),key=(h,o)=>h+"\u0001"+o;
+  sh.rows.forEach(r=>{const h=String(r.v[ch.idx]??"").trim();if(!h)return;const o=String(r.v[co.idx]??"").trim(),d=r.v[cd.idx] instanceof Date?+r.v[cd.idx]:0;
+    const m=by.get(h)||by.set(h,new Map()).get(h);m.set(o,Math.max(m.get(o)||0,d))});
+  const keep=new Set();let cut=0;
+  for(const [h,m] of by){const top=[...m].sort((a,b)=>b[1]-a[1]||(a[0]<b[0]?1:-1));top.slice(0,keepN).forEach(([o])=>keep.add(key(h,o)));if(top.length>keepN)cut++}
+  const idx=[];sh.rows.forEach((r,i)=>{const h=String(r.v[ch.idx]??"").trim();if(!h||keep.has(key(h,String(r.v[co.idx]??"").trim())))idx.push(i)});
+  return{idx,total:sh.rows.length,items:by.size,cut};
+}
+async function nsPrune(){
+  const sh=state.nsSheet;if(!sh){toast("Chưa có dữ liệu Netsuite.",true);return}
+  const n=Math.floor(+prompt("Mỗi hàng hóa chỉ giữ dữ liệu của bao nhiêu đơn hàng gần nhất?",2));if(!(n>=1))return;
+  const pl=nsPrunePlan(sh,n);if(!pl){toast("Không thấy đủ 3 cột Hàng hóa, Số đơn hàng mua, Ngày đơn hàng.",true);return}
+  const drop=pl.total-pl.idx.length;
+  if(!drop){toast(`Không có gì để dọn: mỗi hàng hóa đã có tối đa ${n} đơn.`);return}
+  if(!confirm(`Dọn Netsuite Data: mỗi hàng hóa chỉ giữ ${n} đơn gần nhất.\n• ${fmtN(pl.items)} hàng hóa, ${fmtN(pl.cut)} hàng hóa có nhiều hơn ${n} đơn\n• GIỮ ${fmtN(pl.idx.length)} dòng, XÓA ${fmtN(drop)} dòng (trên tổng ${fmtN(pl.total)})\nBản cũ vẫn nằm trong lịch sử GitHub nếu bạn lưu lên GitHub. Tiếp tục?`))return;
+  let old,nsh;
+  try{
+    old=await nsPack(sh);kvSet("ns:backup",{gz:old,ts:Date.now(),rows:pl.total}); // bản sao trước khi dọn, trên máy này
+    const o=nsToJson(sh),keep=pl.idx;o.cols.forEach(c=>{c.d=keep.map(i=>c.d[i])});o.rows=keep.length;
+    nsh=nsFinish(nsFromJson(o),{src:"đã dọn (giữ "+n+" đơn/hàng hóa)",name:"netsuite"});
+  }catch(e){toast("Không dọn được: "+e.message,true);return}
+  nsInstall(nsh);state.active=state.sheets.indexOf(nsh);
+  let gz;try{gz=await nsPack(nsh)}catch(e){toast("Không nén được dữ liệu: "+e.message,true);renderTabs();render();return}
+  const kb=Math.round(gz.length/1024);let up=false;
+  if(ghReady()&&state.src==="github"&&confirm(`Lưu bản đã dọn lên GitHub (${nsJsonPath()}, ${kb} KB) để mọi máy cùng dùng?\nChọn Hủy để chỉ dùng trên trình duyệt này (bản cũ trên GitHub giữ nguyên).`)){
+    try{toast("Đang lưu Netsuite lên GitHub…");await ghPutPath(nsJsonPath(),gz,`Dashboard: dọn Netsuite Data, giữ ${n} đơn gần nhất mỗi hàng hóa (${pl.total} → ${pl.idx.length} dòng)`);up=true}
+    catch(e){toast("Chưa lưu được lên GitHub: "+e.message+" (dữ liệu vẫn dùng được trên máy này)",true)}
+  }
+  if(up){kvSet("ns:local",null);kvSet("ns:gh:"+nsJsonPath(),null);nsh.extMeta.src="GitHub (JSON)"}
+  else kvSet("ns:local",{gz,name:"netsuite",pinned:true,ts:Date.now()});
+  renderTabs();render();updateChrome();
+  toast(`Đã dọn Netsuite Data: giữ ${fmtN(pl.idx.length)} dòng, xóa ${fmtN(drop)} dòng`+(up?" và lưu lên GitHub":" (chỉ trên trình duyệt này)"));
+}
 async function nsImport(file){
   let buf,sh;
   try{buf=await file.arrayBuffer();sh=await nsBuildXlsx(buf,{src:"nhập tay",name:file.name})}
@@ -3200,7 +3239,7 @@ function renderTable(sh,fr){
     <span style="display:flex;flex-wrap:wrap;gap:6px;flex:1 1 100%">${sugRows.map(r=>`<a class="chip ol" href="#" data-code="${esc(r.v[sh.title])}" style="--c:var(--ok)" title="Mở PO này trên Odoo để kiểm tra trước khi duyệt hoàn thành">${esc(r.v[sh.title])}</a>`).join("")}</span>
     <span class="grow"></span><button class="btn sm" data-sugall>Duyệt hoàn thành tất cả (${sugN})</button></div>`:"";
   let h=hint+sugBar+bulkBar(sh)+`<h2 class="sec">Chi tiết (${fmtN(rows.length)} dòng) <small class="sub" style="font-weight:500">· ${matchMedia("(pointer:coarse)").matches?"chạm":"bấm đúp"} vào ô để sửa · bấm ▾ ở tiêu đề để lọc · kéo mép phải tiêu đề để chỉnh độ rộng cột</small></h2>
-    <div class="tblbar">${sh.ext?"":`<button class="btn" data-t="add">＋ Thêm dòng</button><button class="btn" data-t="deln" ${selSet.size?"":"disabled"}>🗑 Xóa dòng đã chọn${selSet.size?" ("+selSet.size+")":""}</button>`}${sh.ext?`<button class="btn" data-t="nsref" title="Dữ liệu Netsuite được lưu sẵn trên máy này, không tự tải lại. Bấm để lấy bản mới nhất từ GitHub (khi máy khác đã cập nhật). Nguồn hiện tại: ${esc(sh.extMeta.src||"")}${sh.extMeta.ts?", lưu lúc "+new Date(sh.extMeta.ts).toLocaleString("vi-VN"):""}">↻ Làm mới từ GitHub</button>`:""}<button class="btn" data-t="imp" title="${sh.ext?"Thay TOÀN BỘ dữ liệu Netsuite bằng file Excel mới (hỏi xác nhận, có thể lưu lên GitHub)":"Nhập dữ liệu từ file Excel vào bảng này (khớp theo tên cột; có cột mã/tên thì cập nhật dòng trùng, dòng chưa có thì thêm mới)"}">⬆ Nhập Excel</button><button class="btn" data-t="xlsx">⬇ Xuất Excel (đang lọc)</button><button class="btn" data-t="csv">⬇ Xuất CSV</button><span class="grow"></span><button class="btn sm" data-t="cols" title="Chọn cột muốn hiện/ẩn trong bảng này (không xóa dữ liệu)">👁 Chọn cột hiển thị${hid.size?" (đang ẩn "+hid.size+")":""}</button><button class="btn sm" data-t="rzreset" title="Trả độ rộng các cột về mặc định">↔ Đặt lại độ rộng cột</button></div>
+    <div class="tblbar">${sh.ext?"":`<button class="btn" data-t="add">＋ Thêm dòng</button><button class="btn" data-t="deln" ${selSet.size?"":"disabled"}>🗑 Xóa dòng đã chọn${selSet.size?" ("+selSet.size+")":""}</button>`}${sh.ext?`<button class="btn" data-t="nsref" title="Dữ liệu Netsuite được lưu sẵn trên máy này, không tự tải lại. Bấm để lấy bản mới nhất từ GitHub (khi máy khác đã cập nhật). Nguồn hiện tại: ${esc(sh.extMeta.src||"")}${sh.extMeta.ts?", lưu lúc "+new Date(sh.extMeta.ts).toLocaleString("vi-VN"):""}">↻ Làm mới từ GitHub</button>`:""}${sh.ext?`<button class="btn" data-t="nsprune" title="Cùng một Hàng hóa thì chỉ giữ dữ liệu của N đơn hàng gần nhất (mặc định 2), xóa phần còn lại. Có xem trước số dòng và hỏi xác nhận.">🧹 Dọn: giữ đơn gần nhất / hàng hóa</button>`:""}<button class="btn" data-t="imp" title="${sh.ext?"Thay TOÀN BỘ dữ liệu Netsuite bằng file Excel mới (hỏi xác nhận, có thể lưu lên GitHub)":"Nhập dữ liệu từ file Excel vào bảng này (khớp theo tên cột; có cột mã/tên thì cập nhật dòng trùng, dòng chưa có thì thêm mới)"}">⬆ Nhập Excel</button><button class="btn" data-t="xlsx">⬇ Xuất Excel (đang lọc)</button><button class="btn" data-t="csv">⬇ Xuất CSV</button><span class="grow"></span><button class="btn sm" data-t="cols" title="Chọn cột muốn hiện/ẩn trong bảng này (không xóa dữ liệu)">👁 Chọn cột hiển thị${hid.size?" (đang ẩn "+hid.size+")":""}</button><button class="btn sm" data-t="rzreset" title="Trả độ rộng các cột về mặc định">↔ Đặt lại độ rộng cột</button></div>
     ${hid.size?`<div class="hidbar">Cột đang ẩn: ${sh.cols.filter(c=>hid.has(c.idx)).map(c=>`<button class="btn sm" data-showcol="${c.idx}" title="Hiện lại cột này">＋ ${esc(c.type==="flag"?"TT trước":colLabel(c))}</button>`).join("")}<button class="btn sm" data-showcol="all">Hiện tất cả</button></div>`:""}
     <div class="tablewrap ${sh.wf?"cards":""}"><table class="${sh.wf?"cardtbl":""}"><thead><tr>${sh.checklist?"<th></th>":""}<th class="flag"><input type="checkbox" data-selall title="Chọn tất cả dòng đang hiện"></th><th title="Số thứ tự các dòng đang hiển thị (tự đánh lại 1, 2, 3… theo bộ lọc/tìm kiếm/sắp xếp hiện tại)">STT</th>`+
     cols.map(c=>{const on=u.cf[c.idx]?" on":"";const lab=c.type==="flag"?"TT trước":colLabel(c);return `<th data-s="${c.idx}" class="${c.type==="flag"?"flag":""}" title="${c.type==="flag"?"Tick = PO thanh toán trước (luồng có Chờ làm TT / Đã gửi UNC)":""}">${esc(lab)}${u.sort&&u.sort.i===c.idx?(u.sort.dir>0?" ▲":" ▼"):""}<button class="fb${on}" data-f="${c.idx}" title="Lọc cột này">▾</button></th>`}).join("")+`<th></th></tr></thead><tbody>`;
@@ -3243,6 +3282,7 @@ function renderTable(sh,fr){
     else if(k==="deln")deleteRows(si,[...selSet]);
     else if(k==="imp"){state.impTarget=si;$("#fileImp").click()}
     else if(k==="nsref")nsLoad(false,{refresh:true});
+    else if(k==="nsprune")nsPrune();
     else if(k==="xlsx")exportXlsx(sh);
     else if(k==="csv")exportCsv(sh);
     else if(k==="cols")colMenu(sh,t.querySelector('[data-t=cols]'));

@@ -15,6 +15,55 @@
 - Tab “🎯 Việc hôm nay”: app tự chấm điểm (40% gấp + 40% quan trọng + 20% dễ), chia 4 mục Làm ngay / Lên lịch / Gộp theo NCC / Để sau; việc chờ người khác nằm ở “Đang chờ”. Có hai cách xem để so sánh: “Theo 4 mục” (xếp theo điểm) và “Theo workflow” (xếp theo bước: trễ nhập hàng, chờ nhập hàng, chờ gửi NCC, chờ gửi duyệt PO, chờ báo giá, chờ KT xác nhận công nợ, chờ lập hóa đơn, chờ làm TT). Kéo thả (hoặc ô ⇄) để chuyển việc sang mục khác hoặc “Để lượt sau”; cứ 2 tiếng rule tự chạy lại, nút “Xếp lại ngay” để chạy tay. Mọi nhóm (mục, NCC, bước workflow, nhóm “Đang chờ”) đều có mũi tên gập/mở; nút “▸ Thu gọn tất cả” và “▾ Mở tất cả” ở đầu tab gập/mở cùng lúc, trạng thái được nhớ trên trình duyệt. Bảng “NCC quan trọng” do app tự đoán, bạn ghim/bỏ ghim NCC lệch (lưu trên trình duyệt).
 - Nút “⬆ Nhập file Odoo”: gộp file xuất tay từ Odoo theo Mã đơn hàng, giữ nguyên cột Note.
 
+## Hướng dẫn dùng hằng ngày: làm ở tab nào cho nhanh nhất
+
+**Làm chính trong tab 🎯 Việc hôm nay.** Các tab khác chỉ mở khi cần tra cứu hoặc sửa hàng loạt.
+
+### Một ngày làm việc
+Danh sách tự xếp lại cố định lúc **8h, 13h và 20h** mỗi ngày (giữa các mốc việc nằm yên; việc bạn kéo tay giữ tới mốc kế). Muốn xếp ngay thì bấm **🔄 Xếp lại ngay**.
+1. Mở **🎯 Việc hôm nay**, để chế độ **⛓ Theo workflow**. Khối **⭐ Top N** ở đầu là những việc điểm cao nhất, làm trước. Số N chọn ở ô “Việc Làm ngay hiện…” (5 đến 200).
+2. Bận hoặc ít thời gian thì bấm **🎯 Tập trung**: chỉ còn Làm ngay và Gộp theo NCC; Lên lịch, Để sau, Đang chờ, NCC quan trọng và phần phân tích được ẩn (có dòng cho biết đang ẩn bao nhiêu việc).
+3. Làm lần lượt từng việc:
+   - Bấm **mã PO** để mở PO trên Odoo; bấm **🔎** để xem PO 360°.
+   - Xong bước thì bấm **✔ <bước kế>**: PO tự nâng sang bước tiếp theo (nút không hiện khi bước kế là “Hoàn thành”, bước đó bạn xác nhận ở PO 360°).
+   - Chưa làm được thì bấm **💤**: hoãn tới mốc xếp lại kế tiếp (việc nằm ở ô “Để lượt sau”, nhóm theo trạng thái).
+4. NCC có từ 2 PO trở lên trong cùng một danh sách có dải nút: **📋 Tin nhắn** (sao chép một tin nhắn cho cả cụm PO để dán vào Zalo, câu hỏi theo bước: xin báo giá, xác nhận ngày giao, gửi hóa đơn…) và **🔎 Xem NCC** (mở PO 360° liệt kê mọi PO của NCC đó).
+5. Việc xếp sai mục thì kéo thả sang mục khác (hoặc chọn ⇄). NCC nào bạn kéo lên mục quan trọng từ 2 lần (nhiều hơn số lần kéo xuống) thì app tự coi là **quan trọng** và ngược lại; lý do hiện trong bảng “NCC quan trọng”. Ghim/bỏ ghim tay luôn ưu tiên hơn, “Về tự động” xóa phần app đã học của NCC đó. Dữ liệu học lưu trên trình duyệt này.
+
+### Hai cách xem trong Việc hôm nay
+- **⛓ Theo workflow** (nên dùng để làm việc): việc xếp theo bước quy trình nên cùng một loại thao tác nằm liền nhau.
+- **▦ Theo 4 mục**: xếp theo điểm gấp/quan trọng/dễ; dùng để soát lại mức ưu tiên.
+
+### Cách tính Khẩn / Làm ngay (tóm tắt)
+- PO đã **nhận hàng** (đã nhận hết, hoặc ở Cần lập hóa đơn / Chờ KT xác nhận / Chờ làm TT…) không còn bị tính “trễ” theo ngày nhận hàng dự kiến; chỉ hiện khi **đứng yên từ 5 ngày** ở một bước.
+- **Bước thanh toán** (Chờ làm TT, Chờ gửi UNC, Đã gửi UNC) dừng từ **2 ngày** → mức Cao; từ **3 ngày** → Khẩn / Làm ngay.
+- Đơn **trả trước** ở Chờ làm TT hoặc Chờ gửi UNC mà **trễ từ 1 ngày** → Khẩn / Làm ngay.
+- Đơn từ **50 triệu** luôn là quan trọng. “Gấp” chỉ tính khi đã quá hạn hoặc cần đi nhắc (sắp đến hạn chưa là gấp).
+- Việc đang **chờ người khác** (NCC báo giá/xác nhận, người duyệt, hàng về, kế toán, phiếu thanh toán) nằm riêng ở “Đang chờ người khác”, chỉ lên danh sách của bạn khi đã trễ hoặc đứng yên lâu (cần đi nhắc).
+
+### Việc KHÔNG cần làm tay (Odoo tự cập nhật “Tiến độ hiện tại” sau mỗi lần đồng bộ, 15 phút một lần giờ hành chính)
+- Đã nhận hàng / đã xuất hóa đơn → Cần lập hóa đơn / Chờ làm TT (theo luật nhận kho có sẵn).
+- Bill nhà cung cấp **Đã vào sổ** (đơn công nợ ở Chờ KT xác nhận công nợ) → **Chờ làm TT**.
+- PO **gửi duyệt** trên Odoo (thanh quy trình phê duyệt đang ở “Chờ … duyệt”, ví dụ Chờ TP mua duyệt) → **Chờ duyệt PO**.
+- Phiếu PAY đã thanh toán (BNK): đơn trả trước ở Chờ làm TT → Chờ gửi UNC; đơn công nợ → Hoàn thành.
+- Bạn chỉ phải tự đổi các bước Odoo không biết: **Đã gửi NCC**, **Đã gửi UNC** và **Hoàn thành** (chỉ xác nhận sau khi kế toán xác nhận công nợ).
+
+### Các tab khác, mở khi nào
+| Tab | Mở khi |
+|---|---|
+| 🔎 PO 360° | Xem một PO, hoặc **gõ tên NCC** để thấy mọi PO của NCC đó: tổng tiền PAY đã/chưa thanh toán, số PAY/BNK của PO đang Chờ gửi UNC. Nơi xác nhận Hoàn thành. |
+| Công nợ NCC | Xem mỗi NCC đã thanh toán / chưa thanh toán bao nhiêu (theo số tiền phiếu PAY), liệt kê phiếu PAY và PO; bấm mã PO nhảy sang tab PO, bấm mã PAY nhảy sang Phiếu thanh toán. |
+| PO | Sửa hàng loạt, lọc theo cột, nhập file Odoo, sửa ghi chú. |
+| Phiếu thanh toán | Theo dõi phiếu PAY quá hạn, nhắc kế toán. |
+| Tổng quan, Nhà cung cấp, Báo cáo công việc, 🕘 Lịch sử | Xem số liệu, làm báo cáo, tra lại thao tác. |
+| Netsuite Data | Tra giá/đơn cũ theo hàng hóa; có nút 🧹 Dọn dữ liệu (xem mục Netsuite Data bên dưới). |
+
+### Bốn thói quen giúp ít tốn công nhất
+1. Đừng sửa cột Note trong tab PO nếu nút ✔ ở Việc hôm nay làm được việc đó.
+2. Đừng bấm “Hoàn thành” cho đến khi kế toán xác nhận công nợ; làm ở PO 360° khi app báo đủ điều kiện.
+3. Điền đầy cột “PO liên quan” ở các phiếu PAY, nếu không PO ở Chờ gửi UNC sẽ hiện “chưa có PAY/BNK” và công nợ NCC kém chính xác.
+4. Chỉ chuyển sang chế độ 4 mục khi cần soát lại mức ưu tiên.
+
 ## Bước 1. Hai repo trên GitHub (tài khoản Donniehieu)
 1. `po-dashboard` (**Public**): tải `index.html` lên. Settings, Pages, nhánh `main`, thư mục `/ (root)`. Trang sẽ ở `https://donniehieu.github.io/po-dashboard/`.
 2. `po-data` (**Private**): có đủ `data/PO-data.xlsx`, `scripts/sync_odoo.py`, `scripts/config.json` và `.github/workflows/sync-odoo.yml` (tạo file bằng Add file, Create new file, gõ đúng đường dẫn rồi dán nội dung từ `workflow-copy-vao-.github-workflows/sync-odoo.yml`).
@@ -261,7 +310,11 @@ Mở phiếu thanh toán Odoo **từ dashboard** (bấm đúp dòng ở tab Phi�
 
 ## Tab "Netsuite Data"
 - Dữ liệu lưu trên GitHub dạng JSON nén `data/netsuite.json.gz` (nhỏ và mở nhanh; không nằm trong PO-data.xlsx vì quá lớn). Bấm tab **📊 Netsuite Data** (cuối thanh tab) để tải lần đầu. Nếu repo mới chỉ có file Excel `Netsuite_data.xlsx`, dashboard đọc file đó rồi hỏi có chuyển sang JSON nén không.
-- Có tìm kiếm, lọc theo cột, ẩn/hiện cột, xuất Excel/CSV theo bộ lọc. Chỉ xem, không sửa từng ô.
+- Có tìm kiếm, lọc theo cột, ẩn/hiện cột, xuất Excel/CSV theo bộ lọc. Chỉ xem, không sửa từng ô (chỉ có thao tác dọn theo quy tắc bên dưới).
+- **🧹 Dọn: giữ đơn gần nhất / hàng hóa** (nút ở đầu bảng): cùng một **Hàng hóa** thì chỉ giữ dữ liệu của **2 đơn hàng gần nhất** (số đơn hỏi lúc bấm, mặc định 2); các dòng của đơn cũ hơn bị xóa.
+  - “Gần nhất” theo cột **Ngày đơn hàng** (cùng ngày thì mã đơn lớn hơn là mới hơn). Một đơn có nhiều dòng cùng hàng hóa thì giữ đủ các dòng của đơn đó. Dòng không có Hàng hóa giữ nguyên.
+  - Trước khi xóa có hộp xác nhận ghi rõ số hàng hóa, số dòng giữ và số dòng xóa. Với dữ liệu hiện tại (5.170 dòng, 1.504 hàng hóa) quy tắc 2 đơn giữ **2.160 dòng**, xóa 3.010 dòng.
+  - Sau khi dọn có thể lưu lên GitHub (mọi máy cùng dùng) hoặc chỉ dùng trên máy này. Bản cũ được lưu một bản sao trên trình duyệt và còn trong lịch sử commit của GitHub nếu bạn đã lưu lên đó; nếu cần khôi phục, nhập lại file Excel Netsuite gốc bằng **⬆ Nhập Excel**.
 - Cập nhật dữ liệu: bấm **⬆ Nhập Excel**, chọn file Netsuite mới. Toàn bộ dữ liệu cũ bị thay bằng file mới (dashboard tự chuyển sang JSON nén); chọn lưu lên GitHub để mọi máy cùng dùng, hoặc Hủy để chỉ dùng trên máy này.
 - Netsuite Data được lưu sẵn trên máy và nạp ngầm khi mở dashboard, không tải lại từ GitHub mỗi lần. Muốn lấy bản mới nhất ngay (khi máy khác vừa cập nhật) bấm **↻ Làm mới từ GitHub** ở đầu bảng; ngoài ra dashboard tự kiểm tra âm thầm tối đa một lần mỗi ngày.
 
