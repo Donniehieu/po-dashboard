@@ -2198,12 +2198,17 @@ function tdInsightsBind(m){
 const TD_WAIT=new Set(["Chờ báo giá","Chờ duyệt PO","Đã gửi NCC","Chờ nhận hàng","Chờ KT xác nhận công nợ","Đã gửi UNC"]); // đang chờ người khác, bạn chưa làm được gì ngay
 const TD_WHO={"Chờ báo giá":"NCC báo giá","Chờ duyệt PO":"người duyệt PO","Đã gửi NCC":"NCC xác nhận","Chờ nhận hàng":"hàng về","Chờ KT xác nhận công nợ":"kế toán","Đã gửi UNC":"NCC/KT xác nhận"};
 const t0=(r,sh)=>String(r.v[sh.title]??"").trim();
-const TD_EVERY=2*3600*1000; // cứ 2 tiếng chạy lại rule một lần; trong lúc đó việc nằm yên, ai kéo tay thì giữ tới lượt sau
+const TD_HOURS=[8,13,20]; // xếp lại cố định mỗi ngày lúc 8h, 13h, 20h; giữa các mốc việc nằm yên, ai kéo tay thì giữ tới mốc kế
+function tdSlot(ts,next){ // mốc xếp lại gần nhất không sau ts, hoặc (next=true) mốc kế tiếp sau ts
+  const d=new Date(ts),all=[];for(let k=-1;k<=1;k++)for(const h of TD_HOURS)all.push(new Date(d.getFullYear(),d.getMonth(),d.getDate()+k,h).getTime());
+  all.sort((a,b)=>a-b);return next?all.find(x=>x>ts):all.filter(x=>x<=ts).pop();
+}
+const tdStale=st=>!st||!st.t||tdSlot(Date.now())>st.t; // đã qua một mốc kể từ lần xếp trước
 const TD_TOPS=[5,10,15,20,30,40,50,100,200],tdTop=()=>{const v=+store.get("qlcv:tdTop");return TD_TOPS.includes(v)?v:10}; // số việc “Làm ngay” hiện ra
 const TD_STAGE=["🚚 Trễ nhập hàng","📦 Chờ nhập hàng","📤 Chờ gửi NCC","📝 Chờ gửi duyệt PO","💬 Chờ báo giá","🧾 Chờ KT xác nhận công nợ","🧮 Chờ lập hóa đơn","💳 Chờ làm TT","📨 Chờ gửi UNC","🗒 Việc ghi chú thêm","… Bước khác"];
 const tdWfRank=t=>{const x=t.step;return x==="Chờ nhận hàng"?(t.late>0?0:1):x==="Chờ gửi NCC"?2:x==="Chờ gửi duyệt PO"?3:x==="Chờ báo giá"?4:x==="Chờ KT xác nhận công nợ"?5:x==="Cần lập hóa đơn"?6:x==="Chờ làm TT"?7:x==="Chờ gửi UNC"?8:(t.pay||WF_ALL.includes(x))?10:9}; // 9 = Note tự do ngoài quy trình (vd. “Chờ mua cưa bàn”)
 const TD_QN=["Để lượt sau","Làm ngay","Lên lịch","Gộp theo NCC","Để sau"],TD_QC=["#7c3aed","var(--bad)","var(--brand)","var(--warn)","#64748b"];
-function tdRun(){let st=store.get("qlcv:tdRun");if(!st||!st.t||Date.now()-st.t>=TD_EVERY){st={t:Date.now(),ov:{},snap:{}};store.set("qlcv:tdRun",st)}return st}
+function tdRun(){let st=store.get("qlcv:tdRun");if(tdStale(st)){st={t:Date.now(),ov:{},snap:{}};store.set("qlcv:tdRun",st)}return st}
 let tdMrp=null; // PO -> {mo,items,mos}: PO đang cấp NVL cho lệnh sản xuất thiếu hàng (data/mrp-block.json, do script đọc Odoo tạo)
 let tdMrpTried=false;
 async function tdLoadMrp(){ // data/mrp-block.json do GitHub Actions (scripts/mrp_sync.py) tạo cùng thư mục với PO-data.xlsx
@@ -2272,7 +2277,7 @@ function tdCompute0(){
     t.key=t.sh.name+"|"+t.code;t.wr=tdWfRank(t);t.in=!t.wait||t.nag;if(!t.in)return;
     t.q0=t.urgent&&t.important?1:t.important?2:t.urgent?3:4; // mục theo rule hiện tại
     run.stp=run.stp||{};
-    if(run.snap[t.key]==null||(run.stp[t.key]!=null&&run.stp[t.key]!==t.step)){run.snap[t.key]=t.q0;delete run.ov[t.key];dirty=true} // chốt vị trí tới lần chạy rule kế tiếp (2 tiếng); việc đổi bước quy trình thì xếp lại ngay
+    if(run.snap[t.key]==null||(run.stp[t.key]!=null&&run.stp[t.key]!==t.step)){run.snap[t.key]=t.q0;delete run.ov[t.key];dirty=true} // chốt vị trí tới lần chạy rule kế tiếp (8h / 13h / 20h); việc đổi bước quy trình thì xếp lại ngay
     if(run.stp[t.key]!==t.step){run.stp[t.key]=t.step;dirty=true}
     t.moved=run.ov[t.key]!=null;t.q=t.moved?run.ov[t.key]:run.snap[t.key];
   });
@@ -2297,8 +2302,8 @@ function renderToday(){
   const d=tdCompute(),run=d.run,top=tdTop();
   const view=store.get("qlcv:tdView")||"flow",{q0,q1,q2,q3,q4,waiting}=view==="flow"?d.f:d.m,hm=t=>new Date(t).toLocaleTimeString("vi-VN",{hour:"2-digit",minute:"2-digit"});
   const cut=q1.slice(0,top),rest=q1.slice(top),remind=waiting.filter(t=>(t.pay?t.late:t.stuck)>=STUCK());
-  let html=`<div class="td-bar"><button class="btn td-tg ${view==="matrix"?"on":""}" data-tdview="matrix">▦ Theo 4 mục</button><button class="btn td-tg ${view==="flow"?"on":""}" data-tdview="flow">⛓ Theo workflow</button><span class="grow"></span><span class="sub">Việc “Làm ngay” hiện <select id="tdTop">${TD_TOPS.map(n=>`<option${n===top?" selected":""}>${n}</option>`).join("")}</select> · Xếp lần cuối ${hm(run.t)}, lần kế ${hm(run.t+TD_EVERY)}</span><button class="btn" id="tdOpenAll" title="Mở rộng tất cả các nhóm">▾ Mở tất cả</button><button class="btn" id="tdCloseAll" title="Thu gọn tất cả các nhóm">▸ Thu gọn tất cả</button><button class="btn" id="tdRerun" title="Bỏ các việc đã kéo tay và tính lại toàn bộ theo rule">🔄 Xếp lại ngay</button></div>`;
-  html+=`<div class="sub" style="margin:0 0 10px">🎯 <b>${fmtD(TODAY)}</b> · ${view==="matrix"?"theo 4 mục, xếp theo điểm":"theo workflow, xếp theo bước quy trình"} · kéo thả để chuyển mục · tự xếp lại mỗi 2 tiếng</div>`+tdD("today:help","td-more","Cách tính và cách dùng",`<div class="note">${view==="matrix"?`Điểm = 40% <b>Gấp</b> + 40% <b>Quan trọng</b> + 20% <b>Dễ</b>; trong mỗi mục việc xếp theo điểm. Việc đang chờ người khác để riêng ở “Đang chờ”. Mỗi 2 tiếng rule chạy lại một lần; kéo thả một việc sang mục khác (hoặc chọn ⇄) thì giữ tới lần chạy kế tiếp.`:`cùng phân loại gấp / quan trọng, nhưng xếp theo quy trình: <b>quan trọng & gấp → gấp mà không quan trọng → quan trọng mà không gấp → không quan trọng, không gấp</b>. Trong mỗi nhóm: <b>trễ nhập hàng → chờ nhập hàng → chờ gửi NCC → chờ gửi duyệt PO → chờ báo giá → chờ KT xác nhận công nợ → chờ lập hóa đơn → chờ làm TT</b>; cùng bước thì trễ nhiều và điểm quan trọng cao lên trước. Việc đang chờ người khác chỉ vào các nhóm này khi đã trễ hoặc đứng yên từ ${STUCK()} ngày (🔔 cần đi nhắc). Kéo thả vẫn dùng chung với tab 4 mục.`}</div>`,false);
+  let html=`<div class="td-bar"><button class="btn td-tg ${view==="matrix"?"on":""}" data-tdview="matrix">▦ Theo 4 mục</button><button class="btn td-tg ${view==="flow"?"on":""}" data-tdview="flow">⛓ Theo workflow</button><span class="grow"></span><span class="sub">Việc “Làm ngay” hiện <select id="tdTop">${TD_TOPS.map(n=>`<option${n===top?" selected":""}>${n}</option>`).join("")}</select> · Xếp lần cuối ${hm(run.t)}, lần kế ${hm(tdSlot(Date.now(),true))}</span><button class="btn" id="tdOpenAll" title="Mở rộng tất cả các nhóm">▾ Mở tất cả</button><button class="btn" id="tdCloseAll" title="Thu gọn tất cả các nhóm">▸ Thu gọn tất cả</button><button class="btn" id="tdRerun" title="Bỏ các việc đã kéo tay và tính lại toàn bộ theo rule">🔄 Xếp lại ngay</button></div>`;
+  html+=`<div class="sub" style="margin:0 0 10px">🎯 <b>${fmtD(TODAY)}</b> · ${view==="matrix"?"theo 4 mục, xếp theo điểm":"theo workflow, xếp theo bước quy trình"} · kéo thả để chuyển mục · tự xếp lại lúc 8h, 13h, 20h hằng ngày</div>`+tdD("today:help","td-more","Cách tính và cách dùng",`<div class="note">${view==="matrix"?`Điểm = 40% <b>Gấp</b> + 40% <b>Quan trọng</b> + 20% <b>Dễ</b>; trong mỗi mục việc xếp theo điểm. Việc đang chờ người khác để riêng ở “Đang chờ”. Rule chạy lại cố định lúc 8h, 13h và 20h hằng ngày; kéo thả một việc sang mục khác (hoặc chọn ⇄) thì giữ tới lần chạy kế tiếp.`:`cùng phân loại gấp / quan trọng, nhưng xếp theo quy trình: <b>quan trọng & gấp → gấp mà không quan trọng → quan trọng mà không gấp → không quan trọng, không gấp</b>. Trong mỗi nhóm: <b>trễ nhập hàng → chờ nhập hàng → chờ gửi NCC → chờ gửi duyệt PO → chờ báo giá → chờ KT xác nhận công nợ → chờ lập hóa đơn → chờ làm TT</b>; cùng bước thì trễ nhiều và điểm quan trọng cao lên trước. Việc đang chờ người khác chỉ vào các nhóm này khi đã trễ hoặc đứng yên từ ${STUCK()} ngày (🔔 cần đi nhắc). Kéo thả vẫn dùng chung với tab 4 mục.`}</div>`,false);
   html+=`<div class="td-sum"><span class="chip" style="--c:var(--bad)">Làm ngay ${q1.length}</span><span class="chip" style="--c:var(--brand)">Lên lịch ${q2.length}</span><span class="chip" style="--c:var(--warn)">Gộp theo NCC ${q3.length}</span><span class="chip" style="--c:#64748b">Để sau ${q4.length}</span><span class="chip" style="--c:#7c3aed">Đang chờ ${waiting.length}${q0.length?` · hoãn ${q0.length}`:""}</span></div>`;
   {const sg=[];state.sheets.forEach((sh,si)=>{if(sh.wf)sh.rows.forEach(r=>{if(sugDone(sh,r))sg.push({si,sh,r})})});
    if(sg.length)html+=`<div class="note" style="margin:0 0 14px;border-color:var(--ok)">💡 <b>${sg.length} PO thanh toán trước chờ bạn xác nhận Hoàn thành</b> (đã nhận hết hàng, đã xuất hóa đơn, đang ở Chờ KT xác nhận công nợ): ${sg.slice(0,6).map(x=>`<a href="#" data-po360="${esc(String(x.r.v[x.sh.title]))}">${esc(String(x.r.v[x.sh.title]))}</a>`).join(", ")}${sg.length>6?", …":""} <button class="btn" id="tdSugGo" data-si="${sg[0].si}">Mở danh sách xác nhận</button></div>`}
@@ -2330,7 +2335,7 @@ function renderToday(){
   // hàng chờ lượt sau (trái) + đang chờ người khác (phải): lưới 2 cột như các mục trên; việc nhóm theo trạng thái
   const stepKey=t=>t.pay?"Phiếu thanh toán":t.step,stepOrd=t=>t.pay?99:(t.wr??50);
   const grpBy=(arr,keyf)=>{const by=new Map();arr.forEach(t=>{const k=keyf(t),o=by.get(k)||[];o.push(t);by.set(k,o)});return by};
-  html+=`<div class="td-2c"><div class="card td-snooze" data-tdq="0"><div class="lvl"><i style="background:#7c3aed"></i>💤 Để lượt sau<span class="tag">${q0.length}</span></div><div class="sub" style="margin-bottom:8px">Kéo việc vào đây để tạm ẩn; tới lần xếp lại kế tiếp (${hm(run.t+TD_EVERY)}) việc tự quay về mục theo rule.</div>`
+  html+=`<div class="td-2c"><div class="card td-snooze" data-tdq="0"><div class="lvl"><i style="background:#7c3aed"></i>💤 Để lượt sau<span class="tag">${q0.length}</span></div><div class="sub" style="margin-bottom:8px">Kéo việc vào đây để tạm ẩn; tới lần xếp lại kế tiếp (${hm(tdSlot(Date.now(),true))}) việc tự quay về mục theo rule.</div>`
     +(q0.length?[...grpBy(q0,stepKey)].sort((x,y)=>stepOrd(x[1][0])-stepOrd(y[1][0])).map(([k,a])=>tdD(view+":s0:"+k,"td-wg",`<b>${esc(k)}</b> <span class="tag">${a.length}</span>`,ul(a),false)).join(""):`<div class="sub">Không có (kéo việc vào đây).</div>`)+`</div>`;
   html+=`<div class="card"><details class="td-g" data-tdd="today:wait"${tdOpenMap()["today:wait"]?" open":""}><summary><span class="lvl">⏳ Đang chờ người khác <span class="tag">${waiting.length}</span></span></summary><div class="sub" style="margin-bottom:8px">Chờ NCC, người duyệt, kế toán hoặc hàng về và chưa trễ — không phải việc của bạn hôm nay. Khi trễ hoặc đứng yên từ ${STUCK()} ngày sẽ nhảy lên 4 mục ở trên.</div>`;
   if(!waiting.length)html+=`<div class="sub">Không có.</div>`;
@@ -2367,7 +2372,7 @@ function renderToday(){
     c.ondrop=e=>{e.preventDefault();c.classList.remove("td-drop");const k=e.dataTransfer.getData("text/plain");if(k)moveTo(k,+c.dataset.tdq)};
   });
 }
-setInterval(()=>{if(state.active==="today"&&state.sheets.length){const st=store.get("qlcv:tdRun");if(!st||Date.now()-st.t>=TD_EVERY)renderToday()}},60000);
+setInterval(()=>{if(state.active==="today"&&state.sheets.length){const st=store.get("qlcv:tdRun");if(tdStale(st))renderToday()}},60000);
 
 /* ---- Móc chung sau khi sửa một ô: mọi liên kết giữa các tab đăng ký ở đây (thêm quy tắc mới = thêm một hàm vào LINK_RULES) ---- */
 const LINK_RULES=[
