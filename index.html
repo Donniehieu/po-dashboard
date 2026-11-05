@@ -2488,6 +2488,12 @@ function paySumsOf(sup){ // tổng tiền phiếu PAY của NCC (tên khớp kh�
     if(st==="đã thanh toán"){o.vp+=a;o.np++}else if(st==="chưa thanh toán"){o.vu+=a;o.nu++}});
   return o;
 }
+/* PO đang Chờ gửi UNC: ghi thêm số PAY và số BNK (số chứng từ hiện tại) của các phiếu thanh toán gắn với PO */
+function po360PayNos(pi){
+  const o=[];for(const {p,ps} of pi.pays){const no=String(p.v[ps.title]??"").trim(),cur=ps.payCurIdx!=null?String(p.v[ps.payCurIdx]??"").trim():"";
+    if(no)o.push(`<span class="chip" style="--c:var(--brand)">${esc(no)}</span>`);if(cur&&cur!==no&&/bnk/i.test(cur))o.push(`<span class="chip" style="--c:var(--ok)">${esc(cur)}</span>`)}
+  return o.length?" "+o.join(" "):` <span class="sub">chưa có PAY/BNK</span>`;
+}
 function po360NccHtml(q,list){
   const by=new Map();list.forEach(x=>{const o=by.get(x.sup)||[];o.push(x);by.set(x.sup,o)});
   let html=`<div class="sub" style="margin:0 0 8px">Tìm thấy <b>${list.length}</b> PO của <b>${by.size}</b> NCC khớp “${esc(q)}”. Bấm một PO để xem 360° tại chỗ, hoặc “Xem 360° đầy đủ”.</div>`;
@@ -2496,7 +2502,7 @@ function po360NccHtml(q,list){
     const paid=infos.filter(i=>i.pi.paid),unpaid=infos.filter(i=>!i.pi.paid),ys=paySumsOf(sup);
     html+=`<div class="card" style="margin-bottom:14px"><div class="lvl"><b>${esc(sup)}</b><span class="tag">${a.length} PO</span><span class="chip" style="--c:var(--ok)" title="Theo số tiền phiếu PAY">đã TT ${fmtBig(ys.vp)} · ${ys.np} PAY · ${paid.length} PO</span><span class="chip" style="--c:var(--bad)" title="Theo số tiền phiếu PAY">chưa TT ${fmtBig(ys.vu)} · ${ys.nu} PAY · ${unpaid.length} PO</span></div>`
       +infos.sort((p,q2)=>(p.x.r.done-q2.x.r.done)||(q2.amt-p.amt)).map(i=>{const {x,pi}=i,code=String(x.r.v[x.sh.title]??"");
-        return tdD("p360:"+code,"td-grp",`<b>${esc(code)}</b> <span class="chip" style="--c:${colorFor(x.r.wf)}">${esc(x.r.wf)}</span> <span class="chip" style="--c:${pi.paid?"var(--ok)":"var(--bad)"}">${esc(pi.state)}</span> <span class="sub">${i.amt?fmtN(i.amt):""}</span>`,`<div style="padding:6px 0 10px 18px">${po360Mini(x)}</div>`,false)}).join("")+`</div>`;
+        return tdD("p360:"+code,"td-grp",`<b>${esc(code)}</b> <span class="chip" style="--c:${colorFor(x.r.wf)}">${esc(x.r.wf)}</span> <span class="chip" style="--c:${pi.paid?"var(--ok)":"var(--bad)"}">${esc(pi.state)}</span> <span class="sub">${i.amt?fmtN(i.amt):""}</span>${x.r.wf==="Chờ gửi UNC"?po360PayNos(pi):""}`,`<div style="padding:6px 0 10px 18px">${po360Mini(x)}</div>`,false)}).join("")+`</div>`;
   }
   return html;
 }
