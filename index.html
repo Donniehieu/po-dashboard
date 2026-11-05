@@ -23,6 +23,7 @@
 html,body{margin:0}
 body{background:var(--bg);color:var(--ink);font:14px/1.45 "Segoe UI",system-ui,-apple-system,Roboto,Arial,sans-serif}
 button{font:inherit;color:inherit;cursor:pointer}
+.navbtns{display:inline-flex;gap:4px}.navbtns .btn:disabled{opacity:.4;cursor:default}
 header.top{display:flex;gap:12px;align-items:center;flex-wrap:wrap;padding:14px 20px;background:var(--card);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:20}
 header.top h1{font-size:17px;margin:0;font-weight:700;letter-spacing:-.2px}
 .tgrp{position:relative}
@@ -316,6 +317,7 @@ body.rzing,body.rzing *{cursor:col-resize!important;user-select:none!important}
   <span id="odooState" class="sub"></span>
   <label class="auto" title="Tự động lưu sau mỗi lần sửa (khi đã kết nối GitHub hoặc chọn file bằng Chrome/Edge)"><input type="checkbox" id="chkAuto" checked> Tự động lưu</label>
   <label class="auto" title="Khi mở dashboard, tự yêu cầu GitHub lấy dữ liệu mới từ Odoo nếu lần đồng bộ gần nhất đã quá 10 phút"><input type="checkbox" id="chkSync" checked> Tự đồng bộ Odoo</label>
+  <span class="navbtns"><button class="btn sm" id="navBack" title="Quay lại bước trước (Alt+←): tab / bộ lọc trước đó" disabled>◀ Lùi</button><button class="btn sm" id="navFwd" title="Tới bước kế (Alt+→)" disabled>Tiến ▶</button></span>
   <span class="grow"></span>
   <a class="btn sm" id="lnkBuy" href="https://muahangthongminh.purchasing-online.workers.dev/" target="_blank" rel="noopener noreferrer" title="Mở trang Mua hàng thông minh trong tab mới">🛒 Mua hàng thông minh</a>
   <button class="btn sm" id="btnNotify" title="Nhắc việc trễ bằng thông báo của trình duyệt (khi đang mở trang)">🔔 Bật Thông báo</button>
@@ -2660,7 +2662,45 @@ function renderTabs(){
   mn.querySelectorAll("button[data-i]").forEach(b=>b.onclick=()=>{mn.classList.remove("open");goTab(b.dataset.i)});
   const mb=$("#tMore");if(mb)mb.onclick=e=>{e.stopPropagation();if(mn.classList.toggle("open")){const r=mb.getBoundingClientRect();mn.style.left=Math.max(8,Math.min(r.left,innerWidth-mn.offsetWidth-8))+"px";mn.style.top=(r.bottom+4)+"px"}};
 }
+/* Lịch sử thao tác: lưu 10 bước gần nhất (tab + bộ lọc/tìm kiếm/sắp xếp của bảng) để ◀ Lùi / Tiến ▶ */
+const NAV={h:[],i:-1,max:10,lock:false,t:0};
+function navSnap(){
+  const a=state.active,sh=typeof a==="number"?state.sheets[a]:null,o={a:sh?sh.name:a};
+  if(a==="po360")o.p=state.po360||"";
+  if(sh){const u=sh.ui;o.u=JSON.parse(JSON.stringify({filters:u.filters,cf:Object.fromEntries(Object.entries(u.cf||{}).map(([k,f])=>[k,{...f,vals:f.vals?[...f.vals]:null}])),special:u.special,queue:u.queue,range:u.range,search:u.search,sort:u.sort,noteGrp:u.noteGrp||null,shown:u.shown}))}
+  return o;
+}
+function navUi(){const b=document.getElementById("navBack"),f=document.getElementById("navFwd");if(!b)return;b.disabled=NAV.i<=0;f.disabled=NAV.i>=NAV.h.length-1}
+function navNote(){
+  if(NAV.lock||!state.sheets.length)return;
+  clearTimeout(NAV.t);NAV.t=setTimeout(()=>{ // gom các lần dựng lại liên tiếp (gõ tìm kiếm…) thành một bước
+    if(NAV.lock||!state.sheets.length)return;const o=navSnap(),k=JSON.stringify(o);
+    if(NAV.i>=0&&NAV.h[NAV.i].k===k)return;
+    NAV.h.splice(NAV.i+1);NAV.h.push({k,o,v:null});if(NAV.h.length>NAV.max)NAV.h.shift();NAV.i=NAV.h.length-1;navUi();
+  },400);
+}
+function navGo(d){
+  clearTimeout(NAV.t);const cur=JSON.stringify(navSnap());
+  if(NAV.h[NAV.i]&&NAV.h[NAV.i].k===cur)NAV.h[NAV.i].v=captureView();
+  if(NAV.i>=0&&NAV.h[NAV.i].k!==cur){NAV.h.splice(NAV.i+1);NAV.h.push({k:cur,o:JSON.parse(cur),v:captureView()});if(NAV.h.length>NAV.max)NAV.h.shift();NAV.i=NAV.h.length-1}
+  const j=NAV.i+d;if(j<0||j>=NAV.h.length)return;NAV.i=j;const o=NAV.h[j].o;
+  const si=typeof o.a==="string"&&!["overview","priority","today","po360","history","suppliers","report"].includes(o.a)?state.sheets.findIndex(x=>x.name===o.a):-1;
+  if(typeof o.a==="string"&&si<0&&!["overview","priority","today","po360","history","suppliers","report"].includes(o.a)){toast("Bảng đó không còn nữa.",true);navUi();return}
+  NAV.lock=true;
+  try{
+    if(si>=0){const u=state.sheets[si].ui,v=o.u;u.filters={...v.filters};u.cf=Object.fromEntries(Object.entries(v.cf||{}).map(([k,f])=>[k,{...f,vals:f.vals?new Set(f.vals):null}]));
+      u.special=v.special;u.queue=v.queue;u.range=v.range;u.search=v.search||"";u.sort=v.sort;u.noteGrp=v.noteGrp;u.shown=v.shown||100;state.active=si}
+    else{state.active=o.a;if(o.a==="po360")state.po360=o.p}
+    state._rt=null;renderTabs();render();restoreView(NAV.h[j].v||{x:0,y:0,l:0,t:0});
+  }finally{NAV.lock=false}
+  navUi();
+}
+let navST=0;addEventListener("scroll",()=>{clearTimeout(navST);navST=setTimeout(()=>{const e=NAV.h[NAV.i];if(e&&!NAV.lock)e.v=captureView()},150)},{passive:true,capture:true});
+document.getElementById("navBack").onclick=()=>navGo(-1);
+document.getElementById("navFwd").onclick=()=>navGo(1);
+addEventListener("keydown",e=>{if(e.altKey&&!e.ctrlKey&&!e.shiftKey&&(e.key==="ArrowLeft"||e.key==="ArrowRight")&&!/INPUT|TEXTAREA|SELECT/.test((e.target.tagName||""))){e.preventDefault();navGo(e.key==="ArrowLeft"?-1:1)}});
 function render(){
+  navNote();
   const same=state._rt===state.active,v=same?captureView():null;
   renderMain();state._rt=state.active;if(v)restoreView(v);
 }
@@ -3160,6 +3200,7 @@ function payNoteCard(sh,fr){
     arr.map(([k,v])=>`<div class="bar ${sel===k?"sel":""}" data-ng="${esc(k)}" title="Bấm để lọc"><span class="t">${esc(k)}</span><span class="tr"><span class="f" style="display:block;width:${(v/mx*100).toFixed(1)}%;background:${k===NOTE_NONE?"var(--mute)":colorFor(k)}"></span></span><span class="n">${fmtN(v)} · ${(v/tot*100).toFixed(0)}%</span></div>`).join("")+`</div></div>`;
 }
 function renderDyn(sh,keep,anchor){
+  navNote();
   const u=sh.ui;const fr=rowsFor(sh);
   const dyn=$("#dyn");
   const ow=keep?dyn.querySelector(".tablewrap"):null,ks=keep?{l:ow?ow.scrollLeft:0,t:ow?ow.scrollTop:0,x:scrollX,y:scrollY}:null;

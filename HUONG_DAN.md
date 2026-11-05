@@ -30,6 +30,9 @@ Danh sách tự xếp lại cố định lúc **8h, 13h và 20h** mỗi ngày (g
 4. NCC có từ 2 PO trở lên trong cùng một danh sách có dải nút: **📋 Tin nhắn** (sao chép một tin nhắn cho cả cụm PO để dán vào Zalo, câu hỏi theo bước: xin báo giá, xác nhận ngày giao, gửi hóa đơn…) và **🔎 Xem NCC** (mở PO 360° liệt kê mọi PO của NCC đó).
 5. Việc xếp sai mục thì kéo thả sang mục khác (hoặc chọn ⇄). NCC nào bạn kéo lên mục quan trọng từ 2 lần (nhiều hơn số lần kéo xuống) thì app tự coi là **quan trọng** và ngược lại; lý do hiện trong bảng “NCC quan trọng”. Ghim/bỏ ghim tay luôn ưu tiên hơn, “Về tự động” xóa phần app đã học của NCC đó. Dữ liệu học lưu trên trình duyệt này.
 
+### Nút ◀ Lùi / Tiến ▶ (góc trên, cạnh các ô Tự động lưu)
+Trang nhớ **10 bước gần nhất**: đổi tab, mở PO 360°, và bộ lọc / tìm kiếm / sắp xếp của bảng. Bấm **◀ Lùi** (hoặc phím **Alt + ←**) để quay lại màn hình trước đó, **Tiến ▶** (**Alt + →**) để đi tới lại. Khi lùi/tiến, trang trở về đúng trạng thái cũ: cùng tab, cùng bộ lọc, số dòng đang hiện và vị trí cuộn. Làm thao tác mới sau khi lùi thì các bước phía trước bị bỏ. Lịch sử chỉ lưu trong lần mở trang hiện tại (tải lại trang thì bắt đầu lại).
+
 ### Hai cách xem trong Việc hôm nay
 - **⛓ Theo workflow** (nên dùng để làm việc): việc xếp theo bước quy trình nên cùng một loại thao tác nằm liền nhau.
 - **▦ Theo 4 mục**: xếp theo điểm gấp/quan trọng/dễ; dùng để soát lại mức ưu tiên.
