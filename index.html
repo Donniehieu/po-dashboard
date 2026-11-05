@@ -143,6 +143,7 @@ tr.dn td.txt:first-of-type{text-decoration:line-through}
 h2.sec{font-size:15px;margin:22px 0 10px}
 .td-bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 12px}
 .td-tg.on{border-color:var(--brand);background:color-mix(in srgb,var(--brand) 14%,var(--soft));font-weight:700}
+.td-act{display:flex;gap:4px;justify-content:flex-end;margin-top:4px;flex-wrap:wrap}.td-nb{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:0 0 8px;padding:6px 8px;border:1px dashed var(--line);border-radius:8px}
 .td-mv{font:inherit;font-size:12px;border:1px solid var(--line);border-radius:6px;background:var(--soft);color:var(--ink);padding:1px 2px;margin-top:4px}
 li.dragging{opacity:.4}[draggable=true]{cursor:grab}
 .td-drop{outline:2px dashed var(--brand);outline-offset:-4px;background:color-mix(in srgb,var(--brand) 6%,transparent)}
@@ -2224,7 +2225,7 @@ function tdCompute(){
 }
 function tdCompute0(){
   const sup=new Map();try{supplierRows().out.forEach(o=>sup.set(o.k,o))}catch(e){}
-  const pins=tdPins(),impCache=new Map(),slow=new Map(); // slow: số PO của NCC đã quá hạn mà hàng chưa về hết (gần đúng “làm chậm sản xuất”)
+  const pins=tdPins(),impCache=new Map(),slow=new Map(),learn=store.get("qlcv:tdLearn")||{}; // slow: số PO của NCC đã quá hạn mà hàng chưa về hết (gần đúng “làm chậm sản xuất”)
   state.sheets.forEach(sh=>{if(!sh.wf||sh.rcIdx==null)return;const sc=sh.cols.find(c=>/^nhà cung cấp$/i.test(c.name.trim()));if(!sc)return;
     for(const r of sh.rows){if(r.done||r.st!=="overdue"||wfn(r.v[sh.rcIdx])==="đã nhận hết")continue;const k=String(r.v[sc.idx]??"(Trống)").trim()||"(Trống)";slow.set(k,(slow.get(k)||0)+1)}});
   const impOf=k=>{ // NCC quan trọng: tự suy ra từ dữ liệu, ghim tay đè lên
@@ -2233,8 +2234,8 @@ function tdCompute0(){
     let auto=false,why="";
     if(isOrder&&o.open>0){auto=true;why="NCC Đơn hàng, đang có "+o.open+" PO chạy"}
     else if(slow.get(k)>0){auto=true;why="đang làm chậm: "+slow.get(k)+" PO hàng về trễ"}
-    const pin=pins[k];
-    const v={on:pin===1?true:pin===-1?false:auto,auto,pin:pin||0,why:pin===1?"bạn ghim quan trọng":pin===-1?"bạn bỏ quan trọng":why,cls:o?o.cls:null,open:o?o.open:0,late:o?o.late:0};
+    const pin=pins[k],ln=learn[k],net=ln?ln.up-ln.down:0,lrn=!pin&&Math.abs(net)>=2?(net>0?1:-1):0; // ghim tay đè lên; không ghim thì theo thói quen kéo tay (≥2 lần chênh)
+    const v={on:pin===1?true:pin===-1?false:lrn?lrn>0:auto,auto,pin:pin||0,why:pin===1?"bạn ghim quan trọng":pin===-1?"bạn bỏ quan trọng":lrn?(lrn>0?"bạn thường kéo việc của NCC này lên mục quan trọng":"bạn thường kéo việc của NCC này xuống mục không quan trọng"):why,cls:o?o.cls:null,open:o?o.open:0,late:o?o.late:0};
     impCache.set(k,v);return v;
   };
   const tasks=[];
@@ -2290,19 +2291,37 @@ function tdCompute0(){
   const f=pack(tasks.filter(t=>t.in),byWf,tasks.filter(t=>!t.in).sort((a,b)=>(b.pay?b.late:b.stuck)-(a.pay?a.late:a.stuck)||b.score-a.score));
   return{tasks,m,f,impOf,sup,run};
 }
+let tdBatch=new Map(); // id -> {k,a}: nhóm PO cùng NCC trong một danh sách, cho nút tin nhắn / xem NCC
+const TD_ASK={"Chờ báo giá":"anh/chị gửi giúp em báo giá","Chờ gửi NCC":"em gửi đơn đặt hàng, anh/chị xác nhận đơn giúp em","Đã gửi NCC":"anh/chị xác nhận đơn và ngày giao hàng giúp em","Chờ nhận hàng":"anh/chị cập nhật ngày giao hàng giúp em","Cần lập hóa đơn":"anh/chị xuất và gửi hóa đơn giúp em","Chờ KT xác nhận công nợ":"anh/chị gửi hóa đơn/đối chiếu công nợ giúp em"};
+const tdMsg=g=>`Chào anh/chị ${g.k}, về ${g.a.length>1?"các đơn":"đơn"} ${g.a.map(t=>t.code).join(", ")}: ${(g.a.every(t=>t.step===g.a[0].step)&&TD_ASK[g.a[0].step])||"anh/chị cập nhật tình trạng giúp em"}. Em cảm ơn ạ!`;
+function tdNccBar(arr){
+  const by=new Map();arr.forEach(t=>{if(t.pay)return;const o=by.get(t.k)||[];o.push(t);by.set(t.k,o)});
+  const gs=[...by].filter(([k,a])=>a.length>=2);if(!gs.length)return "";
+  return `<div class="td-nb">`+gs.map(([k,a])=>{const id="b"+tdBatch.size;tdBatch.set(id,{k,a});
+    return `<span class="chip" style="--c:var(--brand)">${esc(k)} · ${a.length} PO</span><button class="btn sm" data-tdcp="${id}" title="Sao chép một tin nhắn cho cả ${a.length} PO (dán vào Zalo)">📋 Tin nhắn</button><button class="btn sm" data-tdncc="${esc(k)}" title="Xem mọi PO của NCC này ở PO 360°">🔎 Xem NCC</button>`}).join("")+`</div>`;
+}
+function tdLearn(d,key,q){ // ghi nhận việc bạn kéo tay: kéo lên mục quan trọng / xuống mục không quan trọng -> tự điều chỉnh độ quan trọng của NCC
+  const t=d.tasks.find(x=>x.key===key);if(!t||q===0||t.q===q)return;
+  const hi=n=>n===1||n===2,L=store.get("qlcv:tdLearn")||{},o=L[t.k]||{up:0,down:0};
+  if(hi(q)&&!hi(t.q))o.up=Math.min(o.up+1,10);else if(!hi(q)&&hi(t.q))o.down=Math.min(o.down+1,10);else return;
+  L[t.k]=o;store.set("qlcv:tdLearn",L);
+}
+function tdLearnReset(k){const L=store.get("qlcv:tdLearn")||{};if(L[k]){delete L[k];store.set("qlcv:tdLearn",L)}}
 function tdRow(t,extra,showQ){
+  const sq=t.pay?null:seqOf(t.sh,t.r),k0=sq?sq.indexOf(t.step):-1,nx=k0>=0?sq[k0+1]:null;
+  const acts=`<div class="td-act">${nx&&nx!==WF_DONE?`<button class="btn sm" data-tdxong="${esc(t.key)}" title="Xong bước “${esc(t.step)}” → chuyển sang “${esc(nx)}”">✔ ${esc(nx)}</button>`:""}${t.in&&t.q!==0?`<button class="btn sm" data-tdsnz="${esc(t.key)}" title="Hoãn tới mốc xếp lại kế tiếp">💤</button>`:""}</div>`;
   const age=t.pay?t.late:t.stuck,mv=t.in?`<select class="td-mv" data-tdmv="${esc(t.key)}" title="Chuyển sang mục khác (hoặc kéo thả)"><option value="">⇄</option>${[1,2,3,4].map(q=>`<option value="${q}"${t.q===q?" disabled":""}>→ ${TD_QN[q]}</option>`).join("")}<option value="0">→ Để lượt sau</option></select>`:"";
-  return `<li class="click" ${t.in?`draggable="true" data-tdk="${esc(t.key)}"`:""} data-tdgo="${t.si}" data-q="${esc(t.code)}"><span class="tag">${esc(t.sh.pay?"PAY":"PO")}</span><div>${t.sh.pay?`<b>${esc(t.code)}</b>`:`<a class="ol" href="#" data-code="${esc(t.code)}" title="Mở PO này trên Odoo để kiểm tra"><b>${esc(t.code)}</b></a>`}${t.sh.pay?"":` <a href="#" class="td-360" data-po360="${esc(t.code)}" title="Xem PO 360°">🔎</a>`} <span class="chip" style="--c:${colorFor(t.step)}">${esc(t.step)}</span>${t.moved?` <span class="chip" style="--c:#7c3aed" title="Bạn đã chuyển tay; tới lần xếp lại kế tiếp sẽ tự tính lại">✋ đã chuyển</span>`:""}<div class="sub">${esc(t.k)}${t.amt?" · "+fmtN(t.amt):""}</div><div class="sub td-why">${esc(t.rs.join(" · ")||"không có tín hiệu gấp")}${extra||""}</div></div><span class="td-score" title="Điểm = 40% gấp + 40% quan trọng + 20% dễ&#10;Gấp ${t.u} · Quan trọng ${t.im} · Dễ ${t.ease}">${t.score}<div class="sub">${age>0&&t.wait?"chờ "+age+" ngày":""}</div>${mv}</span></li>`;
+  return `<li class="click" ${t.in?`draggable="true" data-tdk="${esc(t.key)}"`:""} data-tdgo="${t.si}" data-q="${esc(t.code)}"><span class="tag">${esc(t.sh.pay?"PAY":"PO")}</span><div>${t.sh.pay?`<b>${esc(t.code)}</b>`:`<a class="ol" href="#" data-code="${esc(t.code)}" title="Mở PO này trên Odoo để kiểm tra"><b>${esc(t.code)}</b></a>`}${t.sh.pay?"":` <a href="#" class="td-360" data-po360="${esc(t.code)}" title="Xem PO 360°">🔎</a>`} <span class="chip" style="--c:${colorFor(t.step)}">${esc(t.step)}</span>${t.moved?` <span class="chip" style="--c:#7c3aed" title="Bạn đã chuyển tay; tới lần xếp lại kế tiếp sẽ tự tính lại">✋ đã chuyển</span>`:""}<div class="sub">${esc(t.k)}${t.amt?" · "+fmtN(t.amt):""}</div><div class="sub td-why">${esc(t.rs.join(" · ")||"không có tín hiệu gấp")}${extra||""}</div></div><span class="td-score" title="Điểm = 40% gấp + 40% quan trọng + 20% dễ&#10;Gấp ${t.u} · Quan trọng ${t.im} · Dễ ${t.ease}">${t.score}<div class="sub">${age>0&&t.wait?"chờ "+age+" ngày":""}</div>${mv}${acts}</span></li>`;
 }
 function tdCount(){try{return tdCompute().m.q1.slice(0,tdTop()).length}catch(e){return 0}}
 const tdOpenMap=()=>store.get("qlcv:tdOpen")||{};
 function tdD(key,cls,sum,body,def){const o=tdOpenMap()[key],op=o===undefined?def:o;return `<details class="${cls}" data-tdd="${esc(key)}"${op?" open":""}><summary>${sum}</summary>${body}</details>`}
 function renderToday(){
-  tdLoadMrp();
-  const d=tdCompute(),run=d.run,top=tdTop();
+  tdLoadMrp();tdBatch=new Map();
+  const d=tdCompute(),run=d.run,top=tdTop(),focus=!!store.get("qlcv:tdFocus");
   const view=store.get("qlcv:tdView")||"flow",{q0,q1,q2,q3,q4,waiting}=view==="flow"?d.f:d.m,hm=t=>new Date(t).toLocaleTimeString("vi-VN",{hour:"2-digit",minute:"2-digit"});
   const cut=q1.slice(0,top),rest=q1.slice(top),remind=waiting.filter(t=>(t.pay?t.late:t.stuck)>=STUCK());
-  let html=`<div class="td-bar"><button class="btn td-tg ${view==="matrix"?"on":""}" data-tdview="matrix">▦ Theo 4 mục</button><button class="btn td-tg ${view==="flow"?"on":""}" data-tdview="flow">⛓ Theo workflow</button><span class="grow"></span><span class="sub">Việc “Làm ngay” hiện <select id="tdTop">${TD_TOPS.map(n=>`<option${n===top?" selected":""}>${n}</option>`).join("")}</select> · Xếp lần cuối ${hm(run.t)}, lần kế ${hm(tdSlot(Date.now(),true))}</span><button class="btn" id="tdOpenAll" title="Mở rộng tất cả các nhóm">▾ Mở tất cả</button><button class="btn" id="tdCloseAll" title="Thu gọn tất cả các nhóm">▸ Thu gọn tất cả</button><button class="btn" id="tdRerun" title="Bỏ các việc đã kéo tay và tính lại toàn bộ theo rule">🔄 Xếp lại ngay</button></div>`;
+  let html=`<div class="td-bar"><button class="btn td-tg ${view==="matrix"?"on":""}" data-tdview="matrix">▦ Theo 4 mục</button><button class="btn td-tg ${view==="flow"?"on":""}" data-tdview="flow">⛓ Theo workflow</button><span class="grow"></span><span class="sub">Việc “Làm ngay” hiện <select id="tdTop">${TD_TOPS.map(n=>`<option${n===top?" selected":""}>${n}</option>`).join("")}</select> · Xếp lần cuối ${hm(run.t)}, lần kế ${hm(tdSlot(Date.now(),true))}</span><button class="btn td-tg ${focus?"on":""}" id="tdFocus" title="Chỉ hiện Làm ngay và Gộp theo NCC; ẩn Lên lịch, Để sau, Đang chờ">🎯 Tập trung</button><button class="btn" id="tdOpenAll" title="Mở rộng tất cả các nhóm">▾ Mở tất cả</button><button class="btn" id="tdCloseAll" title="Thu gọn tất cả các nhóm">▸ Thu gọn tất cả</button><button class="btn" id="tdRerun" title="Bỏ các việc đã kéo tay và tính lại toàn bộ theo rule">🔄 Xếp lại ngay</button></div>`;
   html+=`<div class="sub" style="margin:0 0 10px">🎯 <b>${fmtD(TODAY)}</b> · ${view==="matrix"?"theo 4 mục, xếp theo điểm":"theo workflow, xếp theo bước quy trình"} · kéo thả để chuyển mục · tự xếp lại lúc 8h, 13h, 20h hằng ngày</div>`+tdD("today:help","td-more","Cách tính và cách dùng",`<div class="note">${view==="matrix"?`Điểm = 40% <b>Gấp</b> + 40% <b>Quan trọng</b> + 20% <b>Dễ</b>; trong mỗi mục việc xếp theo điểm. Việc đang chờ người khác để riêng ở “Đang chờ”. Rule chạy lại cố định lúc 8h, 13h và 20h hằng ngày; kéo thả một việc sang mục khác (hoặc chọn ⇄) thì giữ tới lần chạy kế tiếp.`:`cùng phân loại gấp / quan trọng, nhưng xếp theo quy trình: <b>quan trọng & gấp → gấp mà không quan trọng → quan trọng mà không gấp → không quan trọng, không gấp</b>. Trong mỗi nhóm: <b>trễ nhập hàng → chờ nhập hàng → chờ gửi NCC → chờ gửi duyệt PO → chờ báo giá → chờ KT xác nhận công nợ → chờ lập hóa đơn → chờ làm TT</b>; cùng bước thì trễ nhiều và điểm quan trọng cao lên trước. Việc đang chờ người khác chỉ vào các nhóm này khi đã trễ hoặc đứng yên từ ${STUCK()} ngày (🔔 cần đi nhắc). Kéo thả vẫn dùng chung với tab 4 mục.`}</div>`,false);
   html+=`<div class="td-sum"><span class="chip" style="--c:var(--bad)">Làm ngay ${q1.length}</span><span class="chip" style="--c:var(--brand)">Lên lịch ${q2.length}</span><span class="chip" style="--c:var(--warn)">Gộp theo NCC ${q3.length}</span><span class="chip" style="--c:#64748b">Để sau ${q4.length}</span><span class="chip" style="--c:#7c3aed">Đang chờ ${waiting.length}${q0.length?` · hoãn ${q0.length}`:""}</span></div>`;
   {const sg=[];state.sheets.forEach((sh,si)=>{if(sh.wf)sh.rows.forEach(r=>{if(sugDone(sh,r))sg.push({si,sh,r})})});
@@ -2310,28 +2329,31 @@ function renderToday(){
   const ul=a=>`<ul class="attn">`+a.map(t=>tdRow(t)).join("")+`</ul>`;
   const list=(a,n,id)=>a.length?ul(a.slice(0,n))+(a.length>n?tdD(view+":more:"+id,"td-more",`… và ${a.length-n} việc nữa`,ul(a.slice(n)),false):""):`<div class="sub">Không có (kéo việc vào đây).</div>`;
   const card=(q,color,title,tag,desc,body)=>`<div class="card" data-tdq="${q}">`+tdD(view+":card:"+q,"td-g",`<span class="lvl"><i style="background:${color}"></i>${title}<span class="tag">${tag}</span></span>`,`<div class="sub" style="margin-bottom:8px">${desc}</div>${body}`,q===1)+`</div>`;
+  if(view==="flow"&&d.m.q1.length)html+=`<div class="card" style="margin-bottom:14px">`+tdD("today:top","td-g",`<span class="lvl"><i style="background:var(--bad)"></i>⭐ Top ${Math.min(top,d.m.q1.length)} cần làm ngay (theo điểm)<span class="tag">${d.m.q1.length}</span></span>`,`<div class="sub" style="margin-bottom:8px">Những việc điểm cao nhất, làm trước; bên dưới là toàn bộ việc xếp theo bước quy trình để làm hàng loạt.</div>`+ul(d.m.q1.slice(0,top)),true)+`</div>`;
   if(view==="matrix"){
     const g=new Map();q3.forEach(t=>{const o=g.get(t.k)||{k:t.k,ts:[]};o.ts.push(t);g.set(t.k,o)});
     const gl=[...g.values()].sort((a,b)=>b.ts.length-a.ts.length||b.ts[0].score-a.ts[0].score);
-    const grp=o=>tdD(view+":ncc:"+o.k,"td-grp",`<b>${esc(o.k)}</b> <span class="tag">${o.ts.length} PO</span> <span class="sub">${fmtBig(o.ts.reduce((a,t)=>a+t.amt,0))}</span>`,ul(o.ts),true);
+    const grp=o=>tdD(view+":ncc:"+o.k,"td-grp",`<b>${esc(o.k)}</b> <span class="tag">${o.ts.length} PO</span> <span class="sub">${fmtBig(o.ts.reduce((a,t)=>a+t.amt,0))}</span>`,tdNccBar(o.ts)+ul(o.ts),true);
     html+=`<div class="td-2x2">`
       +card(1,"var(--bad)","① Làm ngay · quan trọng & gấp",`${cut.length}/${q1.length}`,`Gấp và quan trọng, bạn làm được ngay. Theo điểm, hiện ${top} việc đầu.`,(cut.length?ul(cut):`<div class="sub">Không có. 🎉</div>`)+(rest.length?tdD(view+":more:1","td-more",`Xếp hàng chờ (${rest.length})`,ul(rest),false):""))
       +card(3,"var(--warn)","② Gộp theo NCC · gấp, không quan trọng",`${q3.length} việc · ${gl.length} NCC`,"Gấp nhưng không quan trọng: liên hệ một lần cho cả nhóm PO của NCC.",gl.length?gl.slice(0,6).map(grp).join("")+(gl.length>6?tdD(view+":more:3","td-more",`… và ${gl.length-6} NCC nữa`,gl.slice(6).map(grp).join(""),false):""):`<div class="sub">Không có (kéo việc vào đây).</div>`)
-      +card(2,"var(--brand)","③ Lên lịch · quan trọng, không gấp",q2.length,"Quan trọng nhưng chưa gấp.",list(q2,6,"2"))
-      +card(4,"#64748b","④ Để sau · không quan trọng, không gấp",q4.length,"Không gấp, không quan trọng.",list(q4,5,"4"))
+      +(focus?"":card(2,"var(--brand)","③ Lên lịch · quan trọng, không gấp",q2.length,"Quan trọng nhưng chưa gấp.",list(q2,6,"2")))
+      +(focus?"":card(4,"#64748b","④ Để sau · không quan trọng, không gấp",q4.length,"Không gấp, không quan trọng.",list(q4,5,"4")))
       +`</div>`;
   }else{
     const SEC=[[1,"① Quan trọng & gấp","NCC quan trọng, việc gấp"],[3,"② Gấp mà không quan trọng","nhắc lặp lại, xử lý theo workflow"],[2,"③ Quan trọng mà không gấp","đặt lịch trước khi thành gấp"],[4,"④ Không quan trọng, không gấp","không cần nhìn hàng ngày"]];
     const QL={1:q1,2:q2,3:q3,4:q4};
     html+=`<div class="td-2x2">`;
     for(const [q,t1,t2] of SEC){
+      if(focus&&(q===2||q===4))continue;
       const a=QL[q];let body=a.length?"":`<div class="sub">Không có (kéo việc vào đây).</div>`;
-      const stg=(arr,pfx)=>{let o="";TD_STAGE.forEach((lb,i)=>{const b=arr.filter(t=>t.wr===i);if(!b.length)return;o+=tdD(view+":st:"+pfx+":"+i,"td-stage",`<b>${lb}</b> <span class="tag">${b.length}</span>`,b.length>6?ul(b.slice(0,6))+tdD(view+":more:"+pfx+":"+i,"td-more",`… và ${b.length-6} việc nữa`,ul(b.slice(6)),false):ul(b),true)});return o};
+      const stg=(arr,pfx)=>{let o="";TD_STAGE.forEach((lb,i)=>{const b=arr.filter(t=>t.wr===i);if(!b.length)return;o+=tdD(view+":st:"+pfx+":"+i,"td-stage",`<b>${lb}</b> <span class="tag">${b.length}</span>`,tdNccBar(b)+(b.length>6?ul(b.slice(0,6))+tdD(view+":more:"+pfx+":"+i,"td-more",`… và ${b.length-6} việc nữa`,ul(b.slice(6)),false):ul(b)),true)});return o};
       if(q===1)body+=stg(a.slice(0,top),"1")+(a.length>top?tdD(view+":more:1","td-more",`Xếp hàng chờ (${a.length-top})`,stg(a.slice(top),"1r"),false):"");else body+=stg(a,String(q));
       html+=card(q,TD_QC[q],t1,q===1?`${Math.min(top,a.length)}/${a.length}`:a.length,t2,body);
     }
     html+=`</div>`;
   }
+  if(!focus){
   // hàng chờ lượt sau (trái) + đang chờ người khác (phải): lưới 2 cột như các mục trên; việc nhóm theo trạng thái
   const stepKey=t=>t.pay?"Phiếu thanh toán":t.step,stepOrd=t=>t.pay?99:(t.wr??50);
   const grpBy=(arr,keyf)=>{const by=new Map();arr.forEach(t=>{const k=keyf(t),o=by.get(k)||[];o.push(t);by.set(k,o)});return by};
@@ -2350,19 +2372,28 @@ function renderToday(){
   html+=`<div class="card" style="margin-top:14px"><details class="td-g" data-tdd="today:ncc"${tdOpenMap()["today:ncc"]?" open":""}><summary><span class="lvl">📌 NCC quan trọng <span class="tag">${il.filter(x=>x.on).length}/${il.length}</span></span></summary><div class="sub" style="margin-bottom:8px">App tự đoán: NCC phân loại “Đơn hàng” đang có PO chạy, hoặc có PO hàng về trễ. Đây là <b>ước đoán chưa kiểm chứng</b> — bạn chỉ cần ghim/bỏ ghim vài NCC lệch. Ghim có hiệu lực từ lần xếp lại kế tiếp. Lưu trên trình duyệt này.</div><div class="scroll-x"><table class="mini"><thead><tr><th>NCC</th><th>Phân loại</th><th style="text-align:right">Việc mở</th><th>Quan trọng?</th><th>Lý do</th><th></th></tr></thead><tbody>`+
     il.slice(0,40).map(x=>`<tr><td>${esc(x.k)}</td><td>${esc(x.cls||"—")}</td><td class="num">${x.n}</td><td>${x.on?`<span class="chip" style="--c:var(--bad)">Quan trọng</span>`:`<span class="chip" style="--c:#64748b">Thường</span>`}</td><td class="sub">${esc(x.why||"—")}</td><td><button class="btn" data-tdpin="${esc(x.k)}|${x.on?-1:1}">${x.on?"Bỏ quan trọng":"Ghim quan trọng"}</button>${x.pin?` <button class="btn" data-tdpin="${esc(x.k)}|0">Về tự động</button>`:""}</td></tr>`).join("")+`</tbody></table></div></details></div>`;
   html+=`<div class="card" style="margin-top:14px">`+tdD("today:insight","td-g",`<span class="lvl">📊 Phân tích: hàng việc theo workflow · đơn quá hạn kẹt ở đâu · việc theo trạng thái</span>`,tdInsights(),false)+`</div>`;
+  }else html+=`<div class="note" style="margin-top:14px">🎯 <b>Chế độ tập trung</b>: đang ẩn Lên lịch ${q2.length}, Để sau ${q4.length}, Đang chờ người khác ${waiting.length}, hoãn ${q0.length}, NCC quan trọng và phân tích. Bấm “🎯 Tập trung” để hiện lại.</div>`;
   $("#main").innerHTML=html;
-  const m=$("#main"),moveTo=(key,q)=>{const st=tdRun();st.ov[key]=q;store.set("qlcv:tdRun",st);bump();renderToday()};
+  const m=$("#main"),moveTo=(key,q)=>{tdLearn(d,key,q);const st=tdRun();st.ov[key]=q;store.set("qlcv:tdRun",st);bump();renderToday()};
   tdInsightsBind(m);
   if($("#tdSugGo"))$("#tdSugGo").onclick=e=>goSheet(+e.target.dataset.si,{queue:"sugdone"});
   m.querySelectorAll("a[data-po360]:not(.td-360)").forEach(a=>a.onclick=ev=>{ev.preventDefault();state.po360=a.dataset.po360;state.active="po360";renderTabs();render();scrollTo(0,0)});
-  m.querySelectorAll("[data-tdgo]").forEach(e=>e.onclick=ev=>{if(ev.target.closest("a.td-360")){ev.preventDefault();state.po360=ev.target.closest("a.td-360").dataset.po360;state.active="po360";renderTabs();render();scrollTo(0,0);return}if(ev.target.closest("a.ol,select"))return;ev.preventDefault();goSheet(+e.dataset.tdgo,{search:String(e.dataset.q).toLowerCase()})});
-  m.querySelectorAll("[data-tdpin]").forEach(b=>b.onclick=()=>{const [k,v]=b.dataset.tdpin.split("|"),pp=tdPins();if(+v===0)delete pp[k];else pp[k]=+v;store.set("qlcv:impPin",pp);bump();renderToday()});
+  m.querySelectorAll("[data-tdgo]").forEach(e=>e.onclick=ev=>{if(ev.target.closest("a.td-360")){ev.preventDefault();state.po360=ev.target.closest("a.td-360").dataset.po360;state.active="po360";renderTabs();render();scrollTo(0,0);return}if(ev.target.closest("a.ol,select,button"))return;ev.preventDefault();goSheet(+e.dataset.tdgo,{search:String(e.dataset.q).toLowerCase()})});
+  m.querySelectorAll("[data-tdpin]").forEach(b=>b.onclick=()=>{const [k,v]=b.dataset.tdpin.split("|"),pp=tdPins();if(+v===0){delete pp[k];tdLearnReset(k)}else pp[k]=+v;store.set("qlcv:impPin",pp);bump();renderToday()});
   m.querySelectorAll("[data-tdview]").forEach(b=>b.onclick=()=>{store.set("qlcv:tdView",b.dataset.tdview);renderToday()});
   if($("#tdTop"))$("#tdTop").onchange=e=>{store.set("qlcv:tdTop",+e.target.value);renderToday()};
   const dets=()=>[...m.querySelectorAll("details[data-tdd]")];
   const setAll=on=>{const mp=tdOpenMap();dets().forEach(x=>{x.open=on;mp[x.dataset.tdd]=on});store.set("qlcv:tdOpen",mp)};
   $("#tdOpenAll").onclick=()=>setAll(true);$("#tdCloseAll").onclick=()=>setAll(false);
   setTimeout(()=>dets().forEach(x=>x.addEventListener("toggle",()=>{const mp=tdOpenMap();if(mp[x.dataset.tdd]!==x.open){mp[x.dataset.tdd]=x.open;store.set("qlcv:tdOpen",mp)}})),80); // gắn sau khi trình duyệt phát xong sự kiện toggle ban đầu
+  $("#tdFocus").onclick=()=>{store.set("qlcv:tdFocus",focus?0:1);renderToday()};
+  m.querySelectorAll("[data-tdxong]").forEach(b=>b.onclick=ev=>{ev.stopPropagation();const t=d.tasks.find(x=>x.key===b.dataset.tdxong);if(!t)return;
+    const sq=seqOf(t.sh,t.r),nx=sq[sq.indexOf(t.r.wf)+1];if(!nx||nx===WF_DONE)return;
+    if(setWf(t.si,t.r,nx,"việc hôm nay")){setStatus(t.sh);updateChrome();toast(`${t.code}: ${t.step} → ${nx}`);renderToday()}});
+  m.querySelectorAll("[data-tdsnz]").forEach(b=>b.onclick=ev=>{ev.stopPropagation();moveTo(b.dataset.tdsnz,0)});
+  m.querySelectorAll("[data-tdcp]").forEach(b=>b.onclick=ev=>{ev.stopPropagation();const g=tdBatch.get(b.dataset.tdcp);if(!g)return;const msg=tdMsg(g);
+    (navigator.clipboard?navigator.clipboard.writeText(msg):Promise.reject()).then(()=>toast("Đã sao chép tin nhắn cho "+g.k+", dán vào Zalo")).catch(()=>prompt("Sao chép tin nhắn:",msg))});
+  m.querySelectorAll("[data-tdncc]").forEach(b=>b.onclick=ev=>{ev.stopPropagation();state.po360=b.dataset.tdncc;state.active="po360";renderTabs();render();scrollTo(0,0)});
   $("#tdRerun").onclick=()=>{store.set("qlcv:tdRun",null);bump();renderToday();updateChrome()};
   m.querySelectorAll("select[data-tdmv]").forEach(sel=>sel.onchange=()=>{if(sel.value!=="")moveTo(sel.dataset.tdmv,+sel.value)});
   // kéo thả: kéo một việc thả vào thẻ của mục khác (hoặc vào ô “Để lượt sau”)
