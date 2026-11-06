@@ -9,7 +9,7 @@
 <meta name="theme-color" content="#2563eb">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Quản lý tiến trình công việc</title>
+<title>My working space</title>
 <style>
 /* ==========================================================================
    PO-DASHBOARD MODERN EXECUTIVE DESIGN SYSTEM (UX/UI REDESIGN)
@@ -1088,7 +1088,7 @@ tr.dn td.txt:first-of-type {
 }
 
 /* Interactive Cell Links */
-.ol, .hl, .dbt-po {
+.ol, .hl, .dbt-po, .refpo {
   color: var(--brand);
   text-decoration: none;
   cursor: pointer;
@@ -1097,7 +1097,7 @@ tr.dn td.txt:first-of-type {
   padding: 1px 4px;
   transition: all 0.12s ease;
 }
-.ol:hover, .hl:hover, .dbt-po:hover {
+.ol:hover, .hl:hover, .dbt-po:hover, .refpo:hover {
   background: var(--brand-soft);
   color: var(--brand-hover);
   text-decoration: underline;
@@ -1300,6 +1300,14 @@ h2.sec {
   color: var(--brand);
   font-weight: 700;
 }
+.kpi.mini { padding: 8px 14px; }
+.kpi.mini .v { font-size: 1.15rem; }
+.td-sum .chip.go { cursor: pointer; }
+.td-sum .chip.go:hover { filter: brightness(.95); text-decoration: underline; }
+@keyframes tdflash { from { box-shadow: 0 0 0 3px var(--brand); } to { box-shadow: 0 0 0 0 transparent; } }
+.tdflash { animation: tdflash 1.4s ease-out; }
+.attn li.go { cursor: pointer; grid-template-columns: 1fr auto; }
+.attn li.go:hover { border-color: var(--brand); }
 .td-sum {
   display: flex;
   flex-wrap: wrap;
@@ -2045,7 +2053,7 @@ body.rzing, body.rzing * { cursor: col-resize !important; user-select: none !imp
 </head>
 <body>
 <header class="top">
-  <h1>📋 Quản lý tiến trình công việc</h1>
+  <h1>📋 My working space</h1>
   <span class="fname" id="fname"></span>
   <span id="saveState" class="sub"></span>
   <span id="odooState" class="sub"></span>
@@ -2609,7 +2617,7 @@ function ckDone(sh,r){
 }
 
 /* ============ Trạng thái ứng dụng ============ */
-const BASE_TITLE="Quản lý tiến trình công việc";
+const BASE_TITLE="My working space";
 const state={fileName:"",sheets:[],active:"overview",handle:null,buf:null,sha:null,pending:new Map(),src:"local"};
 function toast(msg,err){const t=$("#toast");t.textContent=msg;t.className="toast"+(err?" err":"");t.hidden=false;clearTimeout(toast._t);toast._t=setTimeout(()=>{t.hidden=true},err?9000:5000)}
 
@@ -3636,6 +3644,21 @@ function pushProgress(old,text){ // nhật ký nhiều dòng "[dd/mm HH:mm] nộ
   return [`[${pad2(d.getDate())}/${pad2(d.getMonth()+1)} ${pad2(d.getHours())}:${pad2(d.getMinutes())}] ${text}`,...ls].join("\n");
 }
 const PRINT_Q="qlcv:printq",PRINT_APPLIED="qlcv:printapplied",PROGRESS_SENT="Đã gửi duyệt TT cho TP",PO_AFTER_PRINT="Chờ gửi UNC",PO_BEFORE_PRINT="Chờ làm TT";
+/* Người dùng bấm “Không in” sau khi gửi đề nghị thanh toán trên Odoo -> thêm việc “In giấy ĐNTT” vào tab CV theo ngày, Tham chiếu = PAY-PO */
+function addPrintTask(rows,ps,psi){
+  const ci=state.sheets.findIndex(x=>x.checklist&&/^cv theo ngày/.test(norm(x.name))),cv=state.sheets[ci];
+  const r0=rows[0],no=String(r0.v[ps.title]??"").trim();
+  if(!cv)return {found:true,pay:false,pos:[],skipped:[],no,added:0,err:"chưa có tab CV theo ngày"};
+  const ti=cv.title,ri=cv.cols.find(c=>/^tham chiếu$/i.test(c.name.trim()));
+  if(ti==null||!ri)return {found:true,pay:false,pos:[],skipped:[],no,added:0,err:"tab CV theo ngày thiếu cột Tên việc/Tham chiếu"};
+  let added=0;
+  const pos=ps.payPoIdx!=null?String(r0.v[ps.payPoIdx]??"").split(/[,;\s]+/).map(x=>x.trim().toUpperCase()).filter(Boolean):[];
+  const ref=no+(pos.length?"-"+pos.join(","):"");
+  if(cv.rows.some(x=>String(x.v[ri.idx]??"").trim().toUpperCase()===ref.toUpperCase()&&!ckDone(cv,x)))return {found:true,pay:false,pos:[],skipped:[],no,added:0}; // đã có việc này, chưa xong
+  state.via="Odoo Helper (không in đề nghị)";
+  try{const nr=addRow(ci,true);setCell(ci,nr,ti,"In giấy đề nghị thanh toán "+no);setCell(ci,nr,ri.idx,ref);added=1;setStatus(cv)}finally{state.via="dashboard"}
+  return {found:true,pay:false,pos:[],skipped:[],no,added};
+}
 function applyPrintEvent(e){ // -> {found, pay, pos:[mã PO đã chuyển]}
   const psi=state.sheets.findIndex(s=>s.pay),ps=state.sheets[psi];
   if(!ps||ps.payNoteIdx==null)return {found:false};
@@ -3645,6 +3668,7 @@ function applyPrintEvent(e){ // -> {found, pay, pos:[mã PO đã chuyển]}
     return (id&&(no===id||cur===id))||(rid&&ps.payId>=0&&String(r.v[ps.payId]??"")===rid);
   });
   if(!rows.length)return {found:false};
+  if(e.kind==="noprint")return addPrintTask(rows,ps,psi);
   const poSi=state.sheets.findIndex(s=>s.wf),po=state.sheets[poSi],moved=[],skipped=[];let pay=false;
   state.via="Odoo Helper (in đề nghị)";
   try{for(const r of rows){
@@ -3675,18 +3699,20 @@ function applyPrintQueue(){ // -> khóa các sự kiện đã xử lý xong (đ�
     if(!r.found)continue; // chưa thấy phiếu trên bảng (dữ liệu chưa về): giữ lại thử sau
     applied.add(e.k);done.push(e.k);
     if(r.skipped.length)msgs.push(`${r.no}: PO ${r.skipped.join(", ")} chưa ở “${PO_BEFORE_PRINT}” nên chưa tự chuyển sang “${PO_AFTER_PRINT}”`);
+    if(r.added)msgs.push(`${r.no}: đã thêm việc “In giấy đề nghị thanh toán” vào tab CV theo ngày`);
+    else if(r.err)msgs.push(`${r.no}: chưa thêm được việc in giấy (${r.err})`);
     if(r.pay||r.pos.length)msgs.push(`${r.no}: “${PROGRESS_SENT}”${r.pos.length?" · PO "+r.pos.join(", ")+" → “"+PO_AFTER_PRINT+"”":""}`);
   }
   store.set(PRINT_APPLIED,[...applied].slice(-500));
   store.set(PRINT_Q,q.filter(e=>!done.includes(e.k)));
-  if(msgs.length){softRender();toast("Đã ghi tiến độ sau khi in Đề nghị thanh toán: "+msgs.join(" | "))}
+  if(msgs.length){softRender();toast("Odoo Helper (đề nghị thanh toán): "+msgs.join(" | "))}
   return done;
 }
 function receivePrintEvents(list,source,origin){
   const q=store.get(PRINT_Q)||[],have=new Set(q.map(x=>x.k)),applied=new Set(store.get(PRINT_APPLIED)||[]);
   for(const x of Array.isArray(list)?list:[]){
-    if(!x||typeof x.k!=="string"||!(x.id||x.rid)||x.kind!=="printed")continue;
-    if(!have.has(x.k)&&!applied.has(x.k))q.push({k:x.k.slice(0,120),id:String(x.id||"").slice(0,60),rid:String(x.rid||"").slice(0,20),kind:"printed",at:String(x.at||"")});
+    if(!x||typeof x.k!=="string"||!(x.id||x.rid)||(x.kind!=="printed"&&x.kind!=="noprint"))continue;
+    if(!have.has(x.k)&&!applied.has(x.k))q.push({k:x.k.slice(0,120),id:String(x.id||"").slice(0,60),rid:String(x.rid||"").slice(0,20),kind:x.kind,at:String(x.at||"")});
   }
   store.set(PRINT_Q,q.slice(-200));
   const done=applyPrintQueue(),all=(Array.isArray(list)?list:[]).map(x=>x&&x.k).filter(k=>done.includes(k)||applied.has(k));
@@ -3982,8 +4008,8 @@ function tdSlot(ts,next){ // mốc xếp lại gần nhất không sau ts, hoặ
 }
 const tdStale=st=>!st||!st.t||tdSlot(Date.now())>st.t; // đã qua một mốc kể từ lần xếp trước
 const TD_TOPS=[5,10,15,20,30,40,50,100,200],tdTop=()=>{const v=+store.get("qlcv:tdTop");return TD_TOPS.includes(v)?v:10}; // số việc “Làm ngay” hiện ra
-const TD_STAGE=["🚚 Trễ nhập hàng","📦 Chờ nhập hàng","📤 Chờ gửi NCC","📝 Chờ gửi duyệt PO","💬 Chờ báo giá","🧾 Chờ KT xác nhận công nợ","🧮 Chờ lập hóa đơn","💳 Chờ làm TT","📨 Chờ gửi UNC","🗒 Việc ghi chú thêm","… Bước khác"];
-const tdWfRank=t=>{const x=t.step;return x==="Chờ nhận hàng"?(t.late>0?0:1):x==="Chờ gửi NCC"?2:x==="Chờ gửi duyệt PO"?3:x==="Chờ báo giá"?4:x==="Chờ KT xác nhận công nợ"?5:x==="Cần lập hóa đơn"?6:x==="Chờ làm TT"?7:x==="Chờ gửi UNC"?8:(t.pay||WF_ALL.includes(x))?10:9}; // 9 = Note tự do ngoài quy trình (vd. “Chờ mua cưa bàn”)
+const TD_STAGE=["🚚 Trễ nhập hàng","📦 Chờ nhập hàng","📤 Chờ gửi NCC","📝 Chờ gửi duyệt PO","✅ Chờ duyệt PO","💬 Chờ báo giá","🧾 Chờ KT xác nhận công nợ","🧮 Chờ lập hóa đơn","💳 Chờ làm TT","📨 Chờ gửi UNC","🗒 Việc ghi chú thêm","… Bước khác"];
+const tdWfRank=t=>{const x=t.step;return x==="Chờ nhận hàng"?(t.late>0?0:1):x==="Chờ gửi NCC"?2:x==="Chờ gửi duyệt PO"?3:x==="Chờ duyệt PO"?4:x==="Chờ báo giá"?5:x==="Chờ KT xác nhận công nợ"?6:x==="Cần lập hóa đơn"?7:x==="Chờ làm TT"?8:x==="Chờ gửi UNC"?9:(t.pay||WF_ALL.includes(x))?11:10}; // 9 = Note tự do ngoài quy trình (vd. “Chờ mua cưa bàn”)
 const TD_QN=["Để lượt sau","Làm ngay","Lên lịch","Gộp theo NCC","Để sau"],TD_QC=["#7c3aed","var(--bad)","var(--brand)","var(--warn)","#64748b"];
 function tdRun(){let st=store.get("qlcv:tdRun");if(tdStale(st)){st={t:Date.now(),ov:{},snap:{}};store.set("qlcv:tdRun",st)}return st}
 let tdMrp=null; // PO -> {mo,items,mos}: PO đang cấp NVL cho lệnh sản xuất thiếu hàng (data/mrp-block.json, do script đọc Odoo tạo)
@@ -4099,7 +4125,7 @@ function renderToday(){
   const cut=q1.slice(0,top),rest=q1.slice(top),remind=waiting.filter(t=>(t.pay?t.late:t.stuck)>=STUCK());
   let html=`<div class="td-bar"><button class="btn td-tg ${view==="matrix"?"on":""}" data-tdview="matrix">▦ Theo 4 mục</button><button class="btn td-tg ${view==="flow"?"on":""}" data-tdview="flow">⛓ Theo workflow</button><span class="grow"></span><span class="sub">Việc “Làm ngay” hiện <select id="tdTop">${TD_TOPS.map(n=>`<option${n===top?" selected":""}>${n}</option>`).join("")}</select> · Xếp lần cuối ${hm(run.t)}, lần kế ${hm(tdSlot(Date.now(),true))}</span><button class="btn td-tg ${focus?"on":""}" id="tdFocus" title="Chỉ hiện Làm ngay và Gộp theo NCC; ẩn Lên lịch, Để sau, Đang chờ">🎯 Tập trung</button><button class="btn" id="tdOpenAll" title="Mở rộng tất cả các nhóm">▾ Mở tất cả</button><button class="btn" id="tdCloseAll" title="Thu gọn tất cả các nhóm">▸ Thu gọn tất cả</button><button class="btn" id="tdRerun" title="Bỏ các việc đã kéo tay và tính lại toàn bộ theo rule">🔄 Xếp lại ngay</button></div>`;
   html+=`<div class="sub" style="margin:0 0 10px">🎯 <b>${fmtD(TODAY)}</b> · ${view==="matrix"?"theo 4 mục, xếp theo điểm":"theo workflow, xếp theo bước quy trình"} · kéo thả để chuyển mục · tự xếp lại lúc 8h, 13h, 20h hằng ngày</div>`+tdD("today:help","td-more","Cách tính và cách dùng",`<div class="note">${view==="matrix"?`Điểm = 40% <b>Gấp</b> + 40% <b>Quan trọng</b> + 20% <b>Dễ</b>; trong mỗi mục việc xếp theo điểm. Việc đang chờ người khác để riêng ở “Đang chờ”. Rule chạy lại cố định lúc 8h, 13h và 20h hằng ngày; kéo thả một việc sang mục khác (hoặc chọn ⇄) thì giữ tới lần chạy kế tiếp.`:`cùng phân loại gấp / quan trọng, nhưng xếp theo quy trình: <b>quan trọng & gấp → gấp mà không quan trọng → quan trọng mà không gấp → không quan trọng, không gấp</b>. Trong mỗi nhóm: <b>trễ nhập hàng → chờ nhập hàng → chờ gửi NCC → chờ gửi duyệt PO → chờ báo giá → chờ KT xác nhận công nợ → chờ lập hóa đơn → chờ làm TT</b>; cùng bước thì trễ nhiều và điểm quan trọng cao lên trước. Việc đang chờ người khác chỉ vào các nhóm này khi đã trễ hoặc đứng yên từ ${STUCK()} ngày (🔔 cần đi nhắc). Kéo thả vẫn dùng chung với tab 4 mục.`}</div>`,false);
-  html+=`<div class="td-sum"><span class="chip" style="--c:var(--bad)">Làm ngay ${q1.length}</span><span class="chip" style="--c:var(--brand)">Lên lịch ${q2.length}</span><span class="chip" style="--c:var(--warn)">Gộp theo NCC ${q3.length}</span><span class="chip" style="--c:#64748b">Để sau ${q4.length}</span><span class="chip" style="--c:#7c3aed">Đang chờ ${waiting.length}${q0.length?` · hoãn ${q0.length}`:""}</span></div>`;
+  html+=`<div class="td-sum"><span class="chip go" data-tdjump="1" title="Đi tới mục Làm ngay" style="--c:var(--bad)">Làm ngay ${q1.length}</span><span class="chip go" data-tdjump="2" title="Đi tới mục Lên lịch" style="--c:var(--brand)">Lên lịch ${q2.length}</span><span class="chip go" data-tdjump="3" title="Đi tới mục Gộp theo NCC" style="--c:var(--warn)">Gộp theo NCC ${q3.length}</span><span class="chip go" data-tdjump="4" title="Đi tới mục Để sau" style="--c:#64748b">Để sau ${q4.length}</span><span class="chip go" data-tdjump="wait" title="Đi tới mục Đang chờ người khác" style="--c:#7c3aed">Đang chờ ${waiting.length}</span>${q0.length?`<span class="chip go" data-tdjump="0" title="Đi tới mục Để lượt sau" style="--c:#7c3aed">Hoãn ${q0.length}</span>`:""}</div>`;
   {const sg=[];state.sheets.forEach((sh,si)=>{if(sh.wf)sh.rows.forEach(r=>{if(sugDone(sh,r))sg.push({si,sh,r})})});
    if(sg.length)html+=`<div class="note" style="margin:0 0 14px;border-color:var(--ok)">💡 <b>${sg.length} PO thanh toán trước chờ bạn xác nhận Hoàn thành</b> (đã nhận hết hàng, đã xuất hóa đơn, đang ở Chờ KT xác nhận công nợ): ${sg.slice(0,6).map(x=>`<a href="#" data-po360="${esc(String(x.r.v[x.sh.title]))}">${esc(String(x.r.v[x.sh.title]))}</a>`).join(", ")}${sg.length>6?", …":""} <button class="btn" id="tdSugGo" data-si="${sg[0].si}">Mở danh sách xác nhận</button></div>`}
   const ul=a=>`<ul class="attn">`+a.map(t=>tdRow(t)).join("")+`</ul>`;
@@ -4152,6 +4178,12 @@ function renderToday(){
   $("#main").innerHTML=html;
   const m=$("#main"),moveTo=(key,q)=>{tdLearn(d,key,q);const st=tdRun();st.ov[key]=q;store.set("qlcv:tdRun",st);bump();renderToday()};
   tdInsightsBind(m);
+  m.querySelectorAll("[data-tdjump]").forEach(b=>b.onclick=()=>{ // bấm số lượng -> cuộn tới đúng mục, mở nếu đang thu gọn
+    const k=b.dataset.tdjump,el=k==="wait"?m.querySelector('details[data-tdd="today:wait"]'):m.querySelector(`.card[data-tdq="${k}"]`);
+    if(!el){toast("Mục này đang ẩn (chế độ tập trung). Bấm “🎯 Tập trung” để hiện lại.",true);return}
+    const d=el.tagName==="DETAILS"?el:el.querySelector("details");if(d&&!d.open)d.open=true;
+    const box=el.closest(".card")||el;box.scrollIntoView({behavior:"smooth",block:"start"});box.classList.remove("tdflash");void box.offsetWidth;box.classList.add("tdflash");
+  });
   if($("#tdSugGo"))$("#tdSugGo").onclick=e=>goSheet(+e.target.dataset.si,{queue:"sugdone"});
   m.querySelectorAll("a[data-po360]:not(.td-360)").forEach(a=>a.onclick=ev=>{ev.preventDefault();state.po360=a.dataset.po360;state.active="po360";renderTabs();render();scrollTo(0,0)});
   m.querySelectorAll("[data-tdgo]").forEach(e=>e.onclick=ev=>{if(ev.target.closest("a.td-360")){ev.preventDefault();state.po360=ev.target.closest("a.td-360").dataset.po360;state.active="po360";renderTabs();render();scrollTo(0,0);return}if(ev.target.closest("a.ol,select,button"))return;ev.preventDefault();goSheet(+e.dataset.tdgo,{search:String(e.dataset.q).toLowerCase()})});
@@ -4445,6 +4477,7 @@ function sheetStats(sh){
   const o={rows:sh.rows.length};
   if(sh.checklist){const d=sh.rows.filter(r=>ckDone(sh,r)).length;o.done=d;o.pct=sh.rows.length?d/sh.rows.length:0}
   else if(sh.progIdx!=null){const d=sh.rows.filter(r=>r.done).length;o.done=d;o.pct=sh.rows.length?d/sh.rows.length:0}
+  else if(sh.bank&&sh.chkIdx!=null){const d=sh.rows.filter(r=>String(r.v[sh.chkIdx]??"").trim()!=="").length;o.done=d;o.pct=sh.rows.length?d/sh.rows.length:0;o.lbl="Đã kiểm tra"} // Thông tin thanh toán: đã kiểm tra / tổng
   o.overdue=sh.rows.filter(r=>r.st==="overdue").length;
   o.soon=sh.rows.filter(r=>r.st==="soon").length;
   if(sh.money)o.sum=sh.rows.reduce((a,r)=>a+(+r.v[sh.money.idx]||0),0);
@@ -4455,7 +4488,7 @@ function kpi(label,val,sub,cls="",id=""){return `<div class="card kpi ${cls} ${i
 function renderOverview(){
   const sheets=state.sheets.filter(s=>!s.ext);const st=sheets.map(sheetStats); // Netsuite Data (luôn ở cuối) không tính vào tổng quan
   const totRows=st.reduce((a,s)=>a+s.rows,0),totOd=st.reduce((a,s)=>a+s.overdue,0),totSoon=st.reduce((a,s)=>a+s.soon,0);
-  let html=`<div class="grid kpis">
+  const kp=`<div class="grid kpis" style="margin-top:14px">
     ${kpi("Quá hạn chưa xong",fmtN(totOd),"hạn &lt; hôm nay ("+fmtD(TODAY)+") và chưa hoàn thành",totOd?"bad":"ok")}
     ${kpi("Sắp đến hạn (3 ngày)",fmtN(totSoon),"chưa hoàn thành",totSoon?"warn":"ok")}
   </div>`;
@@ -4464,13 +4497,13 @@ function renderOverview(){
   sheets.forEach((s,i)=>{
     const x=st[i];
     let line="";
-    if(x.pct!=null)line+=`<div class="prog"><i style="width:${(x.pct*100).toFixed(0)}%"></i></div><div class="sub">Hoàn thành ${x.done}/${x.rows} (${(x.pct*100).toFixed(0)}%)</div>`;
+    if(x.pct!=null)line+=`<div class="prog"><i style="width:${(x.pct*100).toFixed(0)}%"></i></div><div class="sub">${x.lbl||"Hoàn thành"}: <b>${x.done}/${x.rows}</b> (${(x.pct*100).toFixed(0)}%)</div>`;
     let extra=[];
     if(x.sum!=null&&s.money)extra.push(`${/^(tổng|giá trị)/i.test(colLabel(s.money))?"":"Tổng "}${esc(colLabel(s.money))}: <b>${fmtBig(x.sum)}</b>`);
     if(x.overdue)extra.push(`<span class="late">${x.overdue} quá hạn</span>`);
-    cards+=`<div class="card sc" data-i="${i}"><h4>${esc(s.name)}</h4><div class="sub">${x.rows} dòng · ${s.cols.length} cột</div>${line}<div class="sub" style="margin-top:6px">${extra.join(" · ")}</div></div>`;
+    cards+=`<div class="card sc" data-i="${i}"><h4>${esc(s.name)}</h4>${line}<div class="sub" style="margin-top:6px">${extra.join(" · ")}</div></div>`;
   });
-  html+=`<div class="card" style="margin-top:14px">`+tdD("ov:sheets","td-g",`<span class="lvl">Các sheet trong file<span class="tag">${sheets.length}</span></span>`,`<div class="grid sheetcards">${cards}</div>`,false)+`</div>`;
+  let html=`<div class="card">`+tdD("ov:sheets","td-g",`<span class="lvl">Các tab<span class="tag">${sheets.length}</span></span>`,`<div class="grid sheetcards">${cards}</div>`,true)+`</div>`+kp;
   // cần chú ý
   const items=[];
   sheets.forEach((s,i)=>s.rows.forEach(r=>{if(r.st==="overdue")items.push({s,i,r})}));
@@ -4480,7 +4513,7 @@ function renderOverview(){
   else{
     const late=({s,r})=>{const due=r.v[s.dueIdx];return s.pay?bdLate(due):Math.round((TODAY-sod(due))/DAY)};
     const li=({s,i,r})=>{const due=r.v[s.dueIdx];
-      return `<li><span class="tag">${esc(s.name)}</span><div><b>${esc(r.v[s.title])}</b><div class="sub">${esc(s.sub!=null?r.v[s.sub]:"")}${s.money&&r.v[s.money.idx]!=null?" · "+fmtN(r.v[s.money.idx]):""} · dòng ${r.n}</div></div><span class="late">trễ ${late({s,r})} ngày${s.pay?" làm việc":""}<div class="sub">hạn ${fmtD(due)}</div></span></li>`};
+      return `<li class="go" data-gi="${i}" data-gq="${esc(String(r.v[s.title]??""))}" title="Mở ${esc(String(r.v[s.title]??""))} trong tab ${esc(s.name)}"><div><b>${esc(r.v[s.title])}</b><div class="sub">${esc(s.sub!=null?r.v[s.sub]:"")}${s.money&&r.v[s.money.idx]!=null?" · "+fmtN(r.v[s.money.idx]):""} · dòng ${r.n}</div></div><span class="late">trễ ${late({s,r})} ngày${s.pay?" làm việc":""}<div class="sub">hạn ${fmtD(due)}</div></span></li>`};
     const col=(title,arr)=>`<div class="card"><div class="lvl">${title}<span class="tag">${arr.length}</span></div>${arr.length?`<ul class="attn">${arr.slice(0,12).map(li).join("")}</ul>${arr.length>12?`<div class="sub">… và ${arr.length-12} dòng nữa</div>`:""}`:`<div class="sub">Không có.</div>`}</div>`;
     const po=items.filter(x=>x.s.wf),pay=items.filter(x=>x.s.pay),oth=items.filter(x=>!x.s.wf&&!x.s.pay);
     html+=`<div class="ov2">${col("PO",po)}${col("Phiếu thanh toán",pay)}</div>`+(oth.length?`<div style="margin-top:14px">${col("Sheet khác",oth)}</div>`:"");
@@ -4489,6 +4522,7 @@ function renderOverview(){
   }
   html+=`<div class="note">Cách tính: dòng "quá hạn" = có ngày hạn &lt; hôm nay và cột trạng thái chưa ở mức hoàn thành. Cột ngày / cột trạng thái có thể đổi trong từng sheet.</div>`;
   $("#main").innerHTML=html;
+  $("#main").querySelectorAll("li[data-gi]").forEach(li=>li.onclick=()=>goSheet(+li.dataset.gi,{search:li.dataset.gq.toLowerCase()})); // PO -> tab PO, phiếu thanh toán -> tab Phiếu thanh toán
   $("#main").querySelectorAll(".sc").forEach(c=>c.onclick=()=>{state.active=+c.dataset.i;renderTabs();render();scrollTo(0,0)});
   $("#main").querySelectorAll("[data-od]").forEach(a=>a.onclick=e=>{e.preventDefault();const s=state.sheets[+a.dataset.od];s.ui.special="overdue";state.active=+a.dataset.od;renderTabs();render();scrollTo(0,0)});
 }
@@ -4952,11 +4986,14 @@ function renderDyn(sh,keep,anchor){
   let html=queueBar(sh)+(chips.length?`<div class="chips">${chips.join("")}<button class="btn" data-clear>Xoá tất cả bộ lọc</button></div>`:"");
   // KPI
   html+=`<div class="grid kpis">`;
-  html+=kpi("Số dòng",fmtN(fr.length),fr.length!==sh.rows.length?`trên tổng ${fmtN(sh.rows.length)}`:"tổng số dòng");
+  if(!sh.ext&&!sh.checklist){ // CV theo ngày chỉ có chỉ số “Hoàn thành”; Netsuite Data không hiện số dòng
+    const lab=sh.wf?"Số lượng PO":sh.pay?"Số lượng phiếu":sh.bank?"Số lượng NCC":"Số dòng",flt=fr.length!==sh.rows.length;
+    html+=kpi(lab,fmtN(fr.length),flt&&!sh.pay?`trên tổng ${fmtN(sh.rows.length)}`:(flt||sh.wf||sh.pay||sh.bank?"":"tổng số dòng"));
+  }
   if(sh.money){const s=fr.reduce((a,r)=>a+(+r.v[sh.money.idx]||0),0);html+=kpi(/^(tổng|giá trị)/i.test(colLabel(sh.money))?"Tổng "+colLabel(sh.money).replace(/^tổng\s+/i,""):"Tổng "+colLabel(sh.money),fmtBig(s),fmtN(s))}
   if(sh.checklist){
     const d=fr.filter(r=>ckDone(sh,r)).length;
-    html+=kpi("Đã tick hoàn thành",`${d}/${fr.length}`,fr.length?(d/fr.length*100).toFixed(0)+"%":"",d===fr.length&&fr.length?"ok":"");
+    html+=kpi("Hoàn thành",`${d}/${fr.length}`,"",(d===fr.length&&fr.length?"ok":"")+" mini");
   }else if(sh.progIdx!=null){
     const d=fr.filter(r=>r.done).length;
     html+=kpi("Hoàn thành",fr.length?(d/fr.length*100).toFixed(0)+"%":"–",`${d}/${fr.length} · theo cột “${esc(sh.cols.find(c=>c.idx===sh.progIdx).name)}”`,"ok");
@@ -4974,7 +5011,8 @@ function renderDyn(sh,keep,anchor){
     const pc=sh.cols.find(c=>c.idx===sh.progIdx);
     html+=`<div class="card"><h3>${esc(pc.name)} <small>tiến độ chính</small></h3><div class="donutwrap">${donut(d,f2.length,"var(--ok)")}${barsHtml(sh,sh.progIdx,f2,u.metric)}</div></div>`;
   }
-  for(const c of sh.cat){if(c.idx===sh.progIdx)continue;
+  for(const c of sh.cat){if(c.idx===sh.progIdx)continue;if(sh.ext&&/thuế/i.test(c.name))continue; // Netsuite: không vẽ biểu đồ thuế suất
+   
     html+=`<div class="card"><h3>${esc(c.name)}</h3>${barsHtml(sh,c.idx,rowsFor(sh,c.idx),u.metric)}</div>`}
   if(sh.pay&&sh.ghiIdx!=null)html+=payNoteCard(sh,rowsFor(sh,"noteGrp"));
   if(sh.dueIdx!=null)html+=timeline(sh,rowsFor(sh,"range")).replace('class="card"','class="card" style="grid-column:1/-1"');
@@ -4999,6 +5037,15 @@ function renderDyn(sh,keep,anchor){
     requestAnimationFrame(()=>{dyn.style.minHeight=""});setTimeout(()=>{dyn.style.minHeight=""},250)}
 }
 
+/* Cột “Tham chiếu” của CV theo ngày: “PAY04056-POKDQ00334” -> PAY mở phiếu trên Odoo, PO nhảy sang tab PO */
+const REF_RE=/\b(PAY\d+|PO[A-Z&]{2,}\d{3,})\b/i;
+function refCell(v){
+  return v.split(/(\bPAY\d+\b|\bPO[A-Z&]{2,}\d{3,}\b)/i).map(p=>{
+    if(/^PAY\d+$/i.test(p)){const code=p.toUpperCase(),pi=state.sheets.findIndex(x=>x.pay),ps=state.sheets[pi],r=ps&&ps.rows.find(x=>String(x.v[ps.title]??"").trim().toUpperCase()===code||(ps.payCurIdx!=null&&String(x.v[ps.payCurIdx]??"").trim().toUpperCase()===code));
+      return r?`<a class="ol" href="#" data-pay="${pi}|${r.n}" title="Mở phiếu ${esc(code)} trên Odoo">${esc(p)}</a>`:`<a class="ol" href="#" data-code="${esc(code)}" title="Mở ${esc(code)} trên Odoo">${esc(p)}</a>`}
+    if(/^PO[A-Z&]{2,}\d{3,}$/i.test(p))return `<a class="refpo" href="#" data-gopo="${esc(p.toUpperCase())}" title="Xem ${esc(p)} trong tab PO">${esc(p)}</a>`;
+    return esc(p)}).join("");
+}
 function renderTable(sh,fr){
   const u=sh.ui;let rows=fr.slice();
   if(u.sort){const {i,dir}=u.sort;rows.sort((a,b)=>{const x=a.v[i],y=b.v[i];
@@ -5017,14 +5064,14 @@ function renderTable(sh,fr){
   let h=hint+sugBar+bulkBar(sh)+`<h2 class="sec">Chi tiết (${fmtN(rows.length)} dòng) <small class="sub" style="font-weight:500">· ${matchMedia("(pointer:coarse)").matches?"chạm":"bấm đúp"} vào ô để sửa · bấm ▾ ở tiêu đề để lọc · kéo mép phải tiêu đề để chỉnh độ rộng cột</small></h2>
     <div class="tblbar">${sh.ext?"":`<button class="btn" data-t="add">＋ Thêm dòng</button><button class="btn" data-t="deln" ${selSet.size?"":"disabled"}>🗑 Xóa dòng đã chọn${selSet.size?" ("+selSet.size+")":""}</button>`}${sh.ext?`<button class="btn" data-t="nsref" title="Dữ liệu Netsuite được lưu sẵn trên máy này, không tự tải lại. Bấm để lấy bản mới nhất từ GitHub (khi máy khác đã cập nhật). Nguồn hiện tại: ${esc(sh.extMeta.src||"")}${sh.extMeta.ts?", lưu lúc "+new Date(sh.extMeta.ts).toLocaleString("vi-VN"):""}">↻ Làm mới từ GitHub</button>`:""}${sh.ext?`<button class="btn" data-t="nsprune" title="Cùng một Hàng hóa thì chỉ giữ dữ liệu của N đơn hàng gần nhất (mặc định 2), xóa phần còn lại. Có xem trước số dòng và hỏi xác nhận.">🧹 Dọn: giữ đơn gần nhất / hàng hóa</button>`:""}<button class="btn" data-t="imp" title="${sh.ext?"Thay TOÀN BỘ dữ liệu Netsuite bằng file Excel mới (hỏi xác nhận, có thể lưu lên GitHub)":"Nhập dữ liệu từ file Excel vào bảng này (khớp theo tên cột; có cột mã/tên thì cập nhật dòng trùng, dòng chưa có thì thêm mới)"}">⬆ Nhập Excel</button><button class="btn" data-t="xlsx">⬇ Xuất Excel (đang lọc)</button><button class="btn" data-t="csv">⬇ Xuất CSV</button><span class="grow"></span><button class="btn sm" data-t="cols" title="Chọn cột muốn hiện/ẩn trong bảng này (không xóa dữ liệu)">👁 Chọn cột hiển thị${hid.size?" (đang ẩn "+hid.size+")":""}</button><button class="btn sm" data-t="rzreset" title="Trả độ rộng các cột về mặc định">↔ Đặt lại độ rộng cột</button></div>
     ${hid.size?`<div class="hidbar">Cột đang ẩn: ${sh.cols.filter(c=>hid.has(c.idx)).map(c=>`<button class="btn sm" data-showcol="${c.idx}" title="Hiện lại cột này">＋ ${esc(c.type==="flag"?"TT trước":colLabel(c))}</button>`).join("")}<button class="btn sm" data-showcol="all">Hiện tất cả</button></div>`:""}
-    <div class="tablewrap ${sh.wf?"cards":""}"><table class="${sh.wf?"cardtbl":""}"><thead><tr>${sh.checklist?"<th></th>":""}<th class="flag"><input type="checkbox" data-selall title="Chọn tất cả dòng đang hiện"></th><th title="Số thứ tự các dòng đang hiển thị (tự đánh lại 1, 2, 3… theo bộ lọc/tìm kiếm/sắp xếp hiện tại)">STT</th>`+
+    <div class="tablewrap ${sh.wf?"cards":""}"><table class="${sh.wf?"cardtbl":""}"><thead><tr><th title="Số thứ tự các dòng đang hiển thị (tự đánh lại 1, 2, 3… theo bộ lọc/tìm kiếm/sắp xếp hiện tại)">STT</th><th class="flag"><input type="checkbox" data-selall title="Chọn tất cả dòng đang hiện">${sh.checklist?"<div class=\"sub\">Chọn item</div>":""}</th>${sh.checklist?"<th class=\"flag\">Trạng thái</th>":""}`+
     cols.map(c=>{const on=u.cf[c.idx]?" on":"";const lab=c.type==="flag"?"TT trước":colLabel(c);return `<th data-s="${c.idx}" class="${c.type==="flag"?"flag":""}" title="${c.type==="flag"?"Tick = PO thanh toán trước (luồng có Chờ làm TT / Đã gửi UNC)":""}">${esc(lab)}${u.sort&&u.sort.i===c.idx?(u.sort.dir>0?" ▲":" ▼"):""}<button class="fb${on}" data-f="${c.idx}" title="Lọc cột này">▾</button></th>`}).join("")+`<th></th></tr></thead><tbody>`;
   for(const [ri,r] of rows.slice(0,u.shown).entries()){
     const dn=sh.checklist?ckDone(sh,r):(sh.progIdx!=null&&r.done);
     h+=`<tr data-row="${r.n}" class="${r.st==="overdue"?"od":r.st==="soon"?"sn":""} ${dn?"dn":""}">`;
-    if(sh.checklist)h+=`<td><input type="checkbox" data-ck="${r.n}" ${dn?"checked":""} aria-label="Hoàn thành"></td>`;
-    h+=`<td class="flag sel"><input type="checkbox" data-sel="${r.n}" ${selSet.has(r.n)?"checked":""} aria-label="Chọn dòng"></td>`;
     h+=`<td class="rn">${ri+1}</td>`;
+    h+=`<td class="flag sel"><input type="checkbox" data-sel="${r.n}" ${selSet.has(r.n)?"checked":""} aria-label="Chọn dòng"></td>`;
+    if(sh.checklist)h+=`<td class="flag" data-l="Trạng thái"><input type="checkbox" data-ck="${r.n}" ${dn?"checked":""} aria-label="Hoàn thành"></td>`;
     for(const c of cols){const v=r.v[c.idx];let cell="";
       if(c.type==="flag"){h+=`<td class="flag" data-l="TT trước"><input type="checkbox" data-pay="${r.n}" ${isPay(v)?"checked":""} disabled aria-label="Thanh toán trước (tự động)" title="Tự động theo Phân loại của NCC ở tab Công nợ NCC (Đơn hàng = tick, Công nợ = bỏ tick). Không tick tay được."></td>`;continue}
       if(sh.wf&&c.idx===sh.noteIdx){
@@ -5043,6 +5090,7 @@ function renderTable(sh,fr){
       if(v!=null&&sh.pay&&c.idx===sh.payPoIdx)cell=String(v).split(/([,;\s]+)/).map(p=>/^[,;\s]*$/.test(p)?esc(p):`<a class="ol" href="#" data-code="${esc(p.trim().toUpperCase())}" title="Mở PO ${esc(p.trim())} trên Odoo">${esc(p)}</a>`).join("");
       if(sh.pay&&c.idx===sh.title&&v!=null&&sh.payCurIdx!=null){const cur=String(r.v[sh.payCurIdx]??"").trim();if(/bnk/i.test(cur)&&cur!==String(v))cell=`${esc(cur)} <span class="sub" title="Số PAY ban đầu">(${esc(v)})</span>`} // phiếu đã thanh toán: hiện số BNK, kèm số PAY ban đầu trong ngoặc
       if(v!=null&&sh.pay&&c.idx===sh.payNoteIdx&&String(v).includes("\n")){const ls=String(v).split("\n").filter(Boolean);cell=esc(ls[0])+` <span class="sub" title="Rê chuột vào ô để xem toàn bộ nhật ký">(+${ls.length-1} ghi chú cũ)</span>`}
+      if(v!=null&&sh.checklist&&/^tham chiếu$/i.test(c.name.trim())&&REF_RE.test(String(v)))cell=refCell(String(v));
       if(v!=null&&c.idx===sh.title&&/mã đơn|số po|^po$/i.test(c.name))cell=`<a class="ol" href="#" data-code="${esc(v)}" title="Mở Odoo để tìm đơn này">${cell}</a>`;
       if(v!=null&&sh.wf&&/^nhà cung cấp$/i.test(c.name))cell=`<a class="sl" href="#" data-sup="${c.idx}" data-v="${esc(v)}" title="Bấm để lọc các PO của nhà cung cấp này">${cell}</a>`;
       const cls=typeof v==="number"?"num":(c.type==="text"?"txt":"");
@@ -5064,6 +5112,7 @@ function renderTable(sh,fr){
     else if(k==="cols")colMenu(sh,t.querySelector('[data-t=cols]'));
     else if(k==="rzreset"){rzClear();renderDyn(sh);toast("Đã đặt lại độ rộng cột")}});
   t.querySelectorAll("[data-showcol]").forEach(b=>b.onclick=()=>{const v=b.dataset.showcol;store.set(hideKey(sh),v==="all"?[]:[...hid].filter(i=>i!==+v));renderDyn(sh,true)});
+  t.querySelectorAll("[data-gopo]").forEach(a=>a.onclick=ev=>{ev.preventDefault();ev.stopPropagation();const pi=state.sheets.findIndex(x=>x.wf);if(pi<0)return toast("Chưa có tab PO.",true);goSheet(pi,{search:a.dataset.gopo.toLowerCase()})});
   t.querySelectorAll("[data-f]").forEach(b=>b.onclick=e=>{e.stopPropagation();openFilter(sh,+b.dataset.f,b,()=>renderDyn(sh))});
   t.querySelectorAll("[data-pay],[data-sel],[data-selall],[data-sug]").forEach(cb=>cb.onclick=e=>e.stopPropagation());
   t.querySelectorAll("[data-sel]").forEach(cb=>cb.onchange=()=>{cb.checked?selSet.add(+cb.dataset.sel):selSet.delete(+cb.dataset.sel);renderTable(sh,fr)});

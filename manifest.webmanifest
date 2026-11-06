@@ -1,6 +1,6 @@
 {
-  "name": "Quản lý PO",
-  "short_name": "Quản lý PO",
+  "name": "My working space",
+  "short_name": "My working space",
   "description": "Dashboard theo dõi PO mua hàng và nhắc việc",
   "start_url": "./",
   "scope": "./",

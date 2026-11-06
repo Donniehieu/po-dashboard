@@ -427,13 +427,15 @@
     const st = box.querySelector(".pst"), yes = box.querySelector(".yes"), no = box.querySelector(".no");
     const say = (t, bad) => { st.textContent = t; st.style.color = bad ? "#c62828" : "#2e7d32"; };
     const close = () => box.remove();
-    no.onclick = close;
-    box.addEventListener("keydown", (e) => { if (e.key === "Escape") close(); });
+    // Từ chối in (Không in / Esc) -> báo dashboard thêm việc “In giấy đề nghị thanh toán” vào tab CV theo ngày. Đóng hộp sau khi in tự động lỗi thì không tạo việc.
+    const decline = () => { if (!no.dataset.failed) recordNoPrint(docInfo()); close(); };
+    no.onclick = decline;
+    box.addEventListener("keydown", (e) => { if (e.key === "Escape") decline(); });
     yes.onclick = async () => {
       if (printing) return; // chống bấm dồn
       printing = true; yes.disabled = no.disabled = true; yes.style.opacity = no.style.opacity = ".6";
       try { await runPrintFlow(say); box.remove(); }
-      catch (err) { say("Chưa in tự động được: " + err.message + " Hãy bấm tay ⚙ → “" + PRINT_ITEM + "”.", true); no.disabled = false; no.textContent = "Đóng"; }
+      catch (err) { say("Chưa in tự động được: " + err.message + " Hãy bấm tay ⚙ → “" + PRINT_ITEM + "”.", true); no.disabled = false; no.dataset.failed = "1"; no.textContent = "Đóng"; }
       finally { setTimeout(() => { printing = false; }, 4000); } // khoảng nghỉ sau mỗi lần in để tránh bấm lặp
     };
     yes.focus();
@@ -491,6 +493,15 @@
     q.push({ k: "printed:" + (doc.id || doc.rid) + ":" + nowIso(), id: doc.id, rid: doc.rid, kind: "printed", at: nowIso() });
     st.set(PRINTEV_KEY, q.slice(-100));
     msg("✔ Đã ghi nhận in xong " + (doc.id || doc.rid) + " – dashboard sẽ note “Đã gửi duyệt TT cho TP”.");
+    sendPrintEvents();
+  }
+  function recordNoPrint(doc) {
+    if (!doc || !(doc.id || doc.rid)) return;
+    const q = st.get(PRINTEV_KEY, []), day = nowIso().slice(0, 10), k = "noprint:" + (doc.id || doc.rid) + ":" + day; // mỗi phiếu tối đa 1 việc/ngày
+    if (q.some((x) => x.k === k)) return;
+    q.push({ k, id: doc.id, rid: doc.rid, kind: "noprint", at: nowIso() });
+    st.set(PRINTEV_KEY, q.slice(-100));
+    msg("📝 Đã ghi nhận chưa in " + (doc.id || doc.rid) + " – dashboard sẽ thêm việc “In giấy đề nghị thanh toán” vào tab CV theo ngày.");
     sendPrintEvents();
   }
   function sendPrintEvents(target, origin) { // gửi các sự kiện chưa được dashboard xác nhận
