@@ -1209,6 +1209,10 @@ table.fx td.txt { max-width: none; }
   background: var(--card);
   color: var(--ink);
 }
+.fp input[type=checkbox], .fp input[type=radio] { width: 15px; height: 15px; min-width: 15px; padding: 0; margin: 0; flex: none; accent-color: var(--brand); }
+.fp .list label { justify-content: flex-start; text-align: left; }
+.fp .list label > span:not(.n) { flex: 1; min-width: 0; text-align: left; overflow-wrap: anywhere; }
+.fp .join label { display: flex; align-items: center; gap: 6px; }
 .fp .row { display: grid; grid-template-columns: 118px 1fr; gap: 6px; }
 .fp .join { display: flex; gap: 14px; font-size: 12.5px; color: var(--mute); }
 .fp .list {
@@ -5049,7 +5053,8 @@ function refCell(v){
 function renderTable(sh,fr){
   const u=sh.ui;let rows=fr.slice();
   if(u.sort){const {i,dir}=u.sort;rows.sort((a,b)=>{const x=a.v[i],y=b.v[i];
-    if(x==null&&y==null)return 0;if(x==null)return 1;if(y==null)return -1;
+    const bx=x==null||String(x).trim()==="",by=y==null||String(y).trim()==="";
+    if(bx&&by)return 0;if(bx)return -1;if(by)return 1; // ô trống luôn lên đầu, bất kể A→Z hay Z→A
     const r=(typeof x==="number"&&typeof y==="number")||(x instanceof Date&&y instanceof Date)?(x-y):String(x).localeCompare(String(y),"vi");return r*dir})}
   const hid=hiddenCols(sh);
   let cols=sh.cols.filter(c=>c.type!=="index"&&!c.noShow&&!hid.has(c.idx));const si=state.sheets.indexOf(sh);
@@ -5064,7 +5069,7 @@ function renderTable(sh,fr){
   let h=hint+sugBar+bulkBar(sh)+`<h2 class="sec">Chi tiết (${fmtN(rows.length)} dòng) <small class="sub" style="font-weight:500">· ${matchMedia("(pointer:coarse)").matches?"chạm":"bấm đúp"} vào ô để sửa · bấm ▾ ở tiêu đề để lọc · kéo mép phải tiêu đề để chỉnh độ rộng cột</small></h2>
     <div class="tblbar">${sh.ext?"":`<button class="btn" data-t="add">＋ Thêm dòng</button><button class="btn" data-t="deln" ${selSet.size?"":"disabled"}>🗑 Xóa dòng đã chọn${selSet.size?" ("+selSet.size+")":""}</button>`}${sh.ext?`<button class="btn" data-t="nsref" title="Dữ liệu Netsuite được lưu sẵn trên máy này, không tự tải lại. Bấm để lấy bản mới nhất từ GitHub (khi máy khác đã cập nhật). Nguồn hiện tại: ${esc(sh.extMeta.src||"")}${sh.extMeta.ts?", lưu lúc "+new Date(sh.extMeta.ts).toLocaleString("vi-VN"):""}">↻ Làm mới từ GitHub</button>`:""}${sh.ext?`<button class="btn" data-t="nsprune" title="Cùng một Hàng hóa thì chỉ giữ dữ liệu của N đơn hàng gần nhất (mặc định 2), xóa phần còn lại. Có xem trước số dòng và hỏi xác nhận.">🧹 Dọn: giữ đơn gần nhất / hàng hóa</button>`:""}<button class="btn" data-t="imp" title="${sh.ext?"Thay TOÀN BỘ dữ liệu Netsuite bằng file Excel mới (hỏi xác nhận, có thể lưu lên GitHub)":"Nhập dữ liệu từ file Excel vào bảng này (khớp theo tên cột; có cột mã/tên thì cập nhật dòng trùng, dòng chưa có thì thêm mới)"}">⬆ Nhập Excel</button><button class="btn" data-t="xlsx">⬇ Xuất Excel (đang lọc)</button><button class="btn" data-t="csv">⬇ Xuất CSV</button><span class="grow"></span><button class="btn sm" data-t="cols" title="Chọn cột muốn hiện/ẩn trong bảng này (không xóa dữ liệu)">👁 Chọn cột hiển thị${hid.size?" (đang ẩn "+hid.size+")":""}</button><button class="btn sm" data-t="rzreset" title="Trả độ rộng các cột về mặc định">↔ Đặt lại độ rộng cột</button></div>
     ${hid.size?`<div class="hidbar">Cột đang ẩn: ${sh.cols.filter(c=>hid.has(c.idx)).map(c=>`<button class="btn sm" data-showcol="${c.idx}" title="Hiện lại cột này">＋ ${esc(c.type==="flag"?"TT trước":colLabel(c))}</button>`).join("")}<button class="btn sm" data-showcol="all">Hiện tất cả</button></div>`:""}
-    <div class="tablewrap ${sh.wf?"cards":""}"><table class="${sh.wf?"cardtbl":""}"><thead><tr><th title="Số thứ tự các dòng đang hiển thị (tự đánh lại 1, 2, 3… theo bộ lọc/tìm kiếm/sắp xếp hiện tại)">STT</th><th class="flag"><input type="checkbox" data-selall title="Chọn tất cả dòng đang hiện">${sh.checklist?"<div class=\"sub\">Chọn item</div>":""}</th>${sh.checklist?"<th class=\"flag\">Trạng thái</th>":""}`+
+    <div class="tablewrap ${sh.wf?"cards":""}"><table class="${sh.wf?"cardtbl":""}"><thead><tr><th title="Số thứ tự các dòng đang hiển thị (tự đánh lại 1, 2, 3… theo bộ lọc/tìm kiếm/sắp xếp hiện tại)">STT</th><th class="flag"><input type="checkbox" data-selall title="Chọn tất cả dòng đang hiện"></th>${sh.checklist?"<th class=\"flag\">Trạng thái</th>":""}`+
     cols.map(c=>{const on=u.cf[c.idx]?" on":"";const lab=c.type==="flag"?"TT trước":colLabel(c);return `<th data-s="${c.idx}" class="${c.type==="flag"?"flag":""}" title="${c.type==="flag"?"Tick = PO thanh toán trước (luồng có Chờ làm TT / Đã gửi UNC)":""}">${esc(lab)}${u.sort&&u.sort.i===c.idx?(u.sort.dir>0?" ▲":" ▼"):""}<button class="fb${on}" data-f="${c.idx}" title="Lọc cột này">▾</button></th>`}).join("")+`<th></th></tr></thead><tbody>`;
   for(const [ri,r] of rows.slice(0,u.shown).entries()){
     const dn=sh.checklist?ckDone(sh,r):(sh.progIdx!=null&&r.done);
