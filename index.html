@@ -4123,6 +4123,10 @@ function tdCount(){try{return tdCompute().m.q1.slice(0,tdTop()).length}catch(e){
 const tdOpenMap=()=>store.get("qlcv:tdOpen")||{};
 function tdD(key,cls,sum,body,def){const o=tdOpenMap()[key],op=o===undefined?def:o;return `<details class="${cls}" data-tdd="${esc(key)}"${op?" open":""}><summary>${sum}</summary>${body}</details>`}
 function renderToday(){
+  const _v={x:scrollX,y:scrollY,h:$("#main").offsetHeight};
+  const m0=$("#main");m0.style.minHeight=_v.h+"px";try{renderToday0()}finally{scrollTo(_v.x,_v.y);requestAnimationFrame(()=>{m0.style.minHeight=""});setTimeout(()=>{m0.style.minHeight=""},250)}
+}
+function renderToday0(){
   tdLoadMrp();tdBatch=new Map();
   const d=tdCompute(),run=d.run,top=tdTop(),focus=!!store.get("qlcv:tdFocus");
   const view=store.get("qlcv:tdView")||"flow",{q0,q1,q2,q3,q4,waiting}=view==="flow"?d.f:d.m,hm=t=>new Date(t).toLocaleTimeString("vi-VN",{hour:"2-digit",minute:"2-digit"});
@@ -4973,6 +4977,7 @@ function payNoteCard(sh,fr){
     arr.map(([k,v])=>`<div class="bar ${sel===k?"sel":""}" data-ng="${esc(k)}" title="Bấm để lọc"><span class="t">${esc(k)}</span><span class="tr"><span class="f" style="display:block;width:${(v/mx*100).toFixed(1)}%;background:${k===NOTE_NONE?"var(--mute)":colorFor(k)}"></span></span><span class="n">${fmtN(v)} · ${(v/tot*100).toFixed(0)}%</span></div>`).join("")+`</div></div>`;
 }
 function renderDyn(sh,keep,anchor){
+  if(keep===undefined)keep=true; // cập nhật ngầm: luôn giữ vị trí cuộn của trang và của bảng, không để trang nhảy
   navNote();
   const u=sh.ui;const fr=rowsFor(sh);
   const dyn=$("#dyn");
@@ -5052,6 +5057,7 @@ function refCell(v){
 }
 function renderTable(sh,fr){
   const u=sh.ui;let rows=fr.slice();
+  const _tb=$("#tbl"),_ow=_tb&&_tb.querySelector(".tablewrap"),_ks=_tb?{l:_ow?_ow.scrollLeft:0,t:_ow?_ow.scrollTop:0,x:scrollX,y:scrollY,h:_tb.offsetHeight}:null; // vẽ lại bảng mà không làm trang/bảng nhảy
   if(u.sort){const {i,dir}=u.sort;rows.sort((a,b)=>{const x=a.v[i],y=b.v[i];
     const bx=x==null||String(x).trim()==="",by=y==null||String(y).trim()==="";
     if(bx&&by)return 0;if(bx)return -1;if(by)return 1; // ô trống luôn lên đầu, bất kể A→Z hay Z→A
@@ -5105,7 +5111,8 @@ function renderTable(sh,fr){
   }
   h+=`</tbody></table></div>`;
   if(rows.length>u.shown)h+=`<div class="more"><button class="btn" id="more">Hiện thêm (còn ${rows.length-u.shown} dòng)</button></div>`;
-  const t=$("#tbl");t.innerHTML=h;
+  const t=$("#tbl");if(_ks&&_ks.h)t.style.minHeight=_ks.h+"px";t.innerHTML=h;
+  if(_ks){const nw=t.querySelector(".tablewrap");if(nw){nw.scrollLeft=_ks.l;nw.scrollTop=_ks.t}scrollTo(_ks.x,_ks.y);requestAnimationFrame(()=>{t.style.minHeight=""});setTimeout(()=>{t.style.minHeight=""},250)}
   t.querySelectorAll("[data-t]").forEach(b=>b.onclick=()=>{const k=b.dataset.t;
     if(k==="add")addRow(si);
     else if(k==="deln")deleteRows(si,[...selSet]);
@@ -5139,12 +5146,12 @@ function renderTable(sh,fr){
   t.querySelectorAll("td[data-c]").forEach(td=>{td.ondblclick=e=>{if(e.target.closest&&e.target.closest(".ol"))return;cellEdit(td)};if(touch)td.onclick=e=>{if(!td.querySelector("input")&&!e.target.closest("button,.ol,.sl"))cellEdit(td)}});
   t.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>deleteRow(si,+b.dataset.del));
   t.querySelectorAll("a.sl").forEach(a=>{a.onclick=e=>{e.preventDefault();e.stopPropagation();u.filters[+a.dataset.sup]=a.dataset.v;u.shown=100;renderDyn(sh);const tb=$("#tbl");if(tb)tb.scrollIntoView({block:"start"});toast("Đang lọc các PO của: "+a.dataset.v)};a.ondblclick=e=>e.stopPropagation()});
-  t.querySelectorAll("[data-chk]").forEach(cb=>cb.onchange=()=>{const r=sh.rows.find(x=>x.n===+cb.dataset.chk);if(!r)return;state.via="dashboard";setCell(si,r,sh.chkIdx,cb.checked?"Có":null);renderDyn(sh);updateChrome()});
+  t.querySelectorAll("[data-chk]").forEach(cb=>cb.onchange=()=>{const r=sh.rows.find(x=>x.n===+cb.dataset.chk);if(!r)return;state.via="dashboard";setCell(si,r,sh.chkIdx,cb.checked?"Có":null);renderDyn(sh,true,r.n);updateChrome()});
   t.querySelectorAll("[data-ck]").forEach(cb=>cb.onchange=()=>{
     const n=+cb.dataset.ck,r=sh.rows.find(x=>x.n===n);
     if(sh.doneColIdx!=null){state.via="dashboard";setCell(si,r,sh.doneColIdx,cb.checked?"Đã xong "+fmtDS(TODAY):null)}
     else{const m=sh._ck||(sh._ck=store.get(ckKey(sh))||{});m[n]=cb.checked;store.set(ckKey(sh),m)}
-    renderDyn(sh);updateChrome();});
+    renderDyn(sh,true,n);updateChrome();});
 }
 
 function exportCsv(sh){
