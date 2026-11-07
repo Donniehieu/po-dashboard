@@ -4116,9 +4116,50 @@ function tdLearn(d,key,q){ // ghi nhận việc bạn kéo tay: kéo lên mục 
   L[t.k]=o;store.set("qlcv:tdLearn",L);
 }
 function tdLearnReset(k){const L=store.get("qlcv:tdLearn")||{};if(L[k]){delete L[k];store.set("qlcv:tdLearn",L)}}
+/* ---- ➕ Thêm việc hằng ngày: gợi ý lời nhắc theo bước hiện tại của PO / phiếu thanh toán, thêm vào tab CV theo ngày (Tên việc = lời nhắc, Tham chiếu = PO / PAY / NCC) ---- */
+function tdAddOpts(t){ // -> [{title, ref}]
+  const code=t.code,ncc=/^\(Trống\)$/i.test(t.k)?"":t.k,st=t.step,out=[];
+  let ref=code;
+  if(t.pay){const ps=t.sh,pos=ps.payPoIdx!=null?String(t.r.v[ps.payPoIdx]??"").split(/[,;\s]+/).map(x=>x.trim().toUpperCase()).filter(Boolean):[];ref=code+(pos.length?"-"+pos.join(","):"")+(ncc?"-"+ncc:"")}
+  else ref=code+(ncc?"-"+ncc:"");
+  const add=title=>{if(!out.some(o=>o.title===title))out.push({title,ref})};
+  if(t.pay){add(`Nhắc KTNH xác nhận phiếu thanh toán ${code}`);return out}
+  const sq=seqOf(t.sh,t.r),k=sq.indexOf(st),kr=sq.indexOf("Chờ nhận hàng");
+  if(k>=0&&kr>=0&&k<=kr)add(`Nhờ chị Hương đi lấy hàng ${code}${ncc?" - "+ncc:""}`); // PO chưa nhận hàng: luôn có
+  if(st==="Chờ nhận hàng"||(st==="Đã gửi NCC"&&t.late>0)){add(`Nhắc thủ kho nhập hàng ${code}`);add(`Nhắc ${ncc||"NCC"} gửi hàng ${code}`)}
+  else if(st==="Chờ duyệt PO")add(`Nhắc TP duyệt ${code}`);
+  else if(st==="Chờ báo giá")add(`Nhắc ${ncc||"NCC"} báo giá ${code}`);
+  else if(st==="Chờ KT xác nhận công nợ")add(`Nhắc KT xác nhận công nợ ${code}`);
+  else if(st==="Chờ làm TT")add(`Nhắc KTNH xác nhận phiếu thanh toán ${code}`);
+  else if(st==="Chờ gửi duyệt PO")add(`Gửi duyệt ${code}`);
+  else if(st==="Chờ gửi NCC"||st==="Chờ gửi UNC")add(`Gửi ${code}${ncc?" cho "+ncc:""}`);
+  else if(st==="Cần lập hóa đơn")add(`Lập hóa đơn ${code}`);
+  return out;
+}
+function tdAddTask(title,ref){
+  const ci=state.sheets.findIndex(x=>x.checklist&&/^cv theo ngày/.test(norm(x.name))),cv=state.sheets[ci];
+  if(!cv){toast("Chưa có tab CV theo ngày.",true);return false}
+  const ri=cv.cols.find(c=>/^tham chiếu$/i.test(c.name.trim()));
+  if(cv.title==null||!ri){toast("Tab CV theo ngày thiếu cột Tên việc / Tham chiếu.",true);return false}
+  if(state.stale){toast("Đang cập nhật dữ liệu mới nhất, chưa thêm việc được.",true);return false}
+  if(cv.rows.some(x=>norm(x.v[cv.title])===norm(title)&&!ckDone(cv,x))){toast("Việc này đã có trong tab CV theo ngày (chưa xong).",true);return false}
+  state.via="Việc hôm nay (thêm việc)";
+  try{const nr=addRow(ci,true);setCell(ci,nr,cv.title,title);setCell(ci,nr,ri.idx,ref);setStatus(cv)}finally{state.via="dashboard"}
+  updateChrome();toast("Đã thêm vào CV theo ngày: "+title);return true;
+}
+function tdAddMenu(btn,t){
+  document.querySelectorAll(".colmenu").forEach(x=>x.remove());
+  const opts=tdAddOpts(t),m=document.createElement("div");m.className="colmenu";
+  m.innerHTML=`<div class="cmh"><b>➕ Thêm việc hằng ngày</b></div>`+(opts.length?opts.map((o,i)=>`<button class="btn" data-o="${i}" style="display:block;width:100%;text-align:left;margin:3px 0;white-space:normal">${esc(o.title)}</button>`).join(""):`<div class="sub">Chưa có gợi ý cho bước “${esc(t.step)}”.</div>`);
+  document.body.appendChild(m);
+  const r=btn.getBoundingClientRect();m.style.top=(r.bottom+scrollY+4)+"px";m.style.left=Math.max(8,Math.min(r.left+scrollX,innerWidth-m.offsetWidth-8))+"px";
+  m.querySelectorAll("[data-o]").forEach(b=>b.onclick=ev=>{ev.stopPropagation();const o=opts[+b.dataset.o];if(tdAddTask(o.title,o.ref)){m.remove();document.removeEventListener("mousedown",out,true)}});
+  const out=e=>{if(!m.contains(e.target)&&e.target!==btn){m.remove();document.removeEventListener("mousedown",out,true)}};
+  setTimeout(()=>document.addEventListener("mousedown",out,true),0);
+}
 function tdRow(t,extra,showQ){
   const sq=t.pay?null:seqOf(t.sh,t.r),k0=sq?sq.indexOf(t.step):-1,nx=k0>=0?sq[k0+1]:null;
-  const acts=`<div class="td-act">${nx&&nx!==WF_DONE?`<button class="btn sm" data-tdxong="${esc(t.key)}" title="Xong bước “${esc(t.step)}” → chuyển sang “${esc(nx)}”">✔ ${esc(nx)}</button>`:""}${t.zz?`<button class="btn sm" data-tdwake="${esc(t.key)}" title="Đưa việc về lại theo trạng thái thực tế ngay">↩ Đưa về</button>`:""}${(t.lite?!t.zz:(t.in&&t.q!==0))?`<button class="btn sm" data-tdsnz="${esc(t.key)}" title="Hoãn tới mốc xếp lại kế tiếp">💤</button>`:""}</div>`;
+  const acts=`<div class="td-act"><button class="btn sm" data-tdadd="${esc(t.key)}" title="Thêm việc hằng ngày vào tab CV theo ngày">➕ Thêm việc</button>${nx&&nx!==WF_DONE?`<button class="btn sm" data-tdxong="${esc(t.key)}" title="Xong bước “${esc(t.step)}” → chuyển sang “${esc(nx)}”">✔ ${esc(nx)}</button>`:""}${t.zz?`<button class="btn sm" data-tdwake="${esc(t.key)}" title="Đưa việc về lại theo trạng thái thực tế ngay">↩ Đưa về</button>`:""}${(t.lite?!t.zz:(t.in&&t.q!==0))?`<button class="btn sm" data-tdsnz="${esc(t.key)}" title="Hoãn tới mốc xếp lại kế tiếp">💤</button>`:""}</div>`;
   const age=t.pay?t.late:t.stuck,mv=t.in&&!t.lite?`<select class="td-mv" data-tdmv="${esc(t.key)}" title="Chuyển sang mục khác (hoặc kéo thả)"><option value="">⇄</option>${[1,2,3,4].map(q=>`<option value="${q}"${t.q===q?" disabled":""}>→ ${TD_QN[q]}</option>`).join("")}<option value="0">→ Để lượt sau</option></select>`:"";
   return `<li class="click" ${t.in&&!t.lite?`draggable="true" data-tdk="${esc(t.key)}"`:""} data-tdgo="${t.si}" data-q="${esc(t.code)}"><span class="tag">${esc(t.sh.pay?"PAY":"PO")}</span><div>${t.sh.pay?`<b>${esc(t.code)}</b>`:`<a class="ol" href="#" data-code="${esc(t.code)}" title="Mở PO này trên Odoo để kiểm tra"><b>${esc(t.code)}</b></a>`}${t.sh.pay?"":` <a href="#" class="td-360" data-po360="${esc(t.code)}" title="Xem PO 360°">🔎</a>`} <span class="chip" style="--c:${colorFor(t.step)}">${esc(t.step)}</span>${t.moved?` <span class="chip" style="--c:#7c3aed" title="Bạn đã chuyển tay; tới lần xếp lại kế tiếp sẽ tự tính lại">✋ đã chuyển</span>`:""}<div class="sub">${esc(t.k)}${t.amt?" · "+fmtN(t.amt):""}</div><div class="sub td-why">${esc(t.rs.join(" · ")||"không có tín hiệu gấp")}${extra||""}</div></div><span class="td-score" title="Điểm = 40% gấp + 40% quan trọng + 20% dễ&#10;Gấp ${t.u} · Quan trọng ${t.im} · Dễ ${t.ease}">${t.score}<div class="sub">${age>0&&t.wait?"chờ "+age+" ngày":""}</div>${mv}${acts}</span></li>`;
 }
@@ -4254,6 +4295,7 @@ function renderToday0(){
   m.querySelectorAll("[data-tdxong]").forEach(b=>b.onclick=ev=>{ev.stopPropagation();const t=d.tasks.find(x=>x.key===b.dataset.tdxong);if(!t)return;
     const sq=seqOf(t.sh,t.r),nx=sq[sq.indexOf(t.r.wf)+1];if(!nx||nx===WF_DONE)return;
     if(setWf(t.si,t.r,nx,"việc hôm nay")){setStatus(t.sh);updateChrome();toast(`${t.code}: ${t.step} → ${nx}`);renderToday()}});
+  m.querySelectorAll("[data-tdadd]").forEach(b=>b.onclick=ev=>{ev.stopPropagation();const t=d.tasks.find(x=>x.key===b.dataset.tdadd);if(t)tdAddMenu(b,t)});
   m.querySelectorAll("[data-tdwake]").forEach(b=>b.onclick=ev=>{ev.stopPropagation();const st=tdRun();delete st.ov[b.dataset.tdwake];store.set("qlcv:tdRun",st);bump();renderToday()});
   m.querySelectorAll("[data-tdsnz]").forEach(b=>b.onclick=ev=>{ev.stopPropagation();moveTo(b.dataset.tdsnz,0)});
   m.querySelectorAll("[data-tdcp]").forEach(b=>b.onclick=ev=>{ev.stopPropagation();const g=tdBatch.get(b.dataset.tdcp);if(!g)return;const msg=tdMsg(g);
@@ -5143,12 +5185,23 @@ function renderDyn(sh,keep,anchor){
 
 /* Cột “Tham chiếu” của CV theo ngày: “PAY04056-POKDQ00334” -> PAY mở phiếu trên Odoo, PO nhảy sang tab PO */
 const REF_RE=/\b(PAY\d+|PO[A-Z&]{2,}\d{3,})\b/i;
-function refCell(v){
-  return v.split(/(\bPAY\d+\b|\bPO[A-Z&]{2,}\d{3,}\b)/i).map(p=>{
+let _nccRe=null;
+function cvNccRe(){ // 1 regex tách mã PAY / mã PO / tên NCC (lấy từ cột Nhà cung cấp của PO và phiếu thanh toán), cache theo phiên bản dữ liệu
+  if(_nccRe&&_nccRe.v===_ver)return _nccRe.re;
+  const s=new Set();
+  state.sheets.forEach(sh=>{if(!(sh.wf||sh.pay))return;const sc=sh.cols.find(c=>/^nhà cung cấp$/i.test(c.name.trim()));if(!sc)return;sh.rows.forEach(r=>{const k=String(r.v[sc.idx]??"").trim();if(k.length>=4)s.add(k)})});
+  const alt=[...s].sort((a,b)=>b.length-a.length).map(x=>x.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")).join("|");
+  const re=new RegExp("(\\bPAY\\d+\\b|\\bPO[A-Z&]{2,}\\d{3,}\\b"+(alt?"|"+alt:"")+")","i");
+  _nccRe={v:_ver,re};return re;
+}
+function refCell(v,odoo){ // odoo=true (việc “In giấy ĐNTT”): PO cũng mở thẳng trên Odoo thay vì PO 360°
+  return String(v).split(cvNccRe()).map((p,i)=>{
+    if(i%2===0)return esc(p);
+    if(odoo&&/^PO[A-Z&]{2,}\d{3,}$/i.test(p))return `<a class="ol" href="#" data-code="${esc(p.toUpperCase())}" title="Mở ${esc(p)} trên Odoo">${esc(p)}</a>`;
     if(/^PAY\d+$/i.test(p)){const code=p.toUpperCase(),pi=state.sheets.findIndex(x=>x.pay),ps=state.sheets[pi],r=ps&&ps.rows.find(x=>String(x.v[ps.title]??"").trim().toUpperCase()===code||(ps.payCurIdx!=null&&String(x.v[ps.payCurIdx]??"").trim().toUpperCase()===code));
       return r?`<a class="ol" href="#" data-pay="${pi}|${r.n}" title="Mở phiếu ${esc(code)} trên Odoo">${esc(p)}</a>`:`<a class="ol" href="#" data-code="${esc(code)}" title="Mở ${esc(code)} trên Odoo">${esc(p)}</a>`}
-    if(/^PO[A-Z&]{2,}\d{3,}$/i.test(p))return `<a class="refpo" href="#" data-gopo="${esc(p.toUpperCase())}" title="Xem ${esc(p)} trong tab PO">${esc(p)}</a>`;
-    return esc(p)}).join("");
+    if(/^PO[A-Z&]{2,}\d{3,}$/i.test(p))return `<a class="refpo" href="#" data-po360="${esc(p.toUpperCase())}" title="Xem ${esc(p)} ở PO 360°">${esc(p)}</a>`;
+    return `<a class="refpo" href="#" data-po360="${esc(p)}" title="Xem ${esc(p)} ở PO 360°">${esc(p)}</a>`}).join("");
 }
 function renderTable(sh,fr){
   const u=sh.ui;let rows=fr.slice();
@@ -5196,7 +5249,7 @@ function renderTable(sh,fr){
       if(v!=null&&sh.pay&&c.idx===sh.payPoIdx)cell=String(v).split(/([,;\s]+)/).map(p=>/^[,;\s]*$/.test(p)?esc(p):`<a class="ol" href="#" data-code="${esc(p.trim().toUpperCase())}" title="Mở PO ${esc(p.trim())} trên Odoo">${esc(p)}</a>`).join("");
       if(sh.pay&&c.idx===sh.title&&v!=null&&sh.payCurIdx!=null){const cur=String(r.v[sh.payCurIdx]??"").trim();if(/bnk/i.test(cur)&&cur!==String(v))cell=`${esc(cur)} <span class="sub" title="Số PAY ban đầu">(${esc(v)})</span>`} // phiếu đã thanh toán: hiện số BNK, kèm số PAY ban đầu trong ngoặc
       if(v!=null&&sh.pay&&c.idx===sh.payNoteIdx&&String(v).includes("\n")){const ls=String(v).split("\n").filter(Boolean);cell=esc(ls[0])+` <span class="sub" title="Rê chuột vào ô để xem toàn bộ nhật ký">(+${ls.length-1} ghi chú cũ)</span>`}
-      if(v!=null&&sh.checklist&&/^tham chiếu$/i.test(c.name.trim())&&REF_RE.test(String(v)))cell=refCell(String(v));
+      if(v!=null&&sh.checklist&&typeof v==="string"&&(/^tham chiếu$/i.test(c.name.trim())||c.idx===sh.title))cell=refCell(String(v),/^in giấy/.test(norm(r.v[sh.title]))); // Tên việc + Tham chiếu: PAY mở Odoo, PO / NCC nhảy sang PO 360°
       if(v!=null&&c.idx===sh.title&&/mã đơn|số po|^po$/i.test(c.name))cell=`<a class="ol" href="#" data-code="${esc(v)}" title="Mở Odoo để tìm đơn này">${cell}</a>`;
       if(v!=null&&sh.wf&&/^nhà cung cấp$/i.test(c.name))cell=`<a class="sl" href="#" data-sup="${c.idx}" data-v="${esc(v)}" title="Bấm để lọc các PO của nhà cung cấp này">${cell}</a>`;
       const cls=typeof v==="number"?"num":(c.type==="text"?"txt":"");
@@ -5219,6 +5272,7 @@ function renderTable(sh,fr){
     else if(k==="cols")colMenu(sh,t.querySelector('[data-t=cols]'));
     else if(k==="rzreset"){rzClear();renderDyn(sh);toast("Đã đặt lại độ rộng cột")}});
   t.querySelectorAll("[data-showcol]").forEach(b=>b.onclick=()=>{const v=b.dataset.showcol;store.set(hideKey(sh),v==="all"?[]:[...hid].filter(i=>i!==+v));renderDyn(sh,true)});
+  t.querySelectorAll("a[data-po360]").forEach(a=>a.onclick=ev=>{ev.preventDefault();ev.stopPropagation();state.po360=a.dataset.po360;state.active="po360";renderTabs();render();scrollTo(0,0)});
   t.querySelectorAll("[data-gopo]").forEach(a=>a.onclick=ev=>{ev.preventDefault();ev.stopPropagation();const pi=state.sheets.findIndex(x=>x.wf);if(pi<0)return toast("Chưa có tab PO.",true);goSheet(pi,{search:a.dataset.gopo.toLowerCase()})});
   t.querySelectorAll("[data-f]").forEach(b=>b.onclick=e=>{e.stopPropagation();openFilter(sh,+b.dataset.f,b,()=>renderDyn(sh))});
   t.querySelectorAll("[data-pay],[data-sel],[data-selall],[data-sug]").forEach(cb=>cb.onclick=e=>e.stopPropagation());
