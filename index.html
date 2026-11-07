@@ -4196,7 +4196,10 @@ function renderToday0(){
     for(const [q,t1,t2] of SEC){
       if(focus&&(q===2||q===4))continue;
       const a=QL[q];let body=a.length?"":`<div class="sub">Không có (kéo việc vào đây).</div>`;
-      const stg=(arr,pfx)=>{let o="";TD_STAGE.forEach((lb,i)=>{const b=arr.filter(t=>t.wr===i);if(!b.length)return;o+=tdD(view+":st:"+pfx+":"+i,"td-stage",`<b>${lb}</b> <span class="tag">${b.length}</span>`,tdNccBar(b)+(b.length>6?ul(b.slice(0,6))+tdD(view+":more:"+pfx+":"+i,"td-more",`… và ${b.length-6} việc nữa`,ul(b.slice(6)),false):ul(b)),true)});return o};
+      const stg=(arr,pfx)=>{let o="";TD_STAGE.forEach((lb,i)=>{const b=arr.filter(t=>t.wr===i);if(!b.length)return; // mỗi trạng thái: mỗi NCC một khối
+        const nb=new Map();b.forEach(t=>{const g=nb.get(t.k)||{k:t.k,ts:[]};g.ts.push(t);nb.set(t.k,g)});
+        const body=[...nb.values()].map(g=>tdD(view+":ncc:"+pfx+":"+i+":"+g.k,"td-grp",`<b>${esc(g.k)}</b> <span class="tag">${g.ts.length} PO</span> <span class="sub">${fmtBig(g.ts.reduce((x,t)=>x+t.amt,0))}</span>`,tdNccBar(g.ts)+ul(g.ts),true)).join("");
+        o+=tdD(view+":st:"+pfx+":"+i,"td-stage",`<b>${lb}</b> <span class="tag">${b.length}</span>`,body,true)});return o};
       if(q===1)body+=stg(a.slice(0,top),"1")+(a.length>top?tdD(view+":more:1","td-more",`Xếp hàng chờ (${a.length-top})`,stg(a.slice(top),"1r"),false):"");else body+=stg(a,String(q));
       html+=card(q,TD_QC[q],t1,q===1?`${Math.min(top,a.length)}/${a.length}`:a.length,t2,body);
     }
