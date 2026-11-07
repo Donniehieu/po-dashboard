@@ -4132,14 +4132,16 @@ function tdLiteHtml(d){
   const upTo=(t,x)=>{const sq=seqOf(t.sh,t.r),k=sq.indexOf(t.step);return k>=0&&k<=sq.indexOf(x)}; // từ đầu quy trình tới bước x (gồm x)
   const A=d.tasks.filter(t=>!t.pay&&upTo(t,"Chờ nhận hàng")).sort(cmp);
   // Làm TT trả sau: PO trả sau, đã nhận hết hàng, quá hạn thanh toán ≥1 ngày, đang ở bước trước hoặc tại Chờ gửi UNC
-  const B=[];d.tasks.forEach(t=>{if(t.pay||(t.sh.payIdx!=null&&isPay(t.r.v[t.sh.payIdx]))||t.sh.rcIdx==null||wfn(t.r.v[t.sh.rcIdx])!=="đã nhận hết"||t.late<1||!upTo(t,"Chờ gửi UNC"))return;
+  const B=[];d.tasks.forEach(t=>{if(t.pay||(t.sh.payIdx!=null&&isPay(t.r.v[t.sh.payIdx]))||t.sh.rcIdx==null||wfn(t.r.v[t.sh.rcIdx])!=="đã nhận hết"||!upTo(t,"Chờ gửi UNC"))return;
+    const dd=dueOf(t.sh,t.r),tl=dd instanceof Date?Math.round((TODAY-sod(dd))/DAY):0; // PO chưa có cột hạn thanh toán: tính từ ngày nhận hàng dự kiến (hàng đã về nên app không đánh dấu trễ)
+    if(tl<1)return;t.ttLate=tl;
     B.push({t,pi:poPayInfo(t.sh,t.r)})});
   const pm=new Map(B.map(x=>[x.t.key,x.pi]));
   // chưa có PAY/BNK lên trước; trong mỗi nhóm: NCC quan trọng trước, rồi quá hạn nhiều trước
-  const cm2=(x,y)=>(y.t.imp.on-x.t.imp.on)||y.t.late-x.t.late||y.t.score-x.t.score;
+  const cm2=(x,y)=>(y.t.imp.on-x.t.imp.on)||y.t.ttLate-x.t.ttLate||y.t.score-x.t.score;
   const B0=B.filter(x=>!x.pi.pays.length).sort(cm2).map(x=>x.t),B1=B.filter(x=>x.pi.pays.length).sort(cm2).map(x=>x.t);
   const BL=[...B0,...B1];
-  const grp=(arr,lb,id)=>arr.length?tdD("lite:tt:"+id,"td-stage",`<b>${lb}</b> <span class="tag">${arr.length}</span>`,tdNccBar(arr)+`<ul class="attn">`+arr.map(t=>tdRow(t,po360PayNos(pm.get(t.key))+(t.imp.on?" · <b>NCC quan trọng</b>":""))).join("")+`</ul>`,true):"";
+  const grp=(arr,lb,id)=>arr.length?tdD("lite:tt:"+id,"td-stage",`<b>${lb}</b> <span class="tag">${arr.length}</span>`,tdNccBar(arr)+`<ul class="attn">`+arr.map(t=>tdRow(t,po360PayNos(pm.get(t.key))+` · <span style="color:var(--bad)">quá hạn TT ${t.ttLate} ngày</span>`+(t.imp.on?" · <b>NCC quan trọng</b>":""))).join("")+`</ul>`,true):"";
   const card=(title,tag,desc,body,color)=>`<div class="card" style="border-top:3px solid ${color}">`+tdD("lite:card:"+title,"td-g",`<span class="lvl"><i style="background:${color}"></i>${title}<span class="tag">${tag}</span></span>`,`<div class="sub" style="margin-bottom:8px">${desc}</div>${body}`,true)+`</div>`;
   return `<div class="sub" style="margin:0 0 10px">✨ <b>${fmtD(TODAY)}</b> · PO tới Chờ nhận hàng, và PO trả sau đã nhận hàng, quá hạn thanh toán từ 1 ngày</div>`
     +`<div class="td-2c" style="margin-top:0">`
