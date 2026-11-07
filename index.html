@@ -4135,13 +4135,22 @@ function tdLiteHtml(d){
   const B=[];d.tasks.forEach(t=>{if(t.pay||(t.sh.payIdx!=null&&isPay(t.r.v[t.sh.payIdx]))||t.sh.rcIdx==null||wfn(t.r.v[t.sh.rcIdx])!=="đã nhận hết"||!upTo(t,"Chờ gửi UNC"))return;
     const dd=dueOf(t.sh,t.r),tl=dd instanceof Date?Math.round((TODAY-sod(dd))/DAY):0; // PO chưa có cột hạn thanh toán: tính từ ngày nhận hàng dự kiến (hàng đã về nên app không đánh dấu trễ)
     if(tl<1)return;t.ttLate=tl;
-    B.push({t,pi:poPayInfo(t.sh,t.r)})});
+    const pi=poPayInfo(t.sh,t.r);
+    if(!pi.pays.length){ // phiếu PAY chưa ghi “PO liên quan”: khớp theo cùng NCC + cùng số tiền, chỉ lấy phiếu chưa gắn PO nào
+      const m=payMapOf(),ps=m&&m.ps,ci=poSupplierOf(t.sh);
+      if(ps&&ps.sub!=null&&ps.money&&ci!=null){const nm=x=>NCC.fold(String(x??"")).trim(),sup=nm(t.r.v[ci]);
+        for(const r of ps.rows){if(String(r.v[ps.payPoIdx]??"").trim())continue;const st=wfn(r.v[ps.payStIdx]);if(st!=="chưa thanh toán"&&st!=="đã thanh toán")continue;
+          if(Math.abs((+r.v[ps.money.idx]||0)-t.amt)<1&&t.amt>0&&nm(r.v[ps.sub])===sup)pi.pays.push({p:r,ps})}}
+    }
+    B.push({t,pi})});
   const pm=new Map(B.map(x=>[x.t.key,x.pi]));
   // chưa có PAY/BNK lên trước; trong mỗi nhóm: NCC quan trọng trước, rồi quá hạn nhiều trước
   const cm2=(x,y)=>(y.t.imp.on-x.t.imp.on)||y.t.ttLate-x.t.ttLate||y.t.score-x.t.score;
   const B0=B.filter(x=>!x.pi.pays.length).sort(cm2).map(x=>x.t),B1=B.filter(x=>x.pi.pays.length).sort(cm2).map(x=>x.t);
   const BL=[...B0,...B1];
-  const grp=(arr,lb,id)=>arr.length?tdD("lite:tt:"+id,"td-stage",`<b>${lb}</b> <span class="tag">${arr.length}</span>`,tdNccBar(arr)+`<ul class="attn">`+arr.map(t=>tdRow(t,po360PayNos(pm.get(t.key))+` · <span style="color:var(--bad)">quá hạn TT ${t.ttLate} ngày</span>`+(t.imp.on?" · <b>NCC quan trọng</b>":""))).join("")+`</ul>`,true):"";
+  const grp=(arr,lb,id)=>{if(!arr.length)return "";const by=new Map();arr.forEach(t=>{const o=by.get(t.k)||{k:t.k,ts:[]};o.ts.push(t);by.set(t.k,o)}); // mỗi NCC một khối, thứ tự theo mức ưu tiên đã sắp
+    const row=t=>tdRow(Object.assign({},t,{rs:[`dừng bước ${t.stuck} ngày`,`quá hạn TT ${t.ttLate} ngày`]}),pm.get(t.key)&&pm.get(t.key).pays.length?po360PayNos(pm.get(t.key)):"");
+    return tdD("lite:tt:"+id,"td-stage",`<b>${lb}</b> <span class="tag">${arr.length}</span>`,[...by.values()].map(o=>tdD("lite:ttn:"+id+":"+o.k,"td-grp",`<b>${esc(o.k)}</b> <span class="tag">${o.ts.length} PO</span> <span class="sub">${fmtBig(o.ts.reduce((a,t)=>a+t.amt,0))}</span>`,tdNccBar(o.ts)+`<ul class="attn">`+o.ts.map(row).join("")+`</ul>`,true)).join(""),true)};
   const card=(title,tag,desc,body,color)=>`<div class="card" style="border-top:3px solid ${color}">`+tdD("lite:card:"+title,"td-g",`<span class="lvl"><i style="background:${color}"></i>${title}<span class="tag">${tag}</span></span>`,`<div class="sub" style="margin-bottom:8px">${desc}</div>${body}`,true)+`</div>`;
   return `<div class="sub" style="margin:0 0 10px">✨ <b>${fmtD(TODAY)}</b> · PO tới Chờ nhận hàng, và PO trả sau đã nhận hàng, quá hạn thanh toán từ 1 ngày</div>`
     +`<div class="td-2c" style="margin-top:0">`
