@@ -295,6 +295,7 @@
      tương ứng (theo đầu số phiếu: KDQ, KPH…). Người dùng dán (Ctrl+V) và bấm Gửi. Danh sách Thủ kho và mẫu tin lưu trong trình duyệt này. */
   const ZALO_KEY = "zalo_keepers_v1";
   const ZALO_DEFAULT_TPL = "Chị ơi, kiểm đếm và nhập giúp em phiếu kho này {phieu}";
+  const ZALO_TPL_BY_PREFIX = { "KR&D": "Em ơi, kiểm tra và nhập kho cho anh phiếu {}" }; // mẫu riêng theo đầu số phiếu kho; {} hoặc {phieu} = số phiếu
   const loadZalo = () => { const z = st.get(ZALO_KEY, null); return z && Array.isArray(z.keepers) ? { tpl: z.tpl || ZALO_DEFAULT_TPL, keepers: z.keepers, app: !!z.app } : { tpl: ZALO_DEFAULT_TPL, keepers: [], app: false }; };
   function pickingName() { // số phiếu kho đang mở (chỉ khi là phiếu kho: có tên dạng KDQ/IN/00398 và các trường loại điều chuyển, kho đích)
     const n = $('[name="name"]'); const t = n ? n.textContent.trim() : "";
@@ -337,7 +338,8 @@
     zaloBusy = Date.now();
     const k = keeperFor(name);
     if (!k) { msg("Chưa có Zalo của Thủ kho cho phiếu " + name + ". Hãy nhập ở hộp vừa mở.", true); return zaloSettings(name.split("/")[0]); }
-    const text = loadZalo().tpl.split("{phieu}").join(name);
+    const tplZ = ZALO_TPL_BY_PREFIX[name.split("/")[0].toUpperCase()] || loadZalo().tpl;
+    const text = tplZ.split("{phieu}").join(name).split("{}").join(name);
     const ok = await copyText(text);
     const url = zaloUrl(k.zalo), isLink = /^https:\/\//i.test(String(k.zalo || "").trim());
     const phone = isLink ? "" : String(k.zalo || "").replace(/[^\d]/g, "");
