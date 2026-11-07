@@ -1483,6 +1483,9 @@ li.dragging {
   border-bottom: 1px solid var(--line-subtle);
 }
 .td-grp:last-child { border: 0; }
+/* thụt vào theo cấp: trạng thái > NCC > PO */
+.td-stage > .td-grp, .td-stage>.td-grp { margin-left: 14px; padding-left: 10px; border-left: 2px solid var(--line); }
+.td-grp > .attn, .td-grp>.attn, .td-grp > .td-nb, .td-grp>.td-nb { margin-left: 16px; }
 .td-more { margin-top: 8px; }
 .td-more summary, .td-wg summary {
   cursor: pointer;
