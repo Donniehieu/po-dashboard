@@ -4126,8 +4126,10 @@ function tdD(key,cls,sum,body,def){const o=tdOpenMap()[key],op=o===undefined?def
 function tdLiteHtml(d){
   const gk=t=>t.pay?99:t.wr,gl=k=>k===99?"💳 Phiếu thanh toán":TD_STAGE[k];
   const stg=(arr,pfx,extraf)=>{let o="";const by=new Map();arr.forEach(t=>{const o2=by.get(gk(t))||[];o2.push(t);by.set(gk(t),o2)});
-    [...by].sort((x,y)=>x[0]-y[0]).forEach(([i,b])=>{const ul=a=>`<ul class="attn">`+a.map(t=>tdRow(t,extraf?extraf(t):"")).join("")+`</ul>`;
-      o+=tdD("lite:st:"+pfx+":"+i,"td-stage",`<b>${gl(i)}</b> <span class="tag">${b.length}</span>`,tdNccBar(b)+(b.length>6?ul(b.slice(0,6))+tdD("lite:more:"+pfx+":"+i,"td-more",`… và ${b.length-6} việc nữa`,ul(b.slice(6)),false):ul(b)),true)});return o};
+    [...by].sort((x,y)=>x[0]-y[0]).forEach(([i,b])=>{ // mỗi trạng thái: mỗi NCC một khối (thứ tự theo mức ưu tiên đã sắp)
+      const nb=new Map();b.forEach(t=>{const g=nb.get(t.k)||{k:t.k,ts:[]};g.ts.push(t);nb.set(t.k,g)});
+      const body=[...nb.values()].map(g=>tdD("lite:ncc:"+pfx+":"+i+":"+g.k,"td-grp",`<b>${esc(g.k)}</b> <span class="tag">${g.ts.length} PO</span> <span class="sub">${fmtBig(g.ts.reduce((a,t)=>a+t.amt,0))}</span>`,tdNccBar(g.ts)+`<ul class="attn">`+g.ts.map(t=>tdRow(t,extraf?extraf(t):"")).join("")+`</ul>`,true)).join("");
+      o+=tdD("lite:st:"+pfx+":"+i,"td-stage",`<b>${gl(i)}</b> <span class="tag">${b.length}</span>`,body,true)});return o};
   const cmp=(a,b)=>gk(a)-gk(b)||b.late-a.late||b.im-a.im||b.score-a.score;
   const upTo=(t,x)=>{const sq=seqOf(t.sh,t.r),k=sq.indexOf(t.step);return k>=0&&k<=sq.indexOf(x)}; // từ đầu quy trình tới bước x (gồm x)
   const A=d.tasks.filter(t=>!t.pay&&upTo(t,"Chờ nhận hàng")).sort(cmp);
