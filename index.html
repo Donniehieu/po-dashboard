@@ -4118,24 +4118,25 @@ function tdLearn(d,key,q){ // ghi nhận việc bạn kéo tay: kéo lên mục 
 function tdLearnReset(k){const L=store.get("qlcv:tdLearn")||{};if(L[k]){delete L[k];store.set("qlcv:tdLearn",L)}}
 function tdRow(t,extra,showQ){
   const sq=t.pay?null:seqOf(t.sh,t.r),k0=sq?sq.indexOf(t.step):-1,nx=k0>=0?sq[k0+1]:null;
-  const acts=`<div class="td-act">${nx&&nx!==WF_DONE?`<button class="btn sm" data-tdxong="${esc(t.key)}" title="Xong bước “${esc(t.step)}” → chuyển sang “${esc(nx)}”">✔ ${esc(nx)}</button>`:""}${t.in&&t.q!==0?`<button class="btn sm" data-tdsnz="${esc(t.key)}" title="Hoãn tới mốc xếp lại kế tiếp">💤</button>`:""}</div>`;
-  const age=t.pay?t.late:t.stuck,mv=t.in?`<select class="td-mv" data-tdmv="${esc(t.key)}" title="Chuyển sang mục khác (hoặc kéo thả)"><option value="">⇄</option>${[1,2,3,4].map(q=>`<option value="${q}"${t.q===q?" disabled":""}>→ ${TD_QN[q]}</option>`).join("")}<option value="0">→ Để lượt sau</option></select>`:"";
-  return `<li class="click" ${t.in?`draggable="true" data-tdk="${esc(t.key)}"`:""} data-tdgo="${t.si}" data-q="${esc(t.code)}"><span class="tag">${esc(t.sh.pay?"PAY":"PO")}</span><div>${t.sh.pay?`<b>${esc(t.code)}</b>`:`<a class="ol" href="#" data-code="${esc(t.code)}" title="Mở PO này trên Odoo để kiểm tra"><b>${esc(t.code)}</b></a>`}${t.sh.pay?"":` <a href="#" class="td-360" data-po360="${esc(t.code)}" title="Xem PO 360°">🔎</a>`} <span class="chip" style="--c:${colorFor(t.step)}">${esc(t.step)}</span>${t.moved?` <span class="chip" style="--c:#7c3aed" title="Bạn đã chuyển tay; tới lần xếp lại kế tiếp sẽ tự tính lại">✋ đã chuyển</span>`:""}<div class="sub">${esc(t.k)}${t.amt?" · "+fmtN(t.amt):""}</div><div class="sub td-why">${esc(t.rs.join(" · ")||"không có tín hiệu gấp")}${extra||""}</div></div><span class="td-score" title="Điểm = 40% gấp + 40% quan trọng + 20% dễ&#10;Gấp ${t.u} · Quan trọng ${t.im} · Dễ ${t.ease}">${t.score}<div class="sub">${age>0&&t.wait?"chờ "+age+" ngày":""}</div>${mv}${acts}</span></li>`;
+  const acts=`<div class="td-act">${nx&&nx!==WF_DONE?`<button class="btn sm" data-tdxong="${esc(t.key)}" title="Xong bước “${esc(t.step)}” → chuyển sang “${esc(nx)}”">✔ ${esc(nx)}</button>`:""}${t.zz?`<button class="btn sm" data-tdwake="${esc(t.key)}" title="Đưa việc về lại theo trạng thái thực tế ngay">↩ Đưa về</button>`:""}${(t.lite?!t.zz:(t.in&&t.q!==0))?`<button class="btn sm" data-tdsnz="${esc(t.key)}" title="Hoãn tới mốc xếp lại kế tiếp">💤</button>`:""}</div>`;
+  const age=t.pay?t.late:t.stuck,mv=t.in&&!t.lite?`<select class="td-mv" data-tdmv="${esc(t.key)}" title="Chuyển sang mục khác (hoặc kéo thả)"><option value="">⇄</option>${[1,2,3,4].map(q=>`<option value="${q}"${t.q===q?" disabled":""}>→ ${TD_QN[q]}</option>`).join("")}<option value="0">→ Để lượt sau</option></select>`:"";
+  return `<li class="click" ${t.in&&!t.lite?`draggable="true" data-tdk="${esc(t.key)}"`:""} data-tdgo="${t.si}" data-q="${esc(t.code)}"><span class="tag">${esc(t.sh.pay?"PAY":"PO")}</span><div>${t.sh.pay?`<b>${esc(t.code)}</b>`:`<a class="ol" href="#" data-code="${esc(t.code)}" title="Mở PO này trên Odoo để kiểm tra"><b>${esc(t.code)}</b></a>`}${t.sh.pay?"":` <a href="#" class="td-360" data-po360="${esc(t.code)}" title="Xem PO 360°">🔎</a>`} <span class="chip" style="--c:${colorFor(t.step)}">${esc(t.step)}</span>${t.moved?` <span class="chip" style="--c:#7c3aed" title="Bạn đã chuyển tay; tới lần xếp lại kế tiếp sẽ tự tính lại">✋ đã chuyển</span>`:""}<div class="sub">${esc(t.k)}${t.amt?" · "+fmtN(t.amt):""}</div><div class="sub td-why">${esc(t.rs.join(" · ")||"không có tín hiệu gấp")}${extra||""}</div></div><span class="td-score" title="Điểm = 40% gấp + 40% quan trọng + 20% dễ&#10;Gấp ${t.u} · Quan trọng ${t.im} · Dễ ${t.ease}">${t.score}<div class="sub">${age>0&&t.wait?"chờ "+age+" ngày":""}</div>${mv}${acts}</span></li>`;
 }
 function tdCount(){try{return tdCompute().m.q1.slice(0,tdTop()).length}catch(e){return 0}}
 const tdOpenMap=()=>store.get("qlcv:tdOpen")||{};
 function tdD(key,cls,sum,body,def){const o=tdOpenMap()[key],op=o===undefined?def:o;return `<details class="${cls}" data-tdd="${esc(key)}"${op?" open":""}><summary>${sum}</summary>${body}</details>`}
 /* ---- Tab “Làm ít được nhiều”: lấy dữ liệu như tab Theo workflow, chỉ 2 khối (lưới 2x1): PO chờ nhận hàng · Làm TT trả sau (PO chờ gửi UNC có PAY/BNK) ---- */
 function tdLiteHtml(d){
+  const ov=(d.run&&d.run.ov)||{},zz=t=>ov[t.key]===0,LT=(t,x)=>Object.assign({},t,{lite:1,zz:zz(t)},x||{}); // zz: bạn bấm “để lượt sau”; tới mốc xếp lại (8h/13h/20h) tự bỏ và việc về đúng khối theo trạng thái thực tế
   const gk=t=>t.pay?99:t.wr,gl=k=>k===99?"💳 Phiếu thanh toán":TD_STAGE[k];
   const stg=(arr,pfx,extraf)=>{let o="";const by=new Map();arr.forEach(t=>{const o2=by.get(gk(t))||[];o2.push(t);by.set(gk(t),o2)});
     [...by].sort((x,y)=>x[0]-y[0]).forEach(([i,b])=>{ // mỗi trạng thái: mỗi NCC một khối (thứ tự theo mức ưu tiên đã sắp)
       const nb=new Map();b.forEach(t=>{const g=nb.get(t.k)||{k:t.k,ts:[]};g.ts.push(t);nb.set(t.k,g)});
-      const body=[...nb.values()].map(g=>tdD("lite:ncc:"+pfx+":"+i+":"+g.k,"td-grp",`<b>${esc(g.k)}</b> <span class="tag">${g.ts.length} PO</span> <span class="sub">${fmtBig(g.ts.reduce((a,t)=>a+t.amt,0))}</span>`,tdNccBar(g.ts)+`<ul class="attn">`+g.ts.map(t=>tdRow(t,extraf?extraf(t):"")).join("")+`</ul>`,true)).join("");
+      const body=[...nb.values()].map(g=>tdD("lite:ncc:"+pfx+":"+i+":"+g.k,"td-grp",`<b>${esc(g.k)}</b> <span class="tag">${g.ts.length} PO</span> <span class="sub">${fmtBig(g.ts.reduce((a,t)=>a+t.amt,0))}</span>`,tdNccBar(g.ts)+`<ul class="attn">`+g.ts.map(t=>tdRow(LT(t),extraf?extraf(t):"")).join("")+`</ul>`,true)).join("");
       o+=tdD("lite:st:"+pfx+":"+i,"td-stage",`<b>${gl(i)}</b> <span class="tag">${b.length}</span>`,body,true)});return o};
   const cmp=(a,b)=>gk(a)-gk(b)||b.late-a.late||b.im-a.im||b.score-a.score;
   const upTo=(t,x)=>{const sq=seqOf(t.sh,t.r),k=sq.indexOf(t.step);return k>=0&&k<=sq.indexOf(x)}; // từ đầu quy trình tới bước x (gồm x)
-  const A=d.tasks.filter(t=>!t.pay&&upTo(t,"Chờ nhận hàng")).sort(cmp);
+  const A0=d.tasks.filter(t=>!t.pay&&upTo(t,"Chờ nhận hàng")).sort(cmp),A=A0.filter(t=>!zz(t));
   // Làm TT trả sau: PO trả sau, đã nhận hết hàng, quá hạn thanh toán ≥1 ngày, đang ở bước trước hoặc tại Chờ gửi UNC
   const B=[];d.tasks.forEach(t=>{if(t.pay||(t.sh.payIdx!=null&&isPay(t.r.v[t.sh.payIdx]))||t.sh.rcIdx==null||wfn(t.r.v[t.sh.rcIdx])!=="đã nhận hết"||!upTo(t,"Chờ gửi UNC"))return;
     const dd=dueOf(t.sh,t.r),tl=dd instanceof Date?Math.round((TODAY-sod(dd))/DAY):0; // PO chưa có cột hạn thanh toán: tính từ ngày nhận hàng dự kiến (hàng đã về nên app không đánh dấu trễ)
@@ -4148,20 +4149,21 @@ function tdLiteHtml(d){
           if(Math.abs((+r.v[ps.money.idx]||0)-t.amt)<1&&t.amt>0&&nm(r.v[ps.sub])===sup)pi.pays.push({p:r,ps})}}
     }
     B.push({t,pi})});
-  const pm=new Map(B.map(x=>[x.t.key,x.pi]));
+  const pm=new Map(B.map(x=>[x.t.key,x.pi])),Z=[...A0.filter(zz),...B.map(x=>x.t).filter(zz)].sort(cmp);
   // chưa có PAY/BNK lên trước; trong mỗi nhóm: NCC quan trọng trước, rồi quá hạn nhiều trước
   const cm2=(x,y)=>(y.t.imp.on-x.t.imp.on)||y.t.ttLate-x.t.ttLate||y.t.score-x.t.score;
-  const B0=B.filter(x=>!x.pi.pays.length).sort(cm2).map(x=>x.t),B1=B.filter(x=>x.pi.pays.length).sort(cm2).map(x=>x.t);
+  const B0=B.filter(x=>!zz(x.t)&&!x.pi.pays.length).sort(cm2).map(x=>x.t),B1=B.filter(x=>!zz(x.t)&&x.pi.pays.length).sort(cm2).map(x=>x.t);
   const BL=[...B0,...B1];
   const grp=(arr,lb,id)=>{if(!arr.length)return "";const by=new Map();arr.forEach(t=>{const o=by.get(t.k)||{k:t.k,ts:[]};o.ts.push(t);by.set(t.k,o)}); // mỗi NCC một khối, thứ tự theo mức ưu tiên đã sắp
-    const row=t=>tdRow(Object.assign({},t,{rs:[`dừng bước ${t.stuck} ngày`,`quá hạn TT ${t.ttLate} ngày`]}),pm.get(t.key)&&pm.get(t.key).pays.length?po360PayNos(pm.get(t.key)):"");
+    const row=t=>tdRow(LT(t,{rs:[`dừng bước ${t.stuck} ngày`,`quá hạn TT ${t.ttLate} ngày`]}),pm.get(t.key)&&pm.get(t.key).pays.length?po360PayNos(pm.get(t.key)):"");
     return tdD("lite:tt:"+id,"td-stage",`<b>${lb}</b> <span class="tag">${arr.length}</span>`,[...by.values()].map(o=>tdD("lite:ttn:"+id+":"+o.k,"td-grp",`<b>${esc(o.k)}</b> <span class="tag">${o.ts.length} PO</span> <span class="sub">${fmtBig(o.ts.reduce((a,t)=>a+t.amt,0))}</span>`,tdNccBar(o.ts)+`<ul class="attn">`+o.ts.map(row).join("")+`</ul>`,true)).join(""),true)};
   const card=(title,tag,desc,body,color)=>`<div class="card" style="border-top:3px solid ${color}">`+tdD("lite:card:"+title,"td-g",`<span class="lvl"><i style="background:${color}"></i>${title}<span class="tag">${tag}</span></span>`,`<div class="sub" style="margin-bottom:8px">${desc}</div>${body}`,true)+`</div>`;
   return `<div class="sub" style="margin:0 0 10px">✨ <b>${fmtD(TODAY)}</b> · PO tới Chờ nhận hàng, và PO trả sau đã nhận hàng, quá hạn thanh toán từ 1 ngày</div>`
     +`<div class="td-2c" style="margin-top:0">`
     +card("📦 Đơn hàng",A.length,"PO từ đầu quy trình tới bước Chờ nhận hàng (gồm cả bước này), nhóm theo bước.",A.length?stg(A,"a"):`<div class="sub">Không có.</div>`,"var(--brand)")
     +card("💳 Làm TT trả sau",BL.length,"PO trả sau đã nhận hàng, quá hạn thanh toán từ 1 ngày, đang ở bước trước hoặc tại Chờ gửi UNC. Chưa có PAY/BNK lên đầu; trong mỗi nhóm NCC quan trọng và quá hạn nhiều lên trước.",BL.length?grp(B0,"⚠ Chưa có PAY/BNK","0")+grp(B1,"✅ Đã có PAY/BNK","1"):`<div class="sub">Không có.</div>`,"var(--ok)")
-    +`</div>`;
+    +`</div>`
+    +`<div style="margin-top:16px">`+card("💤 Để lượt sau",Z.length,`Việc bạn tạm ẩn; tới lần xếp lại kế tiếp (${new Date(tdSlot(Date.now(),true)).toLocaleTimeString("vi-VN",{hour:"2-digit",minute:"2-digit"})}) tự quay về khối Đơn hàng hoặc Làm TT trả sau theo trạng thái thực tế của PO.`,Z.length?stg(Z,"z"):`<div class="sub">Không có. Bấm 💤 ở một việc để tạm ẩn.</div>`,"#7c3aed")+`</div>`;
 }
 function renderToday(){
   const _v={x:scrollX,y:scrollY,h:$("#main").offsetHeight};
@@ -4252,6 +4254,7 @@ function renderToday0(){
   m.querySelectorAll("[data-tdxong]").forEach(b=>b.onclick=ev=>{ev.stopPropagation();const t=d.tasks.find(x=>x.key===b.dataset.tdxong);if(!t)return;
     const sq=seqOf(t.sh,t.r),nx=sq[sq.indexOf(t.r.wf)+1];if(!nx||nx===WF_DONE)return;
     if(setWf(t.si,t.r,nx,"việc hôm nay")){setStatus(t.sh);updateChrome();toast(`${t.code}: ${t.step} → ${nx}`);renderToday()}});
+  m.querySelectorAll("[data-tdwake]").forEach(b=>b.onclick=ev=>{ev.stopPropagation();const st=tdRun();delete st.ov[b.dataset.tdwake];store.set("qlcv:tdRun",st);bump();renderToday()});
   m.querySelectorAll("[data-tdsnz]").forEach(b=>b.onclick=ev=>{ev.stopPropagation();moveTo(b.dataset.tdsnz,0)});
   m.querySelectorAll("[data-tdcp]").forEach(b=>b.onclick=ev=>{ev.stopPropagation();const g=tdBatch.get(b.dataset.tdcp);if(!g)return;const msg=tdMsg(g);
     (navigator.clipboard?navigator.clipboard.writeText(msg):Promise.reject()).then(()=>toast("Đã sao chép tin nhắn cho "+g.k+", dán vào Zalo")).catch(()=>prompt("Sao chép tin nhắn:",msg))});
