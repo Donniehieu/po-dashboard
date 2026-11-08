@@ -506,12 +506,24 @@
     msg("📝 Đã ghi nhận chưa in " + (doc.id || doc.rid) + " – dashboard sẽ thêm việc “In giấy đề nghị thanh toán” vào tab CV theo ngày.");
     sendPrintEvents();
   }
+  /* Địa chỉ dashboard: lấy từ nơi nạp script (nút bookmark) và nhớ lại, để Odoo mở trực tiếp (không qua dashboard) vẫn báo được về dashboard */
+  const DASH_KEY = "qlcv_dashurl_v1";
+  try { const s = document.currentScript && document.currentScript.src; if (s && /^https:\/\/[a-z0-9-]+\.github\.io\//i.test(s)) st.set(DASH_KEY, new URL("./", s).href); } catch (e) {}
   function sendPrintEvents(target, origin) { // gửi các sự kiện chưa được dashboard xác nhận
     const q = st.get(PRINTEV_KEY, []); if (!q.length) return;
     try {
       if (target) target.postMessage({ qlcv: "printev", events: q }, origin);
       else if (window.opener && !window.opener.closed) window.opener.postMessage({ qlcv: "printev", events: q }, "*");
+      else sendViaDashTab(q);
     } catch (e) {}
+  }
+  /* Không có window.opener: mở (hoặc dùng lại) tab dashboard tên “qlcv-dash” kèm sự kiện trong #qlcvprint=…; dashboard tự nhận và lưu hàng đợi nên bỏ khỏi hàng đợi của helper ngay */
+  function sendViaDashTab(q) {
+    const base = st.get(DASH_KEY, ""); if (!base) { msg("Chưa biết địa chỉ dashboard để báo việc. Hãy bấm lại nút bookmark “Odoo Helper” từ trang dashboard một lần.", true); return; }
+    const evs = q.slice(-20), payload = btoa(unescape(encodeURIComponent(JSON.stringify(evs))));
+    const w = window.open(base + "#qlcvprint=" + encodeURIComponent(payload), "qlcv-dash");
+    if (!w) { msg("Trình duyệt chặn mở tab dashboard. Hãy cho phép cửa sổ bật lên cho trang Odoo rồi thử lại.", true); return; }
+    const keys = evs.map((x) => x.k); st.set(PRINTEV_KEY, st.get(PRINTEV_KEY, []).filter((x) => !keys.includes(x.k)));
   }
   if (location.hostname === "erp.dekko.com.vn") addEventListener("message", (e) => {
     const d = e.data; if (!d || !/^https:\/\/[a-z0-9-]+\.github\.io$/i.test(e.origin)) return;

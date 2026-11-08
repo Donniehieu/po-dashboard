@@ -3652,30 +3652,33 @@ function pushProgress(old,text){ // nhật ký nhiều dòng "[dd/mm HH:mm] nộ
 }
 const PRINT_Q="qlcv:printq",PRINT_APPLIED="qlcv:printapplied",PROGRESS_SENT="Đã gửi duyệt TT cho TP",PO_AFTER_PRINT="Chờ gửi UNC",PO_BEFORE_PRINT="Chờ làm TT";
 /* Người dùng bấm “Không in” sau khi gửi đề nghị thanh toán trên Odoo -> thêm việc “In giấy ĐNTT” vào tab CV theo ngày, Tham chiếu = PAY-PO */
-function addPrintTask(rows,ps,psi){
+function addPrintTask(rows,ps,psi,idOnly){ // idOnly: phiếu vừa tạo trên Odoo, chưa đồng bộ về dashboard -> vẫn thêm việc theo số PAY, chưa có danh sách PO
   const ci=state.sheets.findIndex(x=>x.checklist&&/^cv theo ngày/.test(norm(x.name))),cv=state.sheets[ci];
-  const r0=rows[0],no=String(r0.v[ps.title]??"").trim();
+  const r0=rows[0],no=r0?String(r0.v[ps.title]??"").trim():String(idOnly||"").trim();
   if(!cv)return {found:true,pay:false,pos:[],skipped:[],no,added:0,err:"chưa có tab CV theo ngày"};
   const ti=cv.title,ri=cv.cols.find(c=>/^tham chiếu$/i.test(c.name.trim()));
   if(ti==null||!ri)return {found:true,pay:false,pos:[],skipped:[],no,added:0,err:"tab CV theo ngày thiếu cột Tên việc/Tham chiếu"};
   let added=0;
-  const pos=ps.payPoIdx!=null?String(r0.v[ps.payPoIdx]??"").split(/[,;\s]+/).map(x=>x.trim().toUpperCase()).filter(Boolean):[];
+  const pos=r0&&ps.payPoIdx!=null?String(r0.v[ps.payPoIdx]??"").split(/[,;\s]+/).map(x=>x.trim().toUpperCase()).filter(Boolean):[];
   const ref=no+(pos.length?"-"+pos.join(","):"");
-  if(cv.rows.some(x=>String(x.v[ri.idx]??"").trim().toUpperCase()===ref.toUpperCase()&&!ckDone(cv,x)))return {found:true,pay:false,pos:[],skipped:[],no,added:0}; // đã có việc này, chưa xong
+  const title="In giấy đề nghị thanh toán "+no;
+  if(cv.rows.some(x=>(String(x.v[ri.idx]??"").trim().toUpperCase()===ref.toUpperCase()||norm(x.v[ti])===norm(title))&&!ckDone(cv,x)))return {found:true,pay:false,pos:[],skipped:[],no,added:0}; // đã có việc này, chưa xong
   state.via="Odoo Helper (không in đề nghị)";
-  try{const nr=addRow(ci,true);setCell(ci,nr,ti,"In giấy đề nghị thanh toán "+no);setCell(ci,nr,ri.idx,ref);added=1;setStatus(cv)}finally{state.via="dashboard"}
+  try{const nr=addRow(ci,true);setCell(ci,nr,ti,title);setCell(ci,nr,ri.idx,ref);added=1;setStatus(cv)}finally{state.via="dashboard"}
   return {found:true,pay:false,pos:[],skipped:[],no,added};
 }
 function applyPrintEvent(e){ // -> {found, pay, pos:[mã PO đã chuyển]}
   const psi=state.sheets.findIndex(s=>s.pay),ps=state.sheets[psi];
-  if(!ps||ps.payNoteIdx==null)return {found:false};
   const id=String(e.id||"").trim().toUpperCase(),rid=String(e.rid||"").trim();
-  const rows=ps.rows.filter(r=>{
+  const rows=ps&&ps.payNoteIdx!=null?ps.rows.filter(r=>{
     const no=String(r.v[ps.title]??"").trim().toUpperCase(),cur=ps.payCurIdx!=null?String(r.v[ps.payCurIdx]??"").trim().toUpperCase():"";
     return (id&&(no===id||cur===id))||(rid&&ps.payId>=0&&String(r.v[ps.payId]??"")===rid);
-  });
+  }):[];
+  if(e.kind==="noprint"){ // không cần phiếu đã có trên dashboard: PAY vừa tạo trên Odoo thường chưa đồng bộ về
+    if(rows.length)return addPrintTask(rows,ps,psi);
+    return id?addPrintTask([],ps,psi,id):{found:false};
+  }
   if(!rows.length)return {found:false};
-  if(e.kind==="noprint")return addPrintTask(rows,ps,psi);
   const poSi=state.sheets.findIndex(s=>s.wf),po=state.sheets[poSi],moved=[],skipped=[];let pay=false;
   state.via="Odoo Helper (in đề nghị)";
   try{for(const r of rows){
@@ -3756,6 +3759,14 @@ addEventListener("message",e=>{
     applyRemindLog();
   }catch(err){console.error(err)}
 });
+/* Odoo mở thẳng (không có window.opener): Odoo Helper mở/dùng lại tab tên “qlcv-dash” với #qlcvprint=<sự kiện mã hóa>. Tab dashboard đang mở chỉ nhận hashchange, không tải lại trang. */
+try{window.name="qlcv-dash"}catch(e){}
+function readPrintHash(){
+  const m=/^#qlcvprint=(.+)$/.exec(location.hash);if(!m)return;
+  try{history.replaceState(null,"",location.pathname+location.search)}catch(e){}
+  try{receivePrintEvents(JSON.parse(decodeURIComponent(escape(atob(decodeURIComponent(m[1]))))))}catch(err){console.error(err)}
+}
+addEventListener("hashchange",readPrintHash);readPrintHash();
 setInterval(()=>{try{applyRemindLog()}catch(e){console.error(e)}},6000);
 addEventListener("focus",()=>{try{applyRemindLog()}catch(e){console.error(e)}});
 /* Nút bookmark “Odoo Helper”: thay cho Tampermonkey. Mã nằm trong odoo-helper.js cạnh index.html nên luôn là bản mới nhất, không phải cập nhật tay */
