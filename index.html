@@ -4343,26 +4343,24 @@ function nccDebtRows(){
   const S=nccSheets();if(!S)return null;
   const items=S.ds.rows.filter(r=>r.v[S.nc.idx]!=null&&String(r.v[S.nc.idx]).trim()).map(r=>({name:String(r.v[S.nc.idx]).trim(),row:r}));
   const cache=new Map(items.map(it=>[it,NCC.cands(it.name)])),by=new Map(),memo=new Map();
+  const get=sup=>{let key=memo.get(sup);
+    if(key===undefined){const f=NCC.find(sup,items,cache);key=f.hits.length?f.hits[0].name:null;memo.set(sup,key)}
+    const k=key||sup,o=by.get(k)||{name:k,inDs:!!key,cls:"",paid:[],unpaid:[]};
+    if(key&&!o.cls){const it=items.find(i=>i.name===key);o.cls=it?String(it.row.v[S.tc.idx]??"").trim():""}
+    by.set(k,o);return o};
   state.sheets.forEach((sh,si)=>{if(!sh.wf)return;const ci=poSupplierOf(sh);if(ci==null)return;
     sh.rows.forEach(r=>{
       const sup=String(r.v[ci]??"").trim();if(!sup)return;
-      let key=memo.get(sup);
-      if(key===undefined){const f=NCC.find(sup,items,cache);key=f.hits.length?f.hits[0].name:null;memo.set(sup,key)}
-      const k=key||sup,o=by.get(k)||{name:k,inDs:!!key,cls:"",paid:[],unpaid:[]};
-      if(key&&!o.cls){const it=items.find(i=>i.name===key);o.cls=it?String(it.row.v[S.tc.idx]??"").trim():""}
-      const pi=poPayInfo(sh,r),amt=sh.money?+r.v[sh.money.idx]||0:0,code=String(r.v[sh.title]??"").trim();
+      const o=get(sup),pi=poPayInfo(sh,r),amt=sh.money?+r.v[sh.money.idx]||0:0,code=String(r.v[sh.title]??"").trim();
       (pi.paid?o.paid:o.unpaid).push({code,amt,wf:r.wf,state:pi.state});
-      by.set(k,o);
+      if(!pi.live.length)(pi.paid?(o.pays=o.pays||{paid:[],unpaid:[]}).paid:(o.pays=o.pays||{paid:[],unpaid:[]}).unpaid).push({no:"",po:code,amt,label:code+"-chưa có phiếu"}); // PO chưa có phiếu PAY/BNK
     })});
   const ps=state.sheets.find(x=>x.pay),psi=ps?state.sheets.indexOf(ps):-1;
-  if(ps&&ps.sub!=null&&ps.payStIdx!=null)ps.rows.forEach(r=>{ // số tiền theo phiếu PAY: Đã thanh toán / Chưa thanh toán (bỏ phiếu hủy, không còn trên Odoo)
+  if(ps&&ps.sub!=null&&ps.payStIdx!=null)ps.rows.forEach(r=>{ // số tiền theo phiếu PAY/BNK: Đã / Chưa thanh toán (bỏ phiếu hủy, không còn trên Odoo)
     const sup=String(r.v[ps.sub]??"").trim()||"(Chưa ghi NCC)",st=wfn(r.v[ps.payStIdx]);if(st!=="đã thanh toán"&&st!=="chưa thanh toán")return;
-    let key=memo.get(sup);if(key===undefined){const f=NCC.find(sup,items,cache);key=f.hits.length?f.hits[0].name:null;memo.set(sup,key)}
-    const k=key||sup,o=by.get(k)||{name:k,inDs:!!key,cls:"",paid:[],unpaid:[]};
-    if(key&&!o.cls){const it=items.find(i=>i.name===key);o.cls=it?String(it.row.v[S.tc.idx]??"").trim():""}
-    const amt=ps.money?+r.v[ps.money.idx]||0:0;
-    (o.pays=o.pays||{paid:[],unpaid:[]})[st==="đã thanh toán"?"paid":"unpaid"].push({no:String(r.v[ps.title]??"").trim(),amt});
-    by.set(k,o);
+    const o=get(sup),amt=ps.money?+r.v[ps.money.idx]||0:0,no=String(r.v[ps.title]??"").trim();
+    const pos=ps.payPoIdx!=null?[...new Set(String(r.v[ps.payPoIdx]??"").split(/[,;\s]+/).map(x=>x.trim()).filter(Boolean))]:[];
+    (o.pays=o.pays||{paid:[],unpaid:[]})[st==="đã thanh toán"?"paid":"unpaid"].push({no,po:pos[0]||"",amt,label:pos.length?no+"-"+pos.join(","):no});
   });
   const sm=a=>(a||[]).reduce((t,x)=>t+x.amt,0);
   const out=[...by.values()].map(o=>{o.pays=o.pays||{paid:[],unpaid:[]};return{...o,psi,vp:sm(o.pays.paid),vu:sm(o.pays.unpaid)}});
@@ -4370,14 +4368,17 @@ function nccDebtRows(){
 }
 function nccDebtHtml(sh){
   const d=nccDebtRows();if(!d||!d.out.length)return "";
-  const {out}=d,tp=out.reduce((t,o)=>t+o.vp,0),tu=out.reduce((t,o)=>t+o.vu,0),np=out.reduce((t,o)=>t+o.paid.length,0),nu=out.reduce((t,o)=>t+o.unpaid.length,0),npp=out.reduce((t,o)=>t+o.pays.paid.length,0),npu=out.reduce((t,o)=>t+o.pays.unpaid.length,0);
-  const chips=(a,c)=>a.length?a.map(x=>`<a href="#" class="chip dbt-po" data-dpo="${esc(x.code)}" style="--c:${c}" title="${esc(x.wf+" · "+x.state)}">${esc(x.code)}</a>`).join(""):`<span class="sub">Không có.</span>`;
-  const pchips=(a,c)=>a.length?a.map(x=>`<a href="#" class="chip dbt-po" data-dpay="${esc(x.no)}" style="--c:${c}" title="Mở phiếu thanh toán trong tab Phiếu thanh toán">${esc(x.no)}${x.amt?" · "+fmtBig(x.amt):""}</a>`).join(""):`<span class="sub">Không có.</span>`;
-  return `<div class="card" style="margin-bottom:14px"><div class="td-bar" style="margin-bottom:8px"><span class="lvl" style="margin:0">💰 Giá trị công nợ theo NCC · đã / chưa thanh toán</span><span class="grow"></span><input id="dbtQ" placeholder="Lọc NCC…" style="min-width:160px"><button class="btn" id="dbtOpen">▾ Mở tất cả</button><button class="btn" id="dbtClose">▸ Thu gọn tất cả</button></div>
-    <div class="dbt-sum" style="margin-bottom:8px"><span class="chip" style="--c:var(--ok)">Đã thanh toán ${fmtBig(tp)} · ${npp} phiếu PAY · ${np} PO</span><span class="chip" style="--c:var(--bad)">Chưa thanh toán ${fmtBig(tu)} · ${npu} phiếu PAY · ${nu} PO</span><span class="sub">${out.length} NCC</span></div>
-    <div class="sub" style="margin-bottom:8px"><b>Giá trị lấy theo số tiền phiếu PAY</b> (tab Phiếu thanh toán, theo NCC): “Đã thanh toán” và “Chưa thanh toán” theo cột Trạng thái TT, bỏ phiếu đã hủy / không còn trên Odoo. Danh sách PO: PO đã Hoàn thành hoặc mọi phiếu PAY gắn với PO đã thanh toán = đã thanh toán, còn lại là chưa. Bấm mã PO để mở trong tab PO, bấm mã PAY để mở trong tab Phiếu thanh toán.</div>
-    <div id="dbtList">`+out.map(o=>tdD("dbt:"+o.name,"td-wg",`<b>${esc(o.name)}</b>${o.cls?` <span class="chip" style="--c:${colorFor(o.cls)}">${esc(o.cls)}</span>`:""}${o.inDs?"":` <span class="chip" style="--c:var(--warn)">chưa có trong Công nợ NCC</span>`} <span class="chip" style="--c:var(--ok)">đã TT ${fmtBig(o.vp)} · ${o.paid.length} PO</span> <span class="chip" style="--c:var(--bad)">chưa TT ${fmtBig(o.vu)} · ${o.unpaid.length} PO</span>`,
-      `<div class="dbt-cols" style="padding:6px 0 10px 18px"><div><div class="sub" style="margin-bottom:4px"><b>Đã thanh toán</b> · ${fmtN(o.vp)} · ${o.pays.paid.length} phiếu PAY · ${o.paid.length} PO</div><div style="margin-bottom:4px">${pchips(o.pays.paid,"var(--ok)")}</div><div>${chips(o.paid,"var(--ok)")}</div></div><div><div class="sub" style="margin-bottom:4px"><b>Chưa thanh toán</b> · ${fmtN(o.vu)} · ${o.pays.unpaid.length} phiếu PAY · ${o.unpaid.length} PO</div><div style="margin-bottom:4px">${pchips(o.pays.unpaid,"var(--bad)")}</div><div>${chips(o.unpaid,"var(--bad)")}</div></div></div>`,false)).join("")+`</div></div>`;
+  const {out}=d,tp=out.reduce((t,o)=>t+o.vp,0),tu=out.reduce((t,o)=>t+o.vu,0),npp=out.reduce((t,o)=>t+o.pays.paid.length,0),npu=out.reduce((t,o)=>t+o.pays.unpaid.length,0);
+  const pchips=(a,c)=>a.length?a.map(x=>`<a href="#" class="chip dbt-po" ${x.no?`data-dpay="${esc(x.no)}"`:`data-dpo="${esc(x.po)}"`} style="--c:${c}" title="${x.no?"Mở phiếu trong tab Phiếu thanh toán":"PO chưa có phiếu PAY/BNK - mở trong tab PO"}">${esc(x.label)} - ${fmtBig(x.amt)}</a>`).join(""):`<span class="sub">Không có.</span>`;
+  return `<div class="card" style="margin-bottom:14px"><div class="td-bar" style="margin-bottom:8px"><span class="lvl" style="margin:0">💰 Giá trị công nợ theo NCC · đã / chưa thanh toán</span><span class="grow"></span><input id="dbtQ" placeholder="Lọc NCC…" style="min-width:160px" title="Lọc cả bảng giá trị công nợ và phần Chi tiết bên dưới"><button class="btn" id="dbtOpen">▾ Mở tất cả</button><button class="btn" id="dbtClose">▸ Thu gọn tất cả</button></div>
+    <div class="dbt-sum" style="margin-bottom:8px"><span class="chip" style="--c:var(--ok)">Đã thanh toán ${fmtBig(tp)} · ${npp} mục</span><span class="chip" style="--c:var(--bad)">Chưa thanh toán ${fmtBig(tu)} · ${npu} mục</span><span class="sub">${out.length} NCC</span></div>
+    <div class="sub" style="margin-bottom:8px">Mỗi mục có dạng <b>PAY/BNK-PO - giá trị</b> (theo số tiền phiếu, cột Trạng thái TT; bỏ phiếu hủy). PO chưa có phiếu hiện là <b>PO-chưa có phiếu - giá trị</b> (tính vào cột Chưa thanh toán, trừ PO đã Hoàn thành). Bấm để mở phiếu / PO.</div>
+    <div id="dbtList">`+out.map(o=>tdD("dbt:"+o.name,"td-wg",`<b>${esc(o.name)}</b>${o.cls?` <span class="chip" style="--c:${colorFor(o.cls)}">${esc(o.cls)}</span>`:""}${o.inDs?"":` <span class="chip" style="--c:var(--warn)">chưa có trong Công nợ NCC</span>`} <span class="chip" style="--c:var(--ok)">đã TT ${fmtBig(o.vp)} · ${o.pays.paid.length}</span> <span class="chip" style="--c:var(--bad)">chưa TT ${fmtBig(o.vu)} · ${o.pays.unpaid.length}</span>`,
+      `<div class="dbt-cols" style="padding:6px 0 10px 18px"><div><div class="sub" style="margin-bottom:4px"><b>Đã thanh toán</b> · ${fmtN(o.vp)} · ${o.pays.paid.length} mục</div><div>${pchips(o.pays.paid,"var(--ok)")}</div></div><div><div class="sub" style="margin-bottom:4px"><b>Chưa thanh toán</b> · ${fmtN(o.vu)} · ${o.pays.unpaid.length} mục</div><div>${pchips(o.pays.unpaid,"var(--bad)")}</div></div></div>`,false)).join("")+`</div></div>`;
+}
+function nccDebtFilter(v){ // một ô lọc cho cả bảng giá trị công nợ và phần Chi tiết
+  const m=$("#nccDebt");if(!m)return;const k=NCC.fold(v).trim();
+  m.querySelectorAll("details[data-tdd]").forEach(x=>{x.hidden=!!k&&!NCC.fold(x.dataset.tdd).includes(k)});
 }
 function nccDebtBind(){
   const m=$("#nccDebt");if(!m)return;const d=nccDebtRows();
@@ -4385,7 +4386,12 @@ function nccDebtBind(){
   m.querySelectorAll("[data-dpay]").forEach(a=>a.onclick=ev=>{ev.preventDefault();ev.stopPropagation();if(d&&d.psi>=0)goSheet(d.psi,{search:a.dataset.dpay.toLowerCase()})});
   const dets=()=>[...m.querySelectorAll("details[data-tdd]")],setAll=on=>{const mp=tdOpenMap();dets().forEach(x=>{x.open=on;mp[x.dataset.tdd]=on});store.set("qlcv:tdOpen",mp)};
   if($("#dbtOpen")){$("#dbtOpen").onclick=()=>setAll(true);$("#dbtClose").onclick=()=>setAll(false)}
-  if($("#dbtQ"))$("#dbtQ").oninput=e=>{const k=NCC.fold(e.target.value).trim();dets().forEach(x=>{x.hidden=!!k&&!NCC.fold(x.dataset.tdd).includes(k)})};
+  const sh=state.sheets[state.active],u=sh&&sh.ui;
+  if($("#dbtQ")){
+    $("#dbtQ").value=u&&u.search||"";nccDebtFilter($("#dbtQ").value);
+    $("#dbtQ").oninput=e=>{const v=e.target.value.trim().toLowerCase();nccDebtFilter(v);if(u){u.search=v;u.shown=100;if($("#q"))$("#q").value=e.target.value;renderDyn(sh)}};
+  }
+  if($("#q")){const q=$("#q"),old=q.oninput;q.oninput=e=>{old(e);nccDebtFilter(e.target.value);if($("#dbtQ"))$("#dbtQ").value=e.target.value}};
   setTimeout(()=>dets().forEach(tdTg),80);
 }
 function po360Find(code){
@@ -5004,8 +5010,8 @@ function renderSheet(sh){
     ${IS_DS(sh.name)?`<div id="nccDebt">${nccDebtHtml(sh)}</div>`:""}
     <div id="dyn"></div>
     <div class="src">Nguồn: sheet “${esc(sh.name)}”, tiêu đề ở dòng ${sh.hdrRow}, ${sh.rows.length} dòng dữ liệu.</div>`;
-  if(IS_DS(sh.name))nccDebtBind();
   $("#q").oninput=e=>{u.search=e.target.value.trim().toLowerCase();u.shown=100;renderDyn(sh)};
+  if(IS_DS(sh.name))nccDebtBind();
   const sp=$("#selProg");if(sp)sp.onchange=e=>{sh.progIdx=e.target.value===""?null:+e.target.value;u.special=null;setStatus(sh);renderDyn(sh);updateChrome()};
   const sd=$("#selDue");if(sd)sd.onchange=e=>{sh.dueIdx=e.target.value===""?null:+e.target.value;u.special=null;u.range=null;setStatus(sh);renderDyn(sh);updateChrome()};
   const seg=$("#seg");if(seg)seg.querySelectorAll("button").forEach(b=>b.onclick=()=>{u.metric=b.dataset.m;seg.querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===b));renderDyn(sh)});
