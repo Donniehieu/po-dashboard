@@ -2929,7 +2929,7 @@ async function loadBuffer(buf,name,opts={}){
     if(state.src==="github"&&ghReady())loadRemoteHistory();
     odooStart();loadOdooIds();
     setTimeout(()=>{checkRemovals().catch(()=>{})},900); // PO/PAY bị xóa hoặc hủy trên Odoo -> popup
-    setTimeout(()=>{try{applyPrintQueue()}catch(err){console.error(err)}},1400); // sự kiện "đã in Đề nghị thanh toán" đang chờ
+    setTimeout(()=>{try{applyPrintQueue();autoAdvanceSent()}catch(err){console.error(err)}},1400); // sự kiện "đã in Đề nghị thanh toán" đang chờ
   }catch(e){
     console.error(e);
     if(err){err.hidden=false;err.textContent="Không đọc được file: "+e.message}
@@ -3710,6 +3710,23 @@ function applyPrintEvent(e){ // -> {found, pay, pos:[mã PO đã chuyển]}
   if(pay||moved.length){setStatus(ps);if(po)setStatus(po)}
   return {found:true,pay,pos:moved,skipped,no:rows[0].v[ps.title]};
 }
+/* Tự nâng PO theo ghi chú của PAY: PAY chưa thanh toán đã có dòng “Đã gửi duyệt TT cho TP” (ghi khi bấm In đề nghị thanh toán)
+   mà PO liên quan còn ở “Chờ làm TT” -> “Chờ gửi UNC”. Bù cho trường hợp lúc in phiếu chưa có PO liên quan (PO về sau mới điền). */
+function autoAdvanceSent(){
+  const psi=state.sheets.findIndex(s=>s.pay),ps=state.sheets[psi],poSi=state.sheets.findIndex(s=>s.wf),po=state.sheets[poSi];
+  if(!ps||!po||ps.payNoteIdx==null||ps.payPoIdx==null||po.noteIdx==null)return [];
+  const moved=[];state.via="Tự động (PAY đã gửi duyệt TP)";
+  try{for(const r of ps.rows){
+    if(r.done||!noteLines(r.v[ps.payNoteIdx]).some(l=>l.replace(NOTE_STAMP,"").startsWith(PROGRESS_SENT)))continue;
+    for(const raw of String(r.v[ps.payPoIdx]??"").split(/[,;\s]+/)){
+      const code=raw.trim().toUpperCase();if(!code)continue;
+      const pr=po.rows.find(x=>String(x.v[po.title]??"").trim().toUpperCase()===code);
+      if(pr&&!pr.done&&pr.wf===PO_BEFORE_PRINT&&seqOf(po,pr).includes(PO_AFTER_PRINT)&&setWf(poSi,pr,PO_AFTER_PRINT,"Tự động (PAY đã gửi duyệt TP)"))moved.push(`${code} (do ${r.v[ps.title]} đã “${PROGRESS_SENT}”)`);
+    }
+  }}finally{state.via="dashboard"}
+  if(moved.length){setStatus(po);softRender();toast("Tự động nâng → “"+PO_AFTER_PRINT+"”: "+moved.join("; "))}
+  return moved;
+}
 function applyPrintQueue(){ // -> khóa các sự kiện đã xử lý xong (để báo ngược cho Odoo Helper xóa)
   if(!state.sheets.length||state.stale)return [];
   let q=store.get(PRINT_Q)||[];if(!q.length)return [];
@@ -4338,7 +4355,8 @@ setInterval(()=>{if(state.active==="today"&&state.sheets.length){const st=store.
 const LINK_RULES=[
   (si,r,ci,sh)=>{if(IS_DS(sh.name))nccOnEdit(si,r,ci)}, // Công nợ NCC đổi Phân loại -> tick “Thanh toán trước” ở các PO của NCC
   (si,r,ci,sh)=>{ // phiếu thanh toán vừa đổi trạng thái / PO liên quan -> báo các PO liên quan đã có thể nâng bước (không tự đổi, bạn xác nhận ở PO 360°)
-    if(!sh.pay||(ci!==sh.payStIdx&&ci!==sh.payPoIdx))return;
+    if(!sh.pay||(ci!==sh.payStIdx&&ci!==sh.payPoIdx&&ci!==sh.payNoteIdx))return;
+    if(autoAdvanceSent().length)return;
     const out=[];
     for(const code of String(r.v[sh.payPoIdx]??"").split(/[,;\s]+/)){const f=po360Find(code);if(!f)continue;const pl=po360Plan(f.sh,f.r,po360Pays(f.sh,f.r));if(pl.length)out.push(`${code}: ${pl[0].from} → ${pl[pl.length-1].to}`)}
     if(out.length)toast("Có thể nâng bước PO — "+out.join("; ")+". Mở 🔎 PO 360° để xác nhận.");
