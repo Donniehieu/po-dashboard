@@ -3348,6 +3348,15 @@ function restoreEntry(id){
   setStatus(sh);updateChrome();
   if(state.active==="history")fillHistory();
 }
+/* gợi ý khi gõ ở ô tìm kiếm: datalist lấy từ dữ liệu của chính tab đó (giá trị hay gặp nhất) */
+function attachSug(inp,id,vals,max){
+  if(!inp)return;const cnt=new Map();
+  for(const v of vals){const t=String(v??"").trim();if(t.length<2||t.length>70)continue;cnt.set(t,(cnt.get(t)||0)+1)}
+  let d=document.getElementById(id);if(!d){d=document.createElement("datalist");d.id=id;document.body.appendChild(d)}
+  d.innerHTML=[...cnt].sort((a,b)=>b[1]-a[1]).slice(0,max||500).map(([t])=>`<option value="${esc(t)}">`).join("");
+  inp.setAttribute("list",id);inp.setAttribute("autocomplete","off");
+}
+function sheetSugVals(sh){const o=[];for(const r of sh.rows){for(const x of r.v){if(typeof x==="string")o.push(x)}if(r.wf)o.push(r.wf)}return o}
 const ACT_COLOR={"sửa":"#2563eb","thêm":"#16a34a","xóa":"#dc2626","nhập":"#7c3aed","duyệt hoàn thành":"#059669"};
 function renderHistory(){
   const u=state.hui||(state.hui={act:"",q:"",shown:100});
@@ -3355,6 +3364,7 @@ function renderHistory(){
     <span class="seg" id="hseg">${[["","Tất cả"],["sửa","Sửa"],["thêm","Thêm"],["xóa","Xóa"],["nhập","Nhập Odoo"],["duyệt hoàn thành","Duyệt hoàn thành"]].map(([k,l])=>`<button data-a="${k}" class="${u.act===k?"on":""}">${l}</button>`).join("")}</span></div>
     <div id="hlist"></div>
     <div class="note">Lịch sử ghi lại mọi thao tác sửa, thêm, xóa và nhập file từ dashboard${state.src==="github"?" và lưu trong file <b>history.json</b> cạnh file Excel trên GitHub":" (lưu trong trình duyệt này; kết nối GitHub để lưu lâu dài và dùng chung nhiều máy)"}. Các lần đồng bộ tự động từ Odoo nằm trong lịch sử commit của repo.</div>`);
+  attachSug($("#hq"),"sug-hist",state.history.flatMap(e=>[e.key,e.sheet,e.act,e.via]));
   $("#hq").oninput=e=>{u.q=e.target.value.trim().toLowerCase();u.shown=100;fillHistory()};
   $("#hseg").querySelectorAll("button").forEach(b=>b.onclick=()=>{u.act=b.dataset.a;u.shown=100;$("#hseg").querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===b));fillHistory()});
   fillHistory();
@@ -4388,6 +4398,7 @@ function nccDebtBind(){
   if($("#dbtOpen")){$("#dbtOpen").onclick=()=>setAll(true);$("#dbtClose").onclick=()=>setAll(false)}
   const sh=state.sheets[state.active],u=sh&&sh.ui;
   if($("#dbtQ")){
+    attachSug($("#dbtQ"),"sug-dbt",d?d.out.map(o=>o.name):[]);
     $("#dbtQ").value=u&&u.search||"";nccDebtFilter($("#dbtQ").value);
     $("#dbtQ").oninput=e=>{const v=e.target.value.trim().toLowerCase();nccDebtFilter(v);if(u){u.search=v;u.shown=100;if($("#q"))$("#q").value=e.target.value;renderDyn(sh)}};
   }
@@ -5010,6 +5021,7 @@ function renderSheet(sh){
     ${IS_DS(sh.name)?`<div id="nccDebt">${nccDebtHtml(sh)}</div>`:""}
     <div id="dyn"></div>
     <div class="src">Nguồn: sheet “${esc(sh.name)}”, tiêu đề ở dòng ${sh.hdrRow}, ${sh.rows.length} dòng dữ liệu.</div>`;
+  attachSug($("#q"),"sug-sheet",sheetSugVals(sh));
   $("#q").oninput=e=>{u.search=e.target.value.trim().toLowerCase();u.shown=100;renderDyn(sh)};
   if(IS_DS(sh.name))nccDebtBind();
   const sp=$("#selProg");if(sp)sp.onchange=e=>{sh.progIdx=e.target.value===""?null:+e.target.value;u.special=null;setStatus(sh);renderDyn(sh);updateChrome()};
@@ -5701,6 +5713,7 @@ function renderSuppliers(){
    <button class="btn" id="supExp" title="Xuất danh sách đang hiện ra Excel (Tên NCC, Phân loại, Ghi chú, số liệu PO)">⬇ Xuất Excel</button><button class="btn" id="supImp" title="Nhập Excel vào tab Công nợ NCC: khớp theo cột Tên NCC, cập nhật Phân loại/Ghi chú, NCC mới thì thêm dòng">⬆ Nhập Excel</button></div>${sum}
    <div class="card scroll-x"><table class="mini"><thead><tr><th>Nhà cung cấp</th><th>Phân loại</th><th style="text-align:right">Số PO</th><th style="text-align:right">Đang mở</th><th style="text-align:right">Trễ</th><th style="text-align:right">Chờ báo giá</th><th style="text-align:right">Trễ lâu nhất</th><th style="text-align:right">Giá trị đang mở</th></tr></thead><tbody>`+
    L.slice(0,300).map((o,i)=>`<tr class="click" data-sup="${i}"><td>${esc(o.k)}</td><td>${o.cls?esc(o.cls):(hasDs?'<span class="sub" title="Chưa khớp dòng nào trong Công nợ NCC">—</span>':"")}</td><td class="num">${o.n}</td><td class="num">${o.open}</td><td class="num" style="${o.late?"color:var(--bad);font-weight:700":""}">${o.late}</td><td class="num">${o.quote}</td><td class="num">${o.maxLate?o.maxLate+" ngày":""}</td><td class="num">${fmtBig(o.sumOpen)}</td></tr>`).join("")+`</tbody></table></div><div class="note">“Trễ” = PO chưa Hoàn thành và đã quá ngày nhận hàng. Bấm một dòng để mở sheet PO đã lọc theo nhà cung cấp đó. Danh sách này tự cập nhật theo tab PO.</div>`);
+  attachSug($("#supq"),"sug-sup",L.map(o=>o.k));
   $("#supq").oninput=e=>{state.supQ=e.target.value;const p=e.target.selectionStart;renderSuppliers();const n=$("#supq");n.focus();n.setSelectionRange(p,p)};
   $("#supExp").onclick=supplierExport;$("#supImp").onclick=supplierImport;
   $("#main").querySelectorAll("[data-sup]").forEach(tr=>tr.onclick=()=>{const o=L[+tr.dataset.sup];goSheet(o.si,{filters:{[o.sc]:o.k==="(Trống)"?"":o.k}})});
