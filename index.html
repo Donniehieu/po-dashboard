@@ -4423,9 +4423,10 @@ function po360Plan(sh,r,pays){
   for(let n=0;n<4;n++){
     const c=[];
     if(fl&&idx(fl)>ci)c.push([fl,`Odoo báo ${r.v[sh.rcIdx]??""}${iv?" / "+r.v[sh.ivIdx]:""}`]);
-    if(cur==="Chờ làm TT"&&live.some(paid))c.push([pre?"Chờ gửi UNC":"Hoàn thành",`${no(live.find(paid))} đã thanh toán`]);
+    if(cur==="Chờ làm TT"&&live.some(paid)){const x=live.find(paid);c.push([pre?"Chờ gửi UNC":"Hoàn thành",`${no(x)} đã thanh toán (trạng thái TT = Đã thanh toán)`,x])}
+    else if(cur==="Chờ làm TT"&&!pre&&live.length){const x=live[0];c.push(["Chờ gửi UNC",`đơn công nợ đã có phiếu ${no(x)} (chưa thanh toán) gắn với PO nên chờ gửi UNC`,x])} // khớp quy tắc unc_debt_po trong pay_sync.py
     const best=c.filter(x=>idx(x[0])>ci).sort((a,b)=>idx(b[0])-idx(a[0]))[0];
-    if(!best)break;out.push({from:cur,to:best[0],why:best[1]});cur=best[0];ci=idx(cur);
+    if(!best)break;out.push({from:cur,to:best[0],why:best[1],pay:best[2]?{no:no(best[2]),psi:best[2].psi}:null});cur=best[0];ci=idx(cur);
   }
   return out;
 }
@@ -4494,7 +4495,7 @@ function renderPo360(){
       <div class="p360s" style="margin:10px 0">${seq.map((x,k)=>`<span class="${k===ci?"on":k<ci?"past":""}">${esc(x)}</span>`).join("")}</div>
       <div>${olLink(sh,si,r,"↗ Mở PO trên Odoo")}</div>
       ${sugDone(sh,r)?`<div class="note" style="margin:10px 0 0;border-color:var(--ok)">💡 Odoo báo đã nhận hết hàng và đã xuất hóa đơn, PO đang ở <b>Chờ KT xác nhận công nợ</b>. Hãy kiểm tra rồi xác nhận: <button class="btn" id="po360Done">✔ Xác nhận Hoàn thành</button></div>`:""}
-      ${plan.length?`<div class="note" style="margin:10px 0 0">💡 <b>Có thể nâng:</b> ${plan.map(x=>`${esc(x.from)} → <b>${esc(x.to)}</b> (${esc(x.why)})`).join(" ; ")} <button class="btn" id="po360Apply" data-to="${esc(plan[plan.length-1].to)}">Nâng lên “${esc(plan[plan.length-1].to)}”</button></div>`:`<div class="sub" style="margin-top:8px">Không có gợi ý nâng bước theo Odoo và phiếu thanh toán.</div>`}</div>`;
+      ${plan.length?`<div class="note" style="margin:10px 0 0">💡 <b>Có thể nâng:</b> ${plan.map(x=>`${esc(x.from)} → <b>${esc(x.to)}</b> (${esc(x.why)}${x.pay?` · <a href="#" class="po360chk" data-chk="${esc(x.pay.no)}" data-psi="${x.pay.psi}" title="Mở phiếu ${esc(x.pay.no)} trong tab Phiếu thanh toán để đối chiếu">🔎 kiểm tra ${esc(x.pay.no)}</a>`:""})`).join(" ; ")} <button class="btn" id="po360Apply" data-to="${esc(plan[plan.length-1].to)}">Nâng lên “${esc(plan[plan.length-1].to)}”</button></div>`:`<div class="sub" style="margin-top:8px">Không có gợi ý nâng bước theo Odoo và phiếu thanh toán.</div>`}</div>`;
     html+=`<div class="ov2" style="margin-top:14px">`;
     // phiếu thanh toán
     html+=`<div class="card"><div class="lvl">Phiếu thanh toán<span class="tag">${pays.length}</span></div>`+(pays.length?`<ul class="attn">`+pays.map(({p,ps,psi})=>{
@@ -4526,6 +4527,7 @@ function renderPo360(){
   if(hit){
     const {si,sh,r}=hit;
     if($("#po360Done"))$("#po360Done").onclick=()=>{if(!confirm(`Xác nhận Hoàn thành ${r.v[sh.title]}? Hãy chắc KT đã xác nhận công nợ.`))return;if(setWf(si,r,WF_DONE,"duyệt hoàn thành")){setStatus(sh);updateChrome();toast(r.v[sh.title]+": đã duyệt hoàn thành");renderPo360()}};
+    document.querySelectorAll(".po360chk").forEach(a=>a.onclick=ev=>{ev.preventDefault();goSheet(+a.dataset.psi,{search:a.dataset.chk.toLowerCase()})});
     if($("#po360Apply"))$("#po360Apply").onclick=e=>{const to=e.target.dataset.to;if(setWf(si,r,to)){setStatus(sh);updateChrome();toast(`${r.v[sh.title]}: → ${to}`);renderPo360()}};
     if($("#po360Ncc")){const S=nccSheets();$("#po360Ncc").onclick=e=>{e.preventDefault();goSheet(S.dsSi,{search:String(r.v[sh.cols.find(c=>norm(c.name)==="nhà cung cấp").idx]??"").toLowerCase().slice(0,20)})}}
     $("#po360Sheet").onclick=e=>{e.preventDefault();goSheet(si,{search:String(r.v[sh.title]).toLowerCase()})};
