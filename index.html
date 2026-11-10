@@ -2540,7 +2540,7 @@ function analyze(raw){
   sh.blockIdx=blk?blk.idx:null;
   sh.dueIdx=sh.dates.length?sh.dates[0].idx:null;
   if(isDs){const tc=cols.find(c=>/^trạng thái$/i.test(c.name.trim()));if(tc){sh.progIdx=tc.idx;sh.dueIdx=null}} // Công nợ NCC: hoàn thành tính theo cột “Trạng thái”; “Ngày điều chỉnh” không phải hạn nên không tính trễ hạn
-  sh.checklist=!sh.cat.length&&!sh.dates.length;
+  sh.checklist=(!sh.cat.length&&!sh.dates.length)||/^cv theo ngày/.test(norm(sh.name)); // tab CV theo ngày luôn là danh sách việc, dù cột Tham chiếu có ít giá trị nên bị nhận nhầm là cột phân loại
   const hd=cols.find(c=>/hoàn thành/i.test(c.name));
   sh.doneColIdx=hd?hd.idx:null;
   if(wfNote){
