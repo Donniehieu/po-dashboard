@@ -4132,12 +4132,20 @@ function tdCompute0(){
       const ab=amt>=1e8?40:amt>=5e7?30:amt>=1e7?15:amt>=1e6?5:0;const im0=im;im=Math.min(100,im+ab);if(ab)bi("Giá trị đơn "+fmtBig(amt),ab,"≥1tr +5 · ≥10tr +15 · ≥50tr +30 · ≥100tr +40");
       if(amt>=5e7||force){im=Math.max(im,50);if(im>im0+ab)bi(amt>=5e7?"Đơn ≥50 triệu luôn là quan trọng":"Việc bị ép Làm ngay",im-(im0+ab),"nâng lên tối thiểu 50")} // đơn từ 50 triệu luôn là quan trọng
       if(ab>=15)rs.push(fmtBig(amt));
-      bd.push({g:"Quan trọng",l:"Quan trọng: tổng (tối đa 100)",v:im,tot:1});
+      const sr=bd.filter(b=>b.g==="Quan trọng").reduce((a,b)=>a+b.v,0);if(sr>im)bd.push({g:"Quan trọng",l:"Giới hạn tối đa 100",v:im-sr,note:"Quan trọng không vượt quá 100"});
+      bd.push({g:"Quan trọng",l:"Cộng phần Quan trọng",v:im,tot:1});
       // Dễ (0-100): còn ít bước thì dễ; việc đang chờ người khác không tính
       const k0=seq.indexOf(step),rem=k0<0?seq.length:seq.length-1-k0,ease=wait?0:Math.max(0,100-rem*9);
       const score=Math.round(.4*u+.4*im+.2*ease);
-      bd.push({g:"Dễ",l:wait?"Đang chờ người khác — không tính Dễ":"Còn "+rem+" bước để xong",v:ease,note:wait?"":"100 − 9đ/bước còn lại",tot:1});
-      bd.push({g:"Tổng",l:"Điểm = 40%×"+u+" + 40%×"+im+" + 20%×"+ease,v:score,tot:1});
+      bd.push({g:"Dễ",l:wait?"Đang chờ người khác — không tính Dễ":"Còn "+rem+" bước để xong",v:ease,note:wait?"":"100 − 9đ/bước còn lại"});
+      // quy ra điểm đóng góp vào tổng: Gấp ×40% (chỉ tín hiệu cao nhất được cộng), Quan trọng ×40%, Dễ ×20%
+      const gw=bd.find(b=>b.g==="Gấp"&&!b.tot&&b.v===u&&u>0);
+      bd.forEach(b=>{
+        if(b.g==="Gấp"){if(b.tot){b.l="Cộng phần Gấp";b.p=.4*u;b.note="mức "+u+" × 40%"}else if(b===gw){b.p=.4*b.v;b.note=(b.note?b.note+" · ":"")+"mức "+b.v+" × 40% (cao nhất, được cộng)"}else b.p=0;if(!b.tot&&b!==gw)b.note=(b.note?b.note+" · ":"")+"thấp hơn mức cao nhất, không cộng"}
+        else if(b.g==="Quan trọng"){b.p=.4*b.v;if(!b.tot)b.note=(b.note?b.note+" · ":"")+"mức "+b.v+" × 40%";else b.note="mức "+im+" × 40%"}
+        else if(b.g==="Dễ"){b.p=.2*b.v;b.tot=1;b.note=(b.note?b.note+" · ":"")+"mức "+b.v+" × 20%"}
+      });
+      bd.push({g:"Tổng",l:"TỔNG ĐIỂM",v:score,p:score,tot:1,note:"Gấp + Quan trọng + Dễ (làm tròn)"});
       tasks.push({sh,si,r,k,imp,amt,late,stuck,step,wait,nag,u,im,ease,score,rs,bd,mrpH,urgent:u>=50,important:im>=50,rem,pay:!!sh.pay,code:String(r.v[sh.title]??"")});
     }
   });
@@ -4218,14 +4226,15 @@ function tdAddMenu(btn,t){
 }
 /* ---- Chuột phải vào PO / phiếu ở tab Việc hôm nay: popup 2 cột giải thích các thành phần cấu thành điểm ---- */
 function tdMoUrl(id){try{return new URL(ODOO_LIST()).origin+"/odoo/mrp.production/"+id}catch(e){return null}}
+const tdFmtP=n=>(Math.round(n*10)/10).toString().replace(".",",");
 function tdScorePop(t,x,y){
   document.querySelectorAll(".td-pop").forEach(e=>e.remove());
   const cls=g=>g==="Gấp"?"u":g==="Quan trọng"?"i":g==="Dễ"?"e":"t";
-  const cells=t.bd.map(b=>`<div class="tdp-c g-${cls(b.g)}${b.tot?" tot":""}"><div class="tdp-l"><span class="tdp-g">${esc(b.g)}</span> ${esc(b.l)}${b.note?`<div class="sub">${esc(b.note)}</div>`:""}</div><div class="tdp-v">${b.v}</div></div>`);
+  const cells=t.bd.map(b=>`<div class="tdp-c g-${cls(b.g)}${b.tot?" tot":""}"><div class="tdp-l"><span class="tdp-g">${esc(b.g)}</span> ${esc(b.l)}${b.note?`<div class="sub">${esc(b.note)}</div>`:""}</div><div class="tdp-v">${b.p!=null?tdFmtP(b.p):b.v}</div></div>`);
   if(t.mrpH&&t.mrpH.length)cells.push(`<div class="tdp-c g-m"><div class="tdp-l"><span class="tdp-g">Sản xuất</span> Lệnh SX đang thiếu hàng liên quan${t.pay?" (qua PO "+esc([...new Set(t.mrpH.map(h=>h.po))].join(", "))+")":""}<div class="sub">${t.mrpH.map(h=>{const u=h.id?tdMoUrl(h.id):null;return u?`<a href="${esc(u)}" data-tdmo="${esc(u)}">${esc(h.n)}</a>`:`<span>${esc(h.n)}</span>`}).join(" · ")}</div></div><div class="tdp-v">↗</div></div>`);
   if(cells.length%2)cells.push(`<div class="tdp-c"></div>`); // đủ cặp để chia đều 2 cột: số dòng = số phần tử / 2
   const m=document.createElement("div");m.className="td-pop";
-  m.innerHTML=`<div class="tdp-h"><b>${esc(t.code)}</b> · ${esc(t.step)} · <b>${t.score} điểm</b><button class="btn sm tdp-x" title="Đóng">×</button></div><div class="tdp-grid">${cells.join("")}</div>`;
+  m.innerHTML=`<div class="tdp-h"><b>${esc(t.code)}</b> · ${esc(t.step)} · <b>${t.score} điểm</b> <span class="sub">— mỗi ô là số điểm góp vào tổng</span><button class="btn sm tdp-x" title="Đóng">×</button></div><div class="tdp-grid">${cells.join("")}</div>`;
   document.body.appendChild(m);
   m.style.left=Math.max(8,Math.min(x,innerWidth-m.offsetWidth-8))+"px";m.style.top=Math.max(8,Math.min(y,innerHeight-m.offsetHeight-8))+"px";
   const close=()=>{m.remove();document.removeEventListener("mousedown",out,true);document.removeEventListener("keydown",esc2,true)};
@@ -4243,7 +4252,7 @@ function tdRow(t,extra,showQ){
   const sq=t.pay?null:seqOf(t.sh,t.r),k0=sq?sq.indexOf(t.step):-1,nx=k0>=0?sq[k0+1]:null;
   const acts=`<div class="td-act"><button class="btn sm" data-tdadd="${esc(t.key)}" title="Thêm việc hằng ngày vào tab CV theo ngày">➕ Thêm việc</button>${nx&&nx!==WF_DONE?`<button class="btn sm" data-tdxong="${esc(t.key)}" title="Xong bước “${esc(t.step)}” → chuyển sang “${esc(nx)}”">✔ ${esc(nx)}</button>`:""}${t.zz?`<button class="btn sm" data-tdwake="${esc(t.key)}" title="Đưa việc về lại theo trạng thái thực tế ngay">↩ Đưa về</button>`:""}${(t.lite?!t.zz:(t.in&&t.q!==0))?`<button class="btn sm" data-tdsnz="${esc(t.key)}" title="Hoãn tới mốc xếp lại kế tiếp">💤</button>`:""}</div>`;
   const age=t.pay?t.late:t.stuck,mv=t.in&&!t.lite?`<select class="td-mv" data-tdmv="${esc(t.key)}" title="Chuyển sang mục khác (hoặc kéo thả)"><option value="">⇄</option>${[1,2,3,4].map(q=>`<option value="${q}"${t.q===q?" disabled":""}>→ ${TD_QN[q]}</option>`).join("")}<option value="0">→ Để lượt sau</option></select>`:"";
-  return `<li class="click" data-tdrow="${esc(t.key)}" title="Chuột phải để xem cách tính điểm" ${t.in&&!t.lite?`draggable="true" data-tdk="${esc(t.key)}"`:""} data-tdgo="${t.si}" data-q="${esc(t.code)}"><span class="tag">${esc(t.sh.pay?"PAY":"PO")}</span><div>${t.sh.pay?`<b>${esc(t.code)}</b>`:`<a class="ol" href="#" data-code="${esc(t.code)}" title="Mở PO này trên Odoo để kiểm tra"><b>${esc(t.code)}</b></a>`}${t.sh.pay?"":` <a href="#" class="td-360" data-po360="${esc(t.code)}" title="Xem PO 360°">🔎</a>`} <span class="chip" style="--c:${colorFor(t.step)}">${esc(t.step)}</span>${t.moved?` <span class="chip" style="--c:#7c3aed" title="Bạn đã chuyển tay; tới lần xếp lại kế tiếp sẽ tự tính lại">✋ đã chuyển</span>`:""}<div class="sub">${esc(t.k)}${t.amt?" · "+fmtN(t.amt):""}</div><div class="sub td-why">${esc(t.rs.join(" · ")||"không có tín hiệu gấp")}${extra||""}</div></div><span class="td-score" title="Điểm = 40% gấp + 40% quan trọng + 20% dễ&#10;Gấp ${t.u} · Quan trọng ${t.im} · Dễ ${t.ease}">${t.score}<div class="sub">${age>0&&t.wait?"chờ "+age+" ngày":""}</div>${mv}${acts}</span></li>`;
+  return `<li class="click" data-tdrow="${esc(t.key)}" title="Chuột phải để xem cách tính điểm" ${t.in&&!t.lite?`draggable="true" data-tdk="${esc(t.key)}"`:""} data-tdgo="${t.si}" data-q="${esc(t.code)}"><span class="tag">${esc(t.sh.pay?"PAY":"PO")}</span><div>${t.sh.pay?`<b>${esc(t.code)}</b>`:`<a class="ol" href="#" data-code="${esc(t.code)}" title="Mở PO này trên Odoo để kiểm tra"><b>${esc(t.code)}</b></a>`}${t.sh.pay?"":` <a href="#" class="td-360" data-po360="${esc(t.code)}" title="Xem PO 360°">🔎</a>`} <span class="chip" style="--c:${colorFor(t.step)}">${esc(t.step)}</span>${t.moved?` <span class="chip" style="--c:#7c3aed" title="Bạn đã chuyển tay; tới lần xếp lại kế tiếp sẽ tự tính lại">✋ đã chuyển</span>`:""}<div class="sub">${esc(t.k)}${t.amt?" · "+fmtN(t.amt):""}</div><div class="sub td-why">${esc(t.rs.join(" · ")||"không có tín hiệu gấp")}${extra||""}</div></div><span class="td-score" title="Chuột phải vào việc để xem từng thành phần góp bao nhiêu điểm&#10;(Điểm = 40% gấp + 40% quan trọng + 20% dễ · Gấp ${t.u} · Quan trọng ${t.im} · Dễ ${t.ease})">${t.score}<div class="sub">${age>0&&t.wait?"chờ "+age+" ngày":""}</div>${mv}${acts}</span></li>`;
 }
 function tdCount(){try{return tdCompute().m.q1.slice(0,tdTop()).length}catch(e){return 0}}
 const tdOpenMap=()=>store.get("qlcv:tdOpen")||{};
