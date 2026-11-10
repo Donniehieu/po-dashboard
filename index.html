@@ -4367,6 +4367,14 @@ function linkAfterEdit(si,r,ci){const sh=state.sheets[si];if(!sh)return;for(cons
 /* ---- 🔎 PO 360°: gom mọi dữ liệu liên quan một PO (PO, PAY/BNK, NCC, lệnh sản xuất, việc hôm nay, nhật ký) + gợi ý nâng bước.
    Quy tắc gợi ý khớp với script đồng bộ (pay_sync.py): chỉ nâng, không hạ. ---- */
 /* ---- Công nợ NCC: giá trị PO đã / chưa thanh toán theo từng NCC, liệt kê PO (bấm để mở trong tab PO) ---- */
+/* Công nợ NCC (bảng Chi tiết): bấm tên NCC -> sang tab PO, lọc cột Nhà cung cấp theo đúng các cách ghi tên của NCC đó trong tab PO */
+function nccGoPo(name){
+  const S=nccSheets();if(!S){toast("Không có tab PO để lọc",true);return}
+  const po=S.po,ci=poSupplierOf(po),items=[{name,row:null}],cache=new Map([[items[0],NCC.cands(name)]]),vals=new Set(),seen=new Set();
+  if(ci!=null)for(const r of po.rows){const sup=String(r.v[ci]??"").trim();if(!sup||seen.has(sup))continue;seen.add(sup);const f=NCC.find(sup,items,cache);if(f.hits.length)vals.add(dispVal(r.v[ci]))}
+  goSheet(S.poSi,vals.size&&ci!=null?{cf:{[ci]:{c1:null,c2:null,join:"and",vals}}}:{search:name.toLowerCase()});
+  toast(vals.size?`Tab PO: lọc theo NCC “${name}” (${vals.size} cách ghi tên)`:`Tab PO: tìm “${name}” (không thấy NCC khớp trong cột Nhà cung cấp)`);
+}
 function nccDebtRows(){
   const S=nccSheets();if(!S)return null;
   const items=S.ds.rows.filter(r=>r.v[S.nc.idx]!=null&&String(r.v[S.nc.idx]).trim()).map(r=>({name:String(r.v[S.nc.idx]).trim(),row:r}));
@@ -5296,6 +5304,7 @@ function renderTable(sh,fr){
       else if(typeof v==="number"){cell=fmtN(v)}
       else if(c.type==="cat")cell=`<span class="chip" style="--c:${colorFor(v)}">${esc(v)}</span>`;
       else cell=esc(v);
+      if(v!=null&&IS_DS(sh.name)&&norm(c.name)==="tên ncc"&&String(v).trim())cell=`<a class="ol" href="#" data-ncc="${esc(String(v).trim())}" title="Mở tab PO và lọc theo NCC này">${cell}</a>`;
       if(v!=null&&sh.pay&&c.idx===sh.payPoIdx)cell=String(v).split(/([,;\s]+)/).map(p=>/^[,;\s]*$/.test(p)?esc(p):`<a class="ol" href="#" data-code="${esc(p.trim().toUpperCase())}" title="Mở PO ${esc(p.trim())} trên Odoo">${esc(p)}</a>`).join("");
       if(sh.pay&&c.idx===sh.title&&v!=null&&sh.payCurIdx!=null){const cur=String(r.v[sh.payCurIdx]??"").trim();if(/bnk/i.test(cur)&&cur!==String(v))cell=`${esc(cur)} <span class="sub" title="Số PAY ban đầu">(${esc(v)})</span>`} // phiếu đã thanh toán: hiện số BNK, kèm số PAY ban đầu trong ngoặc
       if(v!=null&&sh.pay&&c.idx===sh.payNoteIdx&&String(v).includes("\n")){const ls=String(v).split("\n").filter(Boolean);cell=esc(ls[0])+` <span class="sub" title="Rê chuột vào ô để xem toàn bộ nhật ký">(+${ls.length-1} ghi chú cũ)</span>`}
@@ -5329,6 +5338,7 @@ function renderTable(sh,fr){
   t.querySelectorAll("[data-sel]").forEach(cb=>cb.onchange=()=>{cb.checked?selSet.add(+cb.dataset.sel):selSet.delete(+cb.dataset.sel);renderTable(sh,fr)});
   const sa=t.querySelector("[data-selall]");if(sa){const vis=rows.slice(0,u.shown);sa.checked=vis.length>0&&vis.every(r=>selSet.has(r.n));sa.onchange=()=>{vis.forEach(r=>sa.checked?selSet.add(r.n):selSet.delete(r.n));renderTable(sh,fr)}}
   t.querySelectorAll("[data-sugpo]").forEach(a=>a.onclick=ev=>{ev.preventDefault();ev.stopPropagation();goSheet(si,{search:a.dataset.sugpo.toLowerCase()})});
+  t.querySelectorAll("[data-ncc]").forEach(a=>a.onclick=ev=>{ev.preventDefault();ev.stopPropagation();nccGoPo(a.dataset.ncc)});
   t.querySelectorAll("[data-sug]").forEach(b=>b.onclick=()=>{const r=sh.rows.find(x=>x.n===+b.dataset.sug);if(r&&setWf(si,r,WF_DONE,"duyệt hoàn thành")){setStatus(sh);renderDyn(sh,true);updateChrome();toast(r.v[sh.title]+": đã duyệt hoàn thành")}});
   const sga=t.querySelector("[data-sugall]");if(sga)sga.onclick=()=>{const L=sh.rows.filter(r=>sugDone(sh,r));if(!confirm(`Duyệt hoàn thành ${L.length} PO sau? Hãy chắc bạn đã kiểm tra từng PO.\n\n`+L.map(r=>r.v[sh.title]).join(", ")))return;let k=0;for(const r of L)if(setWf(si,r,WF_DONE,"duyệt hoàn thành"))k++;setStatus(sh);renderDyn(sh);updateChrome();toast(`Đã duyệt hoàn thành ${k} PO.`)};
   t.querySelectorAll("[data-bk]").forEach(b=>b.onclick=()=>{const k=b.dataset.bk;if(k==="clear"){u.sel=new Set();renderTable(sh,fr)}else if(k==="step1")bulkApply(si,"step",1);else if(k==="step-1")bulkApply(si,"step",-1);else bulkApply(si,k)});
