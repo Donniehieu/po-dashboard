@@ -1,4 +1,4 @@
-/* Odoo Helper v1.4.1 - tự điền thụ hưởng NCC + nhắc kế toán trong Chatter (tin mẫu, nhật ký tin đã gửi).
+/* Odoo Helper v1.5.0 - tự điền thụ hưởng NCC + nhắc kế toán trong Chatter (tin mẫu, nhật ký tin đã gửi).
    Chạy bằng nút bookmark trên trang Odoo (không cần Tampermonkey). File này nằm trong dashboard nên luôn là bản mới nhất.
    Dữ liệu NCC và nhật ký lưu trong trình duyệt (localStorage của trang Odoo), không gửi đi đâu ngoài tab dashboard đã mở trang này. */
 (function () {
@@ -221,10 +221,22 @@
     { key: "pay_dq", label: "Duyệt PAY – Dung Quất (Nguyễn Thị Mai)", code: "HN0096", name: "Nguyễn Thị Mai", text: "Chị ơi, kiểm tra giúp em phiếu này ạ" },
     { key: "pay_ph", label: "Duyệt PAY – Phúc Hà (Lê Xuân Giang)", code: "HN0025", name: "Lê Xuân Giang", text: "Anh ơi, kiểm tra giúp em phiếu này ạ" },
     { key: "ktnh", label: "KTNH xác nhận – thanh toán (Phạm Thị Mai Lê)", code: "HN10265", name: "Phạm Thị Mai Lê", text: "Em ơi, kiểm tra giúp anh phiếu này" },
+    { key: "unc", label: "Nhắc gửi UNC (Phạm Thị Mai Lê)", code: "HN10265", name: "Phạm Thị Mai Lê", text: "Em ơi, gửi giúp anh UNC {PAY} - {NCC} - {số tiền}. Anh cảm ơn" }, // {PAY}/{NCC}/{số tiền} được thay bằng dữ liệu của phiếu đang mở
     { key: "inv_dq", label: "Xác nhận hóa đơn PO – Dung Quất (Nguyễn Thị Mai)", code: "HN0096", name: "Nguyễn Thị Mai", text: "Chị ơi, xác nhận hóa đơn này giúp em" },
     { key: "inv_ph", label: "Xác nhận hóa đơn PO – Phúc Hà (Tống Sỹ Xuân Trường)", code: "HN0176", name: "Tống Sỹ Xuân Trường", text: "Anh ơi, xác nhận hóa đơn này giúp em" },
   ];
   const tplByKey = (k) => TPL.find((t) => t.key === k);
+  function moneyText() { // số tiền trên form phiếu -> "1.166.400"
+    const i = $('[name="amount"] input, input[id^="amount"]'), d = $('[name="amount"]');
+    let v = i && i.value ? i.value : d ? d.textContent : ""; v = String(v).trim().replace(/[^\d.,]/g, "");
+    v = v.replace(/[.,]\d{2}$/, "").replace(/[^\d]/g, ""); // bỏ phần thập phân (,00 / .00)
+    return v ? v.replace(/\B(?=(\d{3})+(?!\d))/g, ".") : "";
+  }
+  function fillTpl(tpl) { // thay {PAY} {NCC} {số tiền} bằng dữ liệu phiếu đang mở
+    if (!/\{(PAY|NCC|số tiền)\}/.test(tpl.text)) return tpl;
+    const doc = docInfo(), ncc = partnerName(), amt = moneyText();
+    return { ...tpl, text: tpl.text.split("{PAY}").join(doc.id).split("{NCC}").join(ncc).split("{số tiền}").join(amt) };
+  }
   const isDQ = (co) => /dung qu[aấ]t/i.test(co);
   const COMPOSER = "textarea.o-mail-Composer-input, .o-mail-Composer-input";
   const LOG_KEY = "remind_log_v1";
@@ -532,7 +544,9 @@
   });
   if (location.hostname === "erp.dekko.com.vn") { hookSend(); hookSendRequest(); }
   async function typeMessage(tpl) {
+    tpl = fillTpl(tpl);
     const doc = docInfo();
+    if (/\{[^}]*\}/.test(tpl.text) || / - +-|- *\. Anh/.test(tpl.text)) return msg("Chưa đọc được đủ số PAY / NCC / số tiền của phiếu. Hãy lưu phiếu rồi bấm lại.", true);
     let box = $(COMPOSER);
     if (!box) { const b = $(".o-mail-Chatter-sendMessage"); if (b) b.click(); box = await waitFor(() => $(COMPOSER)); }
     if (!box) return msg("Không thấy ô Gửi tin. Hãy lưu phiếu rồi mở lại (phiếu mới chưa có Chatter).", true);
@@ -661,6 +675,7 @@
 <button data-a="invoice" title="PO ở bước Chờ KT xác nhận công nợ: gõ sẵn tin @tag kế toán xác nhận hóa đơn (Dung Quất: Nguyễn Thị Mai, Phúc Hà: Tống Sỹ Xuân Trường)">💬 Nhắc KT xác nhận hóa đơn (PO)</button>
 <select class="tpl" style="display:block"><option value="">— Chọn mẫu tin nhắn có sẵn —</option>${TPL.map((t) => `<option value="${t.key}">${xe(t.label)}</option>`).join("")}</select>
 <button data-a="tpl-send" title="Gõ sẵn mẫu đã chọn (@tag + nội dung) vào ô Gửi tin">✉ Gõ mẫu đã chọn</button>
+<button data-a="unc" title="Gõ sẵn tin @Phạm Thị Mai Lê: Em ơi, gửi giúp anh UNC {PAY} - {NCC} - {số tiền}. Anh cảm ơn (tự lấy từ phiếu đang mở)">💬 Nhắc gửi UNC</button>
 <button data-a="remind" title="Gõ sẵn tin @tag người duyệt (Phúc Hà: Lê Xuân Giang, Dung Quất: Nguyễn Thị Mai) vào ô Gửi tin">💬 Nhắc duyệt PAY (tag người duyệt)</button>
 <select class="pick"></select>
 <div class="r"><button data-a="tpl">⬇ File Excel mẫu</button><button data-a="up">⬆ Nạp Excel</button></div>
@@ -702,6 +717,7 @@
       if (a === "fill") runFill();
       else if (a === "remind") runRemind();
       else if (a === "invoice") runRemind("invoice");
+      else if (a === "unc") typeMessage(tplByKey("unc"));
       else if (a === "zalo") runZalo();
       else if (a === "zalocfg") zaloSettings(pickingName().split("/")[0]);
       else if (a === "tpl-send") runTemplate();
@@ -719,7 +735,7 @@
     if (!ui) return;
     const rec = isPayRecord(), fill = canFill(); // hiện đúng công cụ của màn hình đang mở
     ui.box.querySelectorAll('[data-a="fill"],[data-a="tpl"],[data-a="up"],[data-a="exp"],[data-a="clr"],.ov,.au,.ff').forEach((e) => { const t = e.closest("label,.r") || e; t.style.display = fill ? "" : "none"; });
-    ui.box.querySelectorAll('[data-a="remind"]').forEach((e) => { const t = e.closest("label,.r") || e; t.style.display = rec ? "" : "none"; });
+    ui.box.querySelectorAll('[data-a="remind"],[data-a="unc"]').forEach((e) => { const t = e.closest("label,.r") || e; t.style.display = rec ? "" : "none"; });
     const pk = isPicking();
     ui.box.querySelector(".zl").style.display = pk ? "" : "none"; // phiếu kho: hiện nút nhắn Zalo thủ kho
     ui.box.querySelector('[data-a="invoice"]').style.display = rec || pk ? "none" : "";
