@@ -1408,6 +1408,16 @@ li.dragging {
   border-radius: var(--radius-md);
 }
 
+.td-pop{position:fixed;z-index:9999;width:min(680px,calc(100vw - 16px));max-height:calc(100vh - 16px);overflow:auto;background:var(--card,#fff);color:inherit;border:1px solid var(--line,#d0d5dd);border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.25);padding:10px}
+.td-pop .tdp-h{display:flex;align-items:center;gap:6px;margin-bottom:8px}.td-pop .tdp-x{margin-left:auto}
+.td-pop .tdp-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.td-pop .tdp-c{display:flex;justify-content:space-between;gap:8px;padding:6px 8px;border-radius:8px;background:rgba(127,127,127,.08);border-left:3px solid transparent}
+.td-pop .tdp-c:empty{background:none}
+.td-pop .g-u{border-left-color:var(--bad)}.td-pop .g-i{border-left-color:var(--brand)}.td-pop .g-e{border-left-color:var(--ok)}.td-pop .g-t{border-left-color:var(--warn)}.td-pop .g-m{border-left-color:#7c3aed}
+.td-pop .tot{background:rgba(127,127,127,.18);font-weight:700}
+.td-pop .tdp-g{font-size:11px;opacity:.7;text-transform:uppercase;margin-right:4px}
+.td-pop .tdp-v{font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap}
+@media(max-width:560px){.td-pop .tdp-grid{grid-template-columns:1fr}}
 .td-score {
   font-weight: 800;
   font-size: 16px;
@@ -4100,25 +4110,35 @@ function tdCompute0(){
       const step=sh.wf?r.wf:"Chờ KT thanh toán",seq=sh.wf&&sh.payIdx!=null&&isPay(r.v[sh.payIdx])?WF_PRE:WF_DEBT;
       const wait=sh.pay||TD_WAIT.has(step);
       // Gấp (0-100): trễ hạn nặng nhất; sắp đến hạn; đứng yên lâu ở một bước
-      let u=0;const rs=[];
-      if(late>0){u=Math.min(100,50+Math.min(late,10)*5);rs.push("trễ "+late+" ngày")}
-      else if(r.st==="soon"){u=45;rs.push("sắp đến hạn"+(due instanceof Date?" "+fmtDS(due):""))}
+      let u=0;const rs=[],bd=[]; // bd: các thành phần cấu thành điểm, hiện ở popup chuột phải
+      const bg=(l,v,note)=>bd.push({g:"Gấp",l,v,note});
+      if(late>0){u=Math.min(100,50+Math.min(late,10)*5);rs.push("trễ "+late+" ngày");bg("Trễ hạn "+late+" ngày"+(sh.pay?" làm việc":""),u,"50 + 5đ/ngày, tối đa 100")}
+      else if(r.st==="soon"){u=45;rs.push("sắp đến hạn"+(due instanceof Date?" "+fmtDS(due):""));bg("Sắp đến hạn"+(due instanceof Date?" "+fmtDS(due):""),45)}
       const ps=sh.wf&&WF_PAYSTEPS.includes(step),thr=ps?PAY_STUCK:STUCK(),pre=sh.wf&&sh.payIdx!=null&&isPay(r.v[sh.payIdx]);
-      if(stuck>=thr){u=Math.max(u,30+Math.min(stuck-thr,10)*3);rs.push("ở bước này "+stuck+" ngày")}
+      if(stuck>=thr){const x=30+Math.min(stuck-thr,10)*3;u=Math.max(u,x);rs.push("ở bước này "+stuck+" ngày");bg("Đứng yên "+stuck+" ngày ở bước “"+step+"”",x,"ngưỡng "+thr+" ngày, +3đ/ngày")}
       // Quan trọng (0-100): NCC quan trọng + giá trị đơn
-      const nag=wait&&!sh.pay&&(late>0||stuck>=thr);if(nag){u=Math.max(u,50);rs.push("🔔 cần đi nhắc")}
+      const nag=wait&&!sh.pay&&(late>0||stuck>=thr);if(nag){u=Math.max(u,50);rs.push("🔔 cần đi nhắc");bg("Cần đi nhắc (đang chờ người khác mà đã trễ/đứng yên)",50)}
       let force=false; // thanh toán: dừng ≥2 ngày -> gấp (Cao); ≥3 ngày -> gấp & quan trọng (Làm ngay); đơn trả trước chờ làm TT/UNC trễ ≥1 ngày -> Làm ngay
-      if(ps&&stuck>=PAY_STUCK){u=Math.max(u,50);if(stuck>=PAY_STUCK+1){u=Math.max(u,60);force=true;rs.push("thanh toán dừng "+stuck+" ngày")}}
-      if(pre&&(step==="Chờ làm TT"||step==="Chờ gửi UNC")&&late>=1){u=Math.max(u,60);force=true;rs.push("TT trước trễ "+late+" ngày")}
-      let im=imp.on?50:0;if(imp.on)rs.push("NCC quan trọng");
+      if(ps&&stuck>=PAY_STUCK){u=Math.max(u,50);bg("Bước thanh toán dừng ≥"+PAY_STUCK+" ngày",50);if(stuck>=PAY_STUCK+1){u=Math.max(u,60);force=true;rs.push("thanh toán dừng "+stuck+" ngày");bg("Bước thanh toán dừng ≥"+(PAY_STUCK+1)+" ngày (ép Làm ngay)",60)}}
+      if(pre&&(step==="Chờ làm TT"||step==="Chờ gửi UNC")&&late>=1){u=Math.max(u,60);force=true;rs.push("TT trước trễ "+late+" ngày");bg("TT trước trễ "+late+" ngày (ép Làm ngay)",60)}
+      bd.push({g:"Gấp",l:"Gấp: lấy mức cao nhất ở trên",v:u,note:u?"":"không có tín hiệu gấp",tot:1});
+      const bi=(l,v,note)=>bd.push({g:"Quan trọng",l,v,note});
+      let im=imp.on?50:0;if(imp.on){rs.push("NCC quan trọng");bi("NCC “"+k+"” quan trọng",50,imp.why)}
+      // lệnh SX liên quan: PO tra theo mã của nó; phiếu thanh toán tra theo các PO liên quan
+      const poCodes=sh.pay?(sh.payPoIdx!=null?String(r.v[sh.payPoIdx]??"").split(/[,;\s]+/).map(x=>x.trim()).filter(Boolean):[]):[t0(r,sh)];
+      const mrpH=[];if(tdMrp&&tdMrp.po)for(const pc of poCodes){const m=tdMrp.po[pc];if(m)(m.mos||[]).forEach(n=>{if(!mrpH.some(x=>x.n===n))mrpH.push({n,id:m.mo_ids&&m.mo_ids[n],po:pc})})}
       const mb=tdMrp&&sh.wf?tdMrp.po[t0(r,sh)]:null;
-      if(mb){im=Math.min(100,im+(mb.mo>=10?35:mb.mo>=3?25:15));rs.push("cấp NVL cho "+mb.mo+" lệnh SX đang thiếu")}
-      const ab=amt>=1e8?40:amt>=5e7?30:amt>=1e7?15:amt>=1e6?5:0;im=Math.min(100,im+ab);if(amt>=5e7||force)im=Math.max(im,50); // đơn từ 50 triệu luôn là quan trọng
+      if(mb){const x=mb.mo>=10?35:mb.mo>=3?25:15;im=Math.min(100,im+x);rs.push("cấp NVL cho "+mb.mo+" lệnh SX đang thiếu");bi("Cấp NVL cho "+mb.mo+" lệnh SX đang thiếu",x,"+15 (1-2 lệnh) / +25 (≥3) / +35 (≥10)")}
+      const ab=amt>=1e8?40:amt>=5e7?30:amt>=1e7?15:amt>=1e6?5:0;const im0=im;im=Math.min(100,im+ab);if(ab)bi("Giá trị đơn "+fmtBig(amt),ab,"≥1tr +5 · ≥10tr +15 · ≥50tr +30 · ≥100tr +40");
+      if(amt>=5e7||force){im=Math.max(im,50);if(im>im0+ab)bi(amt>=5e7?"Đơn ≥50 triệu luôn là quan trọng":"Việc bị ép Làm ngay",im-(im0+ab),"nâng lên tối thiểu 50")} // đơn từ 50 triệu luôn là quan trọng
       if(ab>=15)rs.push(fmtBig(amt));
+      bd.push({g:"Quan trọng",l:"Quan trọng: tổng (tối đa 100)",v:im,tot:1});
       // Dễ (0-100): còn ít bước thì dễ; việc đang chờ người khác không tính
       const k0=seq.indexOf(step),rem=k0<0?seq.length:seq.length-1-k0,ease=wait?0:Math.max(0,100-rem*9);
       const score=Math.round(.4*u+.4*im+.2*ease);
-      tasks.push({sh,si,r,k,imp,amt,late,stuck,step,wait,nag,u,im,ease,score,rs,urgent:u>=50,important:im>=50,rem,pay:!!sh.pay,code:String(r.v[sh.title]??"")});
+      bd.push({g:"Dễ",l:wait?"Đang chờ người khác — không tính Dễ":"Còn "+rem+" bước để xong",v:ease,note:wait?"":"100 − 9đ/bước còn lại",tot:1});
+      bd.push({g:"Tổng",l:"Điểm = 40%×"+u+" + 40%×"+im+" + 20%×"+ease,v:score,tot:1});
+      tasks.push({sh,si,r,k,imp,amt,late,stuck,step,wait,nag,u,im,ease,score,rs,bd,mrpH,urgent:u>=50,important:im>=50,rem,pay:!!sh.pay,code:String(r.v[sh.title]??"")});
     }
   });
   const run=tdRun();let dirty=false;
@@ -4196,11 +4216,34 @@ function tdAddMenu(btn,t){
   const out=e=>{if(!m.contains(e.target)&&e.target!==btn){m.remove();document.removeEventListener("mousedown",out,true)}};
   setTimeout(()=>document.addEventListener("mousedown",out,true),0);
 }
+/* ---- Chuột phải vào PO / phiếu ở tab Việc hôm nay: popup 2 cột giải thích các thành phần cấu thành điểm ---- */
+function tdMoUrl(id){try{return new URL(ODOO_LIST()).origin+"/odoo/mrp.production/"+id}catch(e){return null}}
+function tdScorePop(t,x,y){
+  document.querySelectorAll(".td-pop").forEach(e=>e.remove());
+  const cls=g=>g==="Gấp"?"u":g==="Quan trọng"?"i":g==="Dễ"?"e":"t";
+  const cells=t.bd.map(b=>`<div class="tdp-c g-${cls(b.g)}${b.tot?" tot":""}"><div class="tdp-l"><span class="tdp-g">${esc(b.g)}</span> ${esc(b.l)}${b.note?`<div class="sub">${esc(b.note)}</div>`:""}</div><div class="tdp-v">${b.v}</div></div>`);
+  if(t.mrpH&&t.mrpH.length)cells.push(`<div class="tdp-c g-m"><div class="tdp-l"><span class="tdp-g">Sản xuất</span> Lệnh SX đang thiếu hàng liên quan${t.pay?" (qua PO "+esc([...new Set(t.mrpH.map(h=>h.po))].join(", "))+")":""}<div class="sub">${t.mrpH.map(h=>{const u=h.id?tdMoUrl(h.id):null;return u?`<a href="${esc(u)}" data-tdmo="${esc(u)}">${esc(h.n)}</a>`:`<span>${esc(h.n)}</span>`}).join(" · ")}</div></div><div class="tdp-v">↗</div></div>`);
+  if(cells.length%2)cells.push(`<div class="tdp-c"></div>`); // đủ cặp để chia đều 2 cột: số dòng = số phần tử / 2
+  const m=document.createElement("div");m.className="td-pop";
+  m.innerHTML=`<div class="tdp-h"><b>${esc(t.code)}</b> · ${esc(t.step)} · <b>${t.score} điểm</b><button class="btn sm tdp-x" title="Đóng">×</button></div><div class="tdp-grid">${cells.join("")}</div>`;
+  document.body.appendChild(m);
+  m.style.left=Math.max(8,Math.min(x,innerWidth-m.offsetWidth-8))+"px";m.style.top=Math.max(8,Math.min(y,innerHeight-m.offsetHeight-8))+"px";
+  const close=()=>{m.remove();document.removeEventListener("mousedown",out,true);document.removeEventListener("keydown",esc2,true)};
+  const out=e=>{if(!m.contains(e.target))close()},esc2=e=>{if(e.key==="Escape")close()};
+  m.querySelector(".tdp-x").onclick=close;
+  m.querySelectorAll("[data-tdmo]").forEach(a=>a.onclick=e=>{e.preventDefault();openErp(a.dataset.tdmo)});
+  setTimeout(()=>{document.addEventListener("mousedown",out,true);document.addEventListener("keydown",esc2,true)},0);
+}
+document.addEventListener("contextmenu",e=>{
+  const li=e.target.closest&&e.target.closest("li[data-tdrow]");if(!li||state.active!=="today")return;
+  const t=tdCompute().tasks.find(z=>z.key===li.dataset.tdrow);if(!t||!t.bd)return;
+  e.preventDefault();tdScorePop(t,e.clientX,e.clientY);
+});
 function tdRow(t,extra,showQ){
   const sq=t.pay?null:seqOf(t.sh,t.r),k0=sq?sq.indexOf(t.step):-1,nx=k0>=0?sq[k0+1]:null;
   const acts=`<div class="td-act"><button class="btn sm" data-tdadd="${esc(t.key)}" title="Thêm việc hằng ngày vào tab CV theo ngày">➕ Thêm việc</button>${nx&&nx!==WF_DONE?`<button class="btn sm" data-tdxong="${esc(t.key)}" title="Xong bước “${esc(t.step)}” → chuyển sang “${esc(nx)}”">✔ ${esc(nx)}</button>`:""}${t.zz?`<button class="btn sm" data-tdwake="${esc(t.key)}" title="Đưa việc về lại theo trạng thái thực tế ngay">↩ Đưa về</button>`:""}${(t.lite?!t.zz:(t.in&&t.q!==0))?`<button class="btn sm" data-tdsnz="${esc(t.key)}" title="Hoãn tới mốc xếp lại kế tiếp">💤</button>`:""}</div>`;
   const age=t.pay?t.late:t.stuck,mv=t.in&&!t.lite?`<select class="td-mv" data-tdmv="${esc(t.key)}" title="Chuyển sang mục khác (hoặc kéo thả)"><option value="">⇄</option>${[1,2,3,4].map(q=>`<option value="${q}"${t.q===q?" disabled":""}>→ ${TD_QN[q]}</option>`).join("")}<option value="0">→ Để lượt sau</option></select>`:"";
-  return `<li class="click" ${t.in&&!t.lite?`draggable="true" data-tdk="${esc(t.key)}"`:""} data-tdgo="${t.si}" data-q="${esc(t.code)}"><span class="tag">${esc(t.sh.pay?"PAY":"PO")}</span><div>${t.sh.pay?`<b>${esc(t.code)}</b>`:`<a class="ol" href="#" data-code="${esc(t.code)}" title="Mở PO này trên Odoo để kiểm tra"><b>${esc(t.code)}</b></a>`}${t.sh.pay?"":` <a href="#" class="td-360" data-po360="${esc(t.code)}" title="Xem PO 360°">🔎</a>`} <span class="chip" style="--c:${colorFor(t.step)}">${esc(t.step)}</span>${t.moved?` <span class="chip" style="--c:#7c3aed" title="Bạn đã chuyển tay; tới lần xếp lại kế tiếp sẽ tự tính lại">✋ đã chuyển</span>`:""}<div class="sub">${esc(t.k)}${t.amt?" · "+fmtN(t.amt):""}</div><div class="sub td-why">${esc(t.rs.join(" · ")||"không có tín hiệu gấp")}${extra||""}</div></div><span class="td-score" title="Điểm = 40% gấp + 40% quan trọng + 20% dễ&#10;Gấp ${t.u} · Quan trọng ${t.im} · Dễ ${t.ease}">${t.score}<div class="sub">${age>0&&t.wait?"chờ "+age+" ngày":""}</div>${mv}${acts}</span></li>`;
+  return `<li class="click" data-tdrow="${esc(t.key)}" title="Chuột phải để xem cách tính điểm" ${t.in&&!t.lite?`draggable="true" data-tdk="${esc(t.key)}"`:""} data-tdgo="${t.si}" data-q="${esc(t.code)}"><span class="tag">${esc(t.sh.pay?"PAY":"PO")}</span><div>${t.sh.pay?`<b>${esc(t.code)}</b>`:`<a class="ol" href="#" data-code="${esc(t.code)}" title="Mở PO này trên Odoo để kiểm tra"><b>${esc(t.code)}</b></a>`}${t.sh.pay?"":` <a href="#" class="td-360" data-po360="${esc(t.code)}" title="Xem PO 360°">🔎</a>`} <span class="chip" style="--c:${colorFor(t.step)}">${esc(t.step)}</span>${t.moved?` <span class="chip" style="--c:#7c3aed" title="Bạn đã chuyển tay; tới lần xếp lại kế tiếp sẽ tự tính lại">✋ đã chuyển</span>`:""}<div class="sub">${esc(t.k)}${t.amt?" · "+fmtN(t.amt):""}</div><div class="sub td-why">${esc(t.rs.join(" · ")||"không có tín hiệu gấp")}${extra||""}</div></div><span class="td-score" title="Điểm = 40% gấp + 40% quan trọng + 20% dễ&#10;Gấp ${t.u} · Quan trọng ${t.im} · Dễ ${t.ease}">${t.score}<div class="sub">${age>0&&t.wait?"chờ "+age+" ngày":""}</div>${mv}${acts}</span></li>`;
 }
 function tdCount(){try{return tdCompute().m.q1.slice(0,tdTop()).length}catch(e){return 0}}
 const tdOpenMap=()=>store.get("qlcv:tdOpen")||{};
@@ -5001,11 +5044,11 @@ const QUEUES={
     {k:"debt",l:"Công nợ chờ KT / TT",h:"Đơn công nợ chờ KT xác nhận hoặc chờ làm thanh toán",t:(sh,r)=>!r.done&&(r.wf==="Chờ KT xác nhận công nợ"||(r.wf==="Chờ làm TT"&&!isPre(sh,r)))},
     {k:"sugdone",l:"Gợi ý Hoàn thành",h:"Đơn thanh toán trước đã nhận hết hàng, xuất hóa đơn và đang ở Chờ KT xác nhận công nợ — chờ bạn xác nhận hoàn thành",tone:"ok",t:(sh,r)=>sugDone(sh,r)},
     {k:"mismatch",l:"Note lệch Odoo",h:"Note thấp hơn mốc Odoo (sẽ được nâng khi đồng bộ) hoặc là ghi chú tự do ngoài luồng chuẩn",t:(sh,r)=>!r.done&&(!!r.raised||seqOf(sh,r).indexOf(r.wf)<0)},
-    {k:"overdue",l:"Quá hạn",h:"Quá ngày nhận hàng dự kiến, chưa hoàn thành",tone:"bad",t:(sh,r)=>r.st==="overdue"},
+    {k:"overdue",l:"Quá hạn (bước khác)",h:"Quá ngày nhận hàng dự kiến, chưa hoàn thành, KHÔNG ở bước Đã gửi NCC / Chờ nhận hàng (các đơn đó đã tính ở “Nhận hàng trễ”)",tone:"bad",t:(sh,r)=>r.st==="overdue"&&!inWf("Đã gửi NCC","Chờ nhận hàng")(sh,r)},
     {k:"soon",l:"Sắp đến hạn",h:"Hạn trong 3 ngày tới",tone:"warn",t:(sh,r)=>r.st==="soon"}
   ],
   pay:[
-    {k:"nosent",l:"Chưa gửi duyệt cho TP",h:"Phiếu chưa thanh toán và chưa có dòng “Đã gửi duyệt TT cho TP” — cần In Đề nghị thanh toán",t:(sh,r)=>!r.done&&sh.payNoteIdx!=null&&!noteLines(r.v[sh.payNoteIdx]).some(l=>l.replace(NOTE_STAMP,"").startsWith(PROGRESS_SENT))},
+    {k:"nosent",l:"Chưa gửi duyệt cho TP",h:"Phiếu chưa thanh toán, chưa quá hạn và chưa có dòng “Đã gửi duyệt TT cho TP” — cần In Đề nghị thanh toán (phiếu đã quá hạn tính ở “Quá hạn cần nhắc KT”)",t:(sh,r)=>!r.done&&r.st!=="overdue"&&sh.payNoteIdx!=null&&!noteLines(r.v[sh.payNoteIdx]).some(l=>l.replace(NOTE_STAMP,"").startsWith(PROGRESS_SENT))},
     {k:"sent",l:"Đã gửi duyệt, chờ TP",h:"Dòng mới nhất của Theo dõi tiến độ là “Đã gửi duyệt TT cho TP”",t:(sh,r)=>!r.done&&sh.payNoteIdx!=null&&noteTop(r.v[sh.payNoteIdx]).startsWith(PROGRESS_SENT)},
     {k:"late",l:"Quá hạn cần nhắc KT",h:"Chưa thanh toán, quá hạn và chưa gửi duyệt cho TP",tone:"bad",t:(sh,r)=>r.st==="overdue"&&!(sh.payNoteIdx!=null&&noteTop(r.v[sh.payNoteIdx]).startsWith(PROGRESS_SENT))},
     {k:"ktnh",l:"Chờ KTNH thanh toán",h:"Trạng thái Odoo: KTNH xác nhận",t:(sh,r)=>!r.done&&sh.payOdooIdx!=null&&/ktnh/.test(wfn(r.v[sh.payOdooIdx]))},
