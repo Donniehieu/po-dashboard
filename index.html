@@ -2475,7 +2475,7 @@ function analyze(raw){
   const hIdx=re=>hdr.findIndex(h=>re.test(String(h||"").trim()));
   const isBank=/^thông tin thanh toán$/i.test(String(raw.name||"").trim()); // tab Thông tin thanh toán của NCC
   const payId=isPaySheet?hIdx(/^id odoo$/i):-1,payCid=isPaySheet?hIdx(/^mã công ty$/i):-1,bankId=isBank?hIdx(/^id odoo$/i):-1;
-  const forced=n=>/^hoàn thành$/i.test(n.trim())||(hasKey&&FORCE_RE.test(n.trim()))||(isDs&&/^(ngày điều chỉnh|nhóm ncc)$/i.test(n.trim()))||(isPaySheet&&/^ghi chú$/i.test(n.trim()))||(isBank&&/^(note|đã kiểm tra( thông tin)?)$/i.test(n.trim()));
+  const forced=n=>/^hoàn thành$/i.test(n.trim())||(hasKey&&FORCE_RE.test(n.trim()))||(isDs&&/^(ngày điều chỉnh|nhóm ncc|ngày kiểm tra công nợ)$/i.test(n.trim()))||(isPaySheet&&/^ghi chú$/i.test(n.trim()))||(isBank&&/^(note|đã kiểm tra( thông tin)?)$/i.test(n.trim()));
   for(let c=0;c<maxC;c++){
     const name=(hdr[c]!=null?String(hdr[c]):"");
     const vals=rows.map(r=>r.v[c]).filter(x=>x!=null);
