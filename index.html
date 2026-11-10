@@ -2092,6 +2092,7 @@ body.rzing, body.rzing * { cursor: col-resize !important; user-select: none !imp
   <div class="tgrp" id="grpSync"><button type="button" class="gt" aria-expanded="false" aria-haspopup="true">Đồng bộ Odoo thủ công <i>▾</i></button><div class="gb" role="group" aria-label="Đồng bộ Odoo thủ công"><div class="gh"><b>Đồng bộ Odoo thủ công</b><button type="button" class="gx" aria-label="Đóng">✕</button></div><div class="gl2">
     <button class="btn sm" id="btnSync" hidden title="Yêu cầu GitHub chạy đồng bộ từ Odoo ngay">🔄 Đồng bộ Odoo</button>
     <button class="btn sm" id="btnRefresh" hidden>↻ Tải lại</button>
+    <button class="btn sm" id="btnMrp" hidden title="Bật/tắt việc đồng bộ kế hoạch sản xuất (lệnh SX đang thiếu NVL) từ Odoo. Ghi thẳng vào scripts/config.json trên GitHub, không cần sửa code">🏭 Kế hoạch sản xuất: …</button>
   </div></div></div>
   <div class="tgrp" id="grpAuto"><button type="button" class="gt" aria-expanded="false" aria-haspopup="true">Auto nhập liệu <i>▾</i></button><div class="gb" role="group" aria-label="Auto nhập liệu"><div class="gh"><b>Auto nhập liệu</b><button type="button" class="gx" aria-label="Đóng">✕</button></div><div class="gl2">
     <button class="btn sm" id="btnImport" hidden title="Gộp file Excel xuất từ Odoo vào dữ liệu nguồn">⬆ Nhập file Odoo</button>
@@ -2929,6 +2930,7 @@ async function loadBuffer(buf,name,opts={}){
     $("#btnPushCloud").hidden=!(cloudReady()&&state.src==="local");
     $("#btnImport").hidden=false;
     $("#btnSync").hidden=!(ghReady()&&state.src==="github"&&isMainPath());
+    $("#btnMrp").hidden=!ghReady();if(ghReady())mrpReadCfg().then(mrpBtn);
     $("#btnPushOther").hidden=!(ghReady()&&state.src==="local");
     renderTabs();render();updateChrome();notifyDaily();if(view)restoreView(view);
     if(state.rptCmp){state.rptCmp=false;clearTimeout(state._rptCmpT);setTimeout(()=>{if(state.active==="report")rptCompareDialog()},500)}
@@ -4070,8 +4072,30 @@ const TD_QN=["Để lượt sau","Làm ngay","Lên lịch","Gộp theo NCC","Đ�
 function tdRun(){let st=store.get("qlcv:tdRun");if(tdStale(st)){st={t:Date.now(),ov:{},snap:{}};store.set("qlcv:tdRun",st)}return st}
 let tdMrp=null; // PO -> {mo,items,mos}: PO đang cấp NVL cho lệnh sản xuất thiếu hàng (data/mrp-block.json, do script đọc Odoo tạo)
 let tdMrpTried=false;
+/* ---- Bật/tắt đồng bộ kế hoạch sản xuất ngay trong dashboard: sửa "mrp_sync.enabled" trong scripts/config.json trên GitHub ---- */
+const MRP_CFG="scripts/config.json",MRP_RE=/("mrp_sync"\s*:\s*\{[^}]*?"enabled"\s*:\s*)(true|false)/;
+let mrpOn=null; // null = chưa biết
+async function mrpReadCfg(){
+  if(!ghReady())return null;
+  try{const g=await ghFetchPath(MRP_CFG,"cfg:gh");if(!g||!g.buf)return null;const txt=new TextDecoder().decode(g.buf),m=txt.match(MRP_RE);mrpOn=m?m[2]==="true":false;return txt}catch(e){return null}
+}
+function mrpBtn(){const b=$("#btnMrp");if(!b)return;b.textContent=mrpOn==null?"🏭 Kế hoạch sản xuất: …":mrpOn?"🏭 Kế hoạch sản xuất: BẬT (bấm để tắt)":"🏭 Kế hoạch sản xuất: TẮT (bấm để bật)"}
+async function mrpToggle(){
+  const b=$("#btnMrp");b.disabled=true;
+  try{
+    const txt=await mrpReadCfg();if(!txt||!MRP_RE.test(txt))throw new Error("Không đọc được mục mrp_sync trong scripts/config.json");
+    const on=!mrpOn;
+    await ghPutPath(MRP_CFG,new TextEncoder().encode(txt.replace(MRP_RE,(_,a)=>a+(on?"true":"false"))),"Dashboard: "+(on?"bật":"tắt")+" đồng bộ kế hoạch sản xuất (mrp_sync)");
+    mrpOn=on;mrpBtn();
+    if(on){tdMrpTried=false;toast("Đã BẬT đồng bộ kế hoạch sản xuất. Đang yêu cầu GitHub đồng bộ ngay; xong thì bấm “↻ Tải lại”.");try{requestSync(false)}catch(e){}}
+    else{tdMrp=null;bump();if(state.active==="today")renderToday();toast("Đã TẮT đồng bộ kế hoạch sản xuất. Điểm “cấp NVL” không còn được tính.")}
+  }catch(e){toast("Không đổi được: "+e.message,true)}
+  finally{b.disabled=false}
+}
+$("#btnMrp").onclick=mrpToggle;
 async function tdLoadMrp(){ // data/mrp-block.json do GitHub Actions (scripts/mrp_sync.py) tạo cùng thư mục với PO-data.xlsx
   if(tdMrpTried)return;tdMrpTried=true;
+  await mrpReadCfg();if(mrpOn===false){tdMrp=null;return} // đang tắt trong cấu hình: không dùng dữ liệu cũ còn sót
   try{const g=await ghFetchPath(dataDir()+"mrp-block.json","mrp:gh");if(g&&g.buf){tdMrp=JSON.parse(new TextDecoder().decode(g.buf))}}catch(e){}
   if(!tdMrp)try{const r=await fetch("data/mrp-block.json",{cache:"no-store"});if(r.ok)tdMrp=await r.json()}catch(e){}
   if(tdMrp){bump();if(state.active==="today")renderToday()}
