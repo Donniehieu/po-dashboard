@@ -4432,7 +4432,7 @@ function nccDebtBind(){
       const t=new Date(),val=cb.checked?`${pad2(t.getDate())}/${pad2(t.getMonth()+1)}/${t.getFullYear()}`:"";
       if(!setCell(d.S.dsSi,r,d.ckCol.idx,val)){cb.checked=!cb.checked;return}
       const sp=m.querySelector(`[data-dckd="${cb.dataset.dck}"]`);if(sp)sp.textContent=cb.checked?"kiểm tra công nợ · "+val:"kiểm tra công nợ";
-      setStatus(d.S.ds);renderDyn(d.S.ds,true);
+      setStatus(d.S.ds);renderDyn(d.S.ds,true);updateChrome(); // updateChrome = hiện thanh “chưa lưu” và lên lịch tự lưu
     };
   });
   m.querySelectorAll("[data-dpay]").forEach(a=>a.onclick=ev=>{ev.preventDefault();ev.stopPropagation();if(d&&d.psi>=0)goSheet(d.psi,{search:a.dataset.dpay.toLowerCase()})});
