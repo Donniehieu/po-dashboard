@@ -1,4 +1,4 @@
-/* Odoo Helper v1.5.0 - tự điền thụ hưởng NCC + nhắc kế toán trong Chatter (tin mẫu, nhật ký tin đã gửi).
+/* Odoo Helper v1.5.1 - tự điền thụ hưởng NCC + nhắc kế toán trong Chatter (tin mẫu, nhật ký tin đã gửi).
    Chạy bằng nút bookmark trên trang Odoo (không cần Tampermonkey). File này nằm trong dashboard nên luôn là bản mới nhất.
    Dữ liệu NCC và nhật ký lưu trong trình duyệt (localStorage của trang Odoo), không gửi đi đâu ngoài tab dashboard đã mở trang này. */
 (function () {
@@ -543,6 +543,12 @@
     else if (d.qlcv === "printev-ack" && Array.isArray(d.keys)) st.set(PRINTEV_KEY, st.get(PRINTEV_KEY, []).filter((x) => !d.keys.includes(x.k)));
   });
   if (location.hostname === "erp.dekko.com.vn") { hookSend(); hookSendRequest(); }
+  async function copyUnc() { // sao chép tin nhắc gửi UNC (không có @tag) để dán sang Zalo
+    const tpl = fillTpl(tplByKey("unc"));
+    if (/\{[^}]*\}/.test(tpl.text) || / - +-|- *\. Anh/.test(tpl.text)) return msg("Chưa đọc được đủ số PAY / NCC / số tiền của phiếu. Hãy lưu phiếu rồi bấm lại.", true);
+    const ok = await copyText(tpl.text);
+    msg((ok ? "Đã sao chép tin, mở Zalo rồi dán (Ctrl+V): " : "Không sao chép được, hãy gõ tay: ") + "“" + tpl.text + "”", !ok);
+  }
   async function typeMessage(tpl) {
     tpl = fillTpl(tpl);
     const doc = docInfo();
@@ -676,6 +682,7 @@
 <select class="tpl" style="display:block"><option value="">— Chọn mẫu tin nhắn có sẵn —</option>${TPL.map((t) => `<option value="${t.key}">${xe(t.label)}</option>`).join("")}</select>
 <button data-a="tpl-send" title="Gõ sẵn mẫu đã chọn (@tag + nội dung) vào ô Gửi tin">✉ Gõ mẫu đã chọn</button>
 <button data-a="unc" title="Gõ sẵn tin @Phạm Thị Mai Lê: Em ơi, gửi giúp anh UNC {PAY} - {NCC} - {số tiền}. Anh cảm ơn (tự lấy từ phiếu đang mở)">💬 Nhắc gửi UNC</button>
+<button data-a="unc-zalo" title="Sao chép tin nhắc gửi UNC (không kèm @tag) để dán sang Zalo">📋 Sao chép nhắc UNC (Zalo)</button>
 <button data-a="remind" title="Gõ sẵn tin @tag người duyệt (Phúc Hà: Lê Xuân Giang, Dung Quất: Nguyễn Thị Mai) vào ô Gửi tin">💬 Nhắc duyệt PAY (tag người duyệt)</button>
 <select class="pick"></select>
 <div class="r"><button data-a="tpl">⬇ File Excel mẫu</button><button data-a="up">⬆ Nạp Excel</button></div>
@@ -718,6 +725,7 @@
       else if (a === "remind") runRemind();
       else if (a === "invoice") runRemind("invoice");
       else if (a === "unc") typeMessage(tplByKey("unc"));
+      else if (a === "unc-zalo") copyUnc();
       else if (a === "zalo") runZalo();
       else if (a === "zalocfg") zaloSettings(pickingName().split("/")[0]);
       else if (a === "tpl-send") runTemplate();
@@ -735,7 +743,7 @@
     if (!ui) return;
     const rec = isPayRecord(), fill = canFill(); // hiện đúng công cụ của màn hình đang mở
     ui.box.querySelectorAll('[data-a="fill"],[data-a="tpl"],[data-a="up"],[data-a="exp"],[data-a="clr"],.ov,.au,.ff').forEach((e) => { const t = e.closest("label,.r") || e; t.style.display = fill ? "" : "none"; });
-    ui.box.querySelectorAll('[data-a="remind"],[data-a="unc"]').forEach((e) => { const t = e.closest("label,.r") || e; t.style.display = rec ? "" : "none"; });
+    ui.box.querySelectorAll('[data-a="remind"],[data-a="unc"],[data-a="unc-zalo"]').forEach((e) => { const t = e.closest("label,.r") || e; t.style.display = rec ? "" : "none"; });
     const pk = isPicking();
     ui.box.querySelector(".zl").style.display = pk ? "" : "none"; // phiếu kho: hiện nút nhắn Zalo thủ kho
     ui.box.querySelector('[data-a="invoice"]').style.display = rec || pk ? "none" : "";
