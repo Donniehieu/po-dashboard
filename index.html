@@ -1408,6 +1408,8 @@ li.dragging {
   border-radius: var(--radius-md);
 }
 
+tr.mrp>td:first-child,tr.mrp>td.rn{box-shadow:inset 3px 0 0 #7c3aed}
+tr.mrp{background:rgba(124,58,237,.06)}
 .td-pop{position:fixed;z-index:9999;width:min(460px,calc(100vw - 16px));max-height:calc(100vh - 16px);overflow:auto;background:var(--card,#fff);color:inherit;border:1px solid var(--line,#d0d5dd);border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.25);padding:10px}
 .td-pop .tdp-h{display:flex;align-items:center;gap:6px;margin-bottom:8px}.td-pop .tdp-x{margin-left:auto}
 .td-pop .tdp-grid{display:grid;grid-template-columns:1fr;gap:6px}
@@ -4098,7 +4100,7 @@ async function tdLoadMrp(){ // data/mrp-block.json do GitHub Actions (scripts/mr
   await mrpReadCfg();if(mrpOn===false){tdMrp=null;return} // đang tắt trong cấu hình: không dùng dữ liệu cũ còn sót
   try{const g=await ghFetchPath(dataDir()+"mrp-block.json","mrp:gh");if(g&&g.buf){tdMrp=JSON.parse(new TextDecoder().decode(g.buf))}}catch(e){}
   if(!tdMrp)try{const r=await fetch("data/mrp-block.json",{cache:"no-store"});if(r.ok)tdMrp=await r.json()}catch(e){}
-  if(tdMrp){bump();if(state.active==="today")renderToday()}
+  if(tdMrp){bump();if(state.active==="today")renderToday();else if(state.sheets[state.active]&&state.sheets[state.active].wf)render()} // đang ở tab PO: vẽ lại để hiện huy hiệu 🏭
 }
 const tdPins=()=>store.get("qlcv:impPin")||{};
 function tdCompute(){
@@ -4249,6 +4251,8 @@ function tdAddMenu(btn,t){
   setTimeout(()=>document.addEventListener("mousedown",out,true),0);
 }
 /* ---- Chuột phải vào PO / phiếu ở tab Việc hôm nay: popup 2 cột giải thích các thành phần cấu thành điểm ---- */
+const mrpOf=code=>{const m=tdMrp&&tdMrp.po?tdMrp.po[String(code||"").trim()]:null;return m||null}; // PO cấp NVL cho lệnh SX đang thiếu (mrp-block.json)
+const mrpBadge=(code,done)=>{const m=done?null:mrpOf(code);return m?`<span class="chip mrpb" style="--c:#7c3aed" title="PO này đang cấp NVL cho ${m.mo} lệnh sản xuất đang thiếu hàng: ${esc((m.mos||[]).join(", "))}${m.mo>(m.mos||[]).length?", …":""}">🏭 ${m.mo} lệnh SX</span>`:""};
 function tdMoUrl(id){try{return new URL(ODOO_LIST()).origin+"/odoo/mrp.production/"+id}catch(e){return null}}
 const tdFmtP=n=>(Math.round(n*10)/10).toString().replace(".",",");
 function tdScorePop(t,x,y){
@@ -4275,7 +4279,7 @@ function tdRow(t,extra,showQ){
   const sq=t.pay?null:seqOf(t.sh,t.r),k0=sq?sq.indexOf(t.step):-1,nx=k0>=0?sq[k0+1]:null;
   const acts=`<div class="td-act"><button class="btn sm" data-tdadd="${esc(t.key)}" title="Thêm việc hằng ngày vào tab CV theo ngày">➕ Thêm việc</button>${nx&&nx!==WF_DONE?`<button class="btn sm" data-tdxong="${esc(t.key)}" title="Xong bước “${esc(t.step)}” → chuyển sang “${esc(nx)}”">✔ ${esc(nx)}</button>`:""}${t.zz?`<button class="btn sm" data-tdwake="${esc(t.key)}" title="Đưa việc về lại theo trạng thái thực tế ngay">↩ Đưa về</button>`:""}${(t.lite?!t.zz:(t.in&&t.q!==0))?`<button class="btn sm" data-tdsnz="${esc(t.key)}" title="Hoãn tới mốc xếp lại kế tiếp">💤</button>`:""}</div>`;
   const age=t.pay?t.late:t.stuck,mv=t.in&&!t.lite?`<select class="td-mv" data-tdmv="${esc(t.key)}" title="Chuyển sang mục khác (hoặc kéo thả)"><option value="">⇄</option>${[1,2,3,4].map(q=>`<option value="${q}"${t.q===q?" disabled":""}>→ ${TD_QN[q]}</option>`).join("")}<option value="0">→ Để lượt sau</option></select>`:"";
-  return `<li class="click" data-tdrow="${esc(t.key)}" title="Chuột phải để xem cách tính điểm" ${t.in&&!t.lite?`draggable="true" data-tdk="${esc(t.key)}"`:""} data-tdgo="${t.si}" data-q="${esc(t.code)}"><span class="tag">${esc(t.sh.pay?"PAY":"PO")}</span><div>${t.sh.pay?`<b>${esc(t.code)}</b>`:`<a class="ol" href="#" data-code="${esc(t.code)}" title="Mở PO này trên Odoo để kiểm tra"><b>${esc(t.code)}</b></a>`}${t.sh.pay?"":` <a href="#" class="td-360" data-po360="${esc(t.code)}" title="Xem PO 360°">🔎</a>`} <span class="chip" style="--c:${colorFor(t.step)}">${esc(t.step)}</span>${t.moved?` <span class="chip" style="--c:#7c3aed" title="Bạn đã chuyển tay; tới lần xếp lại kế tiếp sẽ tự tính lại">✋ đã chuyển</span>`:""}<div class="sub">${esc(t.k)}${t.amt?" · "+fmtN(t.amt):""}</div><div class="sub td-why">${esc(t.rs.join(" · ")||"không có tín hiệu gấp")}${extra||""}</div></div><span class="td-score" title="Chuột phải vào việc để xem từng thành phần góp bao nhiêu điểm&#10;(Điểm = 40% gấp + 40% quan trọng + 20% dễ · Gấp ${t.u} · Quan trọng ${t.im} · Dễ ${t.ease})">${t.score}<div class="sub">${age>0&&t.wait?"chờ "+age+" ngày":""}</div>${mv}${acts}</span></li>`;
+  return `<li class="click" data-tdrow="${esc(t.key)}" title="Chuột phải để xem cách tính điểm" ${t.in&&!t.lite?`draggable="true" data-tdk="${esc(t.key)}"`:""} data-tdgo="${t.si}" data-q="${esc(t.code)}"><span class="tag">${esc(t.sh.pay?"PAY":"PO")}</span><div>${t.sh.pay?`<b>${esc(t.code)}</b>`:`<a class="ol" href="#" data-code="${esc(t.code)}" title="Mở PO này trên Odoo để kiểm tra"><b>${esc(t.code)}</b></a>`}${t.sh.pay?"":` <a href="#" class="td-360" data-po360="${esc(t.code)}" title="Xem PO 360°">🔎</a> ${mrpBadge(t.code)}`} <span class="chip" style="--c:${colorFor(t.step)}">${esc(t.step)}</span>${t.moved?` <span class="chip" style="--c:#7c3aed" title="Bạn đã chuyển tay; tới lần xếp lại kế tiếp sẽ tự tính lại">✋ đã chuyển</span>`:""}<div class="sub">${esc(t.k)}${t.amt?" · "+fmtN(t.amt):""}</div><div class="sub td-why">${esc(t.rs.join(" · ")||"không có tín hiệu gấp")}${extra||""}</div></div><span class="td-score" title="Chuột phải vào việc để xem từng thành phần góp bao nhiêu điểm&#10;(Điểm = 40% gấp + 40% quan trọng + 20% dễ · Gấp ${t.u} · Quan trọng ${t.im} · Dễ ${t.ease})">${t.score}<div class="sub">${age>0&&t.wait?"chờ "+age+" ngày":""}</div>${mv}${acts}</span></li>`;
 }
 function tdCount(){try{return tdCompute().m.q1.slice(0,tdTop()).length}catch(e){return 0}}
 const tdOpenMap=()=>store.get("qlcv:tdOpen")||{};
@@ -4714,7 +4718,7 @@ document.getElementById("navBack").onclick=()=>navGo(-1);
 document.getElementById("navFwd").onclick=()=>navGo(1);
 addEventListener("keydown",e=>{if(e.altKey&&!e.ctrlKey&&!e.shiftKey&&(e.key==="ArrowLeft"||e.key==="ArrowRight")&&!/INPUT|TEXTAREA|SELECT/.test((e.target.tagName||""))){e.preventDefault();navGo(e.key==="ArrowLeft"?-1:1)}});
 function render(){
-  navNote();
+  navNote();try{const sh0=state.sheets[state.active];if(sh0&&sh0.wf)tdLoadMrp()}catch(e){} // tab PO cần dữ liệu lệnh SX để tô huy hiệu
   const same=state._rt===state.active,v=same?captureView():null;
   renderMain();state._rt=state.active;if(v)restoreView(v);
 }
@@ -5077,7 +5081,8 @@ const QUEUES={
     {k:"sugdone",l:"Gợi ý Hoàn thành",h:"Đơn thanh toán trước đã nhận hết hàng, xuất hóa đơn và đang ở Chờ KT xác nhận công nợ — chờ bạn xác nhận hoàn thành",tone:"ok",t:(sh,r)=>sugDone(sh,r)},
     {k:"mismatch",l:"Note lệch Odoo",h:"Note thấp hơn mốc Odoo (sẽ được nâng khi đồng bộ) hoặc là ghi chú tự do ngoài luồng chuẩn",t:(sh,r)=>!r.done&&(!!r.raised||seqOf(sh,r).indexOf(r.wf)<0)},
     {k:"overdue",l:"Quá hạn (bước khác)",h:"Quá ngày nhận hàng dự kiến, chưa hoàn thành, KHÔNG ở bước Đã gửi NCC / Chờ nhận hàng (các đơn đó đã tính ở “Nhận hàng trễ”)",tone:"bad",t:(sh,r)=>r.st==="overdue"&&!inWf("Đã gửi NCC","Chờ nhận hàng")(sh,r)},
-    {k:"soon",l:"Sắp đến hạn",h:"Hạn trong 3 ngày tới",tone:"warn",t:(sh,r)=>r.st==="soon"}
+    {k:"soon",l:"Sắp đến hạn",h:"Hạn trong 3 ngày tới",tone:"warn",t:(sh,r)=>r.st==="soon"},
+    {k:"mrp",l:"🏭 Liên quan lệnh SX",h:"PO đang cấp NVL cho lệnh sản xuất đang thiếu hàng (dù gấp hay không); cần bật “Kế hoạch sản xuất” và đồng bộ Odoo",tone:"warn",t:(sh,r)=>!r.done&&!!mrpOf(r.v[sh.title])}
   ],
   pay:[
     {k:"nosent",l:"Chưa gửi duyệt cho TP",h:"Phiếu chưa thanh toán, chưa quá hạn và chưa có dòng “Đã gửi duyệt TT cho TP” — cần In Đề nghị thanh toán (phiếu đã quá hạn tính ở “Quá hạn cần nhắc KT”)",t:(sh,r)=>!r.done&&r.st!=="overdue"&&sh.payNoteIdx!=null&&!noteLines(r.v[sh.payNoteIdx]).some(l=>l.replace(NOTE_STAMP,"").startsWith(PROGRESS_SENT))},
@@ -5376,7 +5381,7 @@ function renderTable(sh,fr){
     cols.map(c=>{const on=u.cf[c.idx]?" on":"";const lab=c.type==="flag"?"TT trước":colLabel(c);return `<th data-s="${c.idx}" class="${c.type==="flag"?"flag":""}" title="${c.type==="flag"?"Tick = PO thanh toán trước (luồng có Chờ làm TT / Đã gửi UNC)":""}">${esc(lab)}${u.sort&&u.sort.i===c.idx?(u.sort.dir>0?" ▲":" ▼"):""}<button class="fb${on}" data-f="${c.idx}" title="Lọc cột này">▾</button></th>`}).join("")+`<th></th></tr></thead><tbody>`;
   for(const [ri,r] of rows.slice(0,u.shown).entries()){
     const dn=sh.checklist?ckDone(sh,r):(sh.progIdx!=null&&r.done);
-    h+=`<tr data-row="${r.n}" class="${r.st==="overdue"?"od":r.st==="soon"?"sn":""} ${dn?"dn":""}">`;
+    h+=`<tr data-row="${r.n}" class="${r.st==="overdue"?"od":r.st==="soon"?"sn":""} ${dn?"dn":""} ${sh.wf&&!r.done&&mrpOf(r.v[sh.title])?"mrp":""}">`;
     h+=`<td class="rn">${ri+1}</td>`;
     h+=`<td class="flag sel"><input type="checkbox" data-sel="${r.n}" ${selSet.has(r.n)?"checked":""} aria-label="Chọn dòng"></td>`;
     if(sh.checklist)h+=`<td class="flag" data-l="Trạng thái"><input type="checkbox" data-ck="${r.n}" ${dn?"checked":""} aria-label="Hoàn thành"></td>`;
@@ -5400,7 +5405,7 @@ function renderTable(sh,fr){
       if(sh.pay&&c.idx===sh.title&&v!=null&&sh.payCurIdx!=null){const cur=String(r.v[sh.payCurIdx]??"").trim();if(/bnk/i.test(cur)&&cur!==String(v))cell=`${esc(cur)} <span class="sub" title="Số PAY ban đầu">(${esc(v)})</span>`} // phiếu đã thanh toán: hiện số BNK, kèm số PAY ban đầu trong ngoặc
       if(v!=null&&sh.pay&&c.idx===sh.payNoteIdx&&String(v).includes("\n")){const ls=String(v).split("\n").filter(Boolean);cell=esc(ls[0])+` <span class="sub" title="Rê chuột vào ô để xem toàn bộ nhật ký">(+${ls.length-1} ghi chú cũ)</span>`}
       if(v!=null&&sh.checklist&&typeof v==="string"&&(/^tham chiếu$/i.test(c.name.trim())||c.idx===sh.title))cell=refCell(String(v),/^in giấy/.test(norm(r.v[sh.title]))); // Tên việc + Tham chiếu: PAY mở Odoo, PO / NCC nhảy sang PO 360°
-      if(v!=null&&c.idx===sh.title&&/mã đơn|số po|^po$/i.test(c.name))cell=`<a class="ol" href="#" data-code="${esc(v)}" title="Mở Odoo để tìm đơn này">${cell}</a>`;
+      if(v!=null&&c.idx===sh.title&&/mã đơn|số po|^po$/i.test(c.name))cell=`<a class="ol" href="#" data-code="${esc(v)}" title="Mở Odoo để tìm đơn này">${cell}</a>`+(sh.wf?" "+mrpBadge(v,r.done):"");
       if(v!=null&&sh.wf&&/^nhà cung cấp$/i.test(c.name))cell=`<a class="sl" href="#" data-sup="${c.idx}" data-v="${esc(v)}" title="Bấm để lọc các PO của nhà cung cấp này">${cell}</a>`;
       const cls=typeof v==="number"?"num":(c.type==="text"?"txt":"");
       const edited=state.pending.has(pkey(si,r.n,c.idx));
