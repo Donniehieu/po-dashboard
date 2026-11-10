@@ -5304,7 +5304,7 @@ function renderTable(sh,fr){
       else if(typeof v==="number"){cell=fmtN(v)}
       else if(c.type==="cat")cell=`<span class="chip" style="--c:${colorFor(v)}">${esc(v)}</span>`;
       else cell=esc(v);
-      if(v!=null&&IS_DS(sh.name)&&norm(c.name)==="tên ncc"&&String(v).trim())cell=`<a class="ol" href="#" data-ncc="${esc(String(v).trim())}" title="Mở tab PO và lọc theo NCC này">${cell}</a>`;
+      if(v!=null&&IS_DS(sh.name)&&norm(c.name)==="tên ncc"&&String(v).trim())cell=`<a class="hl" style="cursor:pointer" href="#" data-ncc="${esc(String(v).trim())}" title="Mở tab PO và lọc theo NCC này">${cell}</a>`;
       if(v!=null&&sh.pay&&c.idx===sh.payPoIdx)cell=String(v).split(/([,;\s]+)/).map(p=>/^[,;\s]*$/.test(p)?esc(p):`<a class="ol" href="#" data-code="${esc(p.trim().toUpperCase())}" title="Mở PO ${esc(p.trim())} trên Odoo">${esc(p)}</a>`).join("");
       if(sh.pay&&c.idx===sh.title&&v!=null&&sh.payCurIdx!=null){const cur=String(r.v[sh.payCurIdx]??"").trim();if(/bnk/i.test(cur)&&cur!==String(v))cell=`${esc(cur)} <span class="sub" title="Số PAY ban đầu">(${esc(v)})</span>`} // phiếu đã thanh toán: hiện số BNK, kèm số PAY ban đầu trong ngoặc
       if(v!=null&&sh.pay&&c.idx===sh.payNoteIdx&&String(v).includes("\n")){const ls=String(v).split("\n").filter(Boolean);cell=esc(ls[0])+` <span class="sub" title="Rê chuột vào ô để xem toàn bộ nhật ký">(+${ls.length-1} ghi chú cũ)</span>`}
@@ -5352,7 +5352,7 @@ function renderTable(sh,fr){
   const cellEdit=td=>{ // tab Phiếu thanh toán: bấm đúp mở phiếu trên Odoo, riêng cột Ghi chú vẫn sửa được
     if(sh.pay){const ci=+td.dataset.c,col=sh.cols.find(c=>c.idx===ci);if(!col||!/^ghi chú$/i.test(col.name.trim())){const r=sh.rows.find(x=>x.n===+td.dataset.r);if(r)openPay(sh,r);return}}
     startEdit(sh,td)};
-  t.querySelectorAll("td[data-c]").forEach(td=>{td.ondblclick=e=>{if(e.target.closest&&e.target.closest(".ol"))return;cellEdit(td)};if(touch)td.onclick=e=>{if(!td.querySelector("input")&&!e.target.closest("button,.ol,.sl"))cellEdit(td)}});
+  t.querySelectorAll("td[data-c]").forEach(td=>{td.ondblclick=e=>{if(e.target.closest&&e.target.closest(".ol,[data-ncc]"))return;cellEdit(td)};if(touch)td.onclick=e=>{if(!td.querySelector("input")&&!e.target.closest("button,.ol,.sl,[data-ncc]"))cellEdit(td)}});
   t.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>deleteRow(si,+b.dataset.del));
   t.querySelectorAll("a.sl").forEach(a=>{a.onclick=e=>{e.preventDefault();e.stopPropagation();u.filters[+a.dataset.sup]=a.dataset.v;u.shown=100;renderDyn(sh);const tb=$("#tbl");if(tb)tb.scrollIntoView({block:"start"});toast("Đang lọc các PO của: "+a.dataset.v)};a.ondblclick=e=>e.stopPropagation()});
   t.querySelectorAll("[data-chk]").forEach(cb=>cb.onchange=()=>{const r=sh.rows.find(x=>x.n===+cb.dataset.chk);if(!r)return;state.via="dashboard";setCell(si,r,sh.chkIdx,cb.checked?"Có":null);renderDyn(sh,true,r.n);updateChrome()});
