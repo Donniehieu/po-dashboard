@@ -1410,16 +1410,22 @@ li.dragging {
 
 tr.mrp>td:first-child,tr.mrp>td.rn{box-shadow:inset 3px 0 0 #7c3aed}
 tr.mrp{background:rgba(124,58,237,.06)}
-.td-pop{position:fixed;z-index:9999;width:min(460px,calc(100vw - 16px));max-height:calc(100vh - 16px);overflow:auto;background:var(--card,#fff);color:inherit;border:1px solid var(--line,#d0d5dd);border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.25);padding:10px}
-.td-pop .tdp-h{display:flex;align-items:center;gap:6px;margin-bottom:8px}.td-pop .tdp-x{margin-left:auto}
-.td-pop .tdp-grid{display:grid;grid-template-columns:1fr;gap:6px}
-.td-pop .tdp-c{display:flex;justify-content:space-between;gap:8px;padding:6px 8px;border-radius:8px;background:rgba(127,127,127,.08);border-left:3px solid transparent}
-.td-pop .tdp-c:empty{background:none}
-.td-pop .g-u{border-left-color:var(--bad)}.td-pop .g-i{border-left-color:var(--brand)}.td-pop .g-e{border-left-color:var(--ok)}.td-pop .g-t{border-left-color:var(--warn)}.td-pop .g-m{border-left-color:#7c3aed}
-.td-pop .tot{background:rgba(127,127,127,.18);font-weight:700}
-.td-pop .tdp-g{font-size:11px;opacity:.7;text-transform:uppercase;margin-right:4px}
-.td-pop .tdp-v{font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap}
-@media(max-width:560px){.td-pop .tdp-grid{grid-template-columns:1fr}}
+.td-pop{position:fixed;z-index:9999;width:min(460px,calc(100vw - 16px));max-height:calc(100vh - 16px);overflow:auto;background:var(--card,#fff);color:inherit;border:1px solid var(--line,#d0d5dd);border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.25);padding:14px 14px 12px;font-size:13px;--pu:var(--bad);--pi:var(--brand);--pe:var(--ok)}
+.td-pop .tdp-h{display:flex;align-items:baseline;gap:8px;margin-bottom:10px}.td-pop .tdp-h b{font-size:15px}.td-pop .tdp-x{margin-left:auto}
+.td-pop .tdp-eq{display:flex;align-items:stretch;gap:6px;margin-bottom:8px}
+.td-pop .tdp-eq>div{flex:1;border-radius:8px;padding:6px 8px;text-align:center}
+.td-pop .tdp-eq small{display:block;font-size:11px}.td-pop .tdp-eq strong{font-size:20px;line-height:1.2}
+.td-pop .tdp-eq .op{flex:0 0 auto;align-self:center;padding:0;font-size:18px;opacity:.6}
+.td-pop .tdp-bar{display:flex;height:8px;border-radius:4px;overflow:hidden;margin-bottom:12px}
+.td-pop .tdp-s{border-radius:10px;margin-bottom:8px;overflow:hidden;border:1px solid}
+.td-pop .tdp-sh{display:flex;justify-content:space-between;align-items:center;padding:7px 10px;font-weight:700}.td-pop .tdp-sh span:last-child{font-size:16px}
+.td-pop .tdp-r{display:flex;justify-content:space-between;gap:10px;padding:6px 10px;border-top:1px solid var(--line,#e5e7eb)}
+.td-pop .tdp-r .sub{display:block;margin-top:1px}
+.td-pop .tdp-r b{white-space:nowrap}
+.td-pop .tdp-r.off{opacity:.55}.td-pop .tdp-r.off .tdp-l{text-decoration:line-through}.td-pop .tdp-r.off b{font-weight:400}
+.td-pop .tdp-mo{padding:6px 10px;border:1px solid #7c3aed;border-radius:10px;margin-bottom:8px;background:color-mix(in srgb,#7c3aed 8%,transparent)}
+.td-pop .tdp-tot{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-radius:10px;background:#534AB7;color:#fff}
+.td-pop .tdp-tot small{display:block;font-size:11.5px;color:#CECBF6}.td-pop .tdp-tot strong{font-size:26px}
 .td-score {
   font-weight: 800;
   font-size: 16px;
@@ -4257,11 +4263,18 @@ function tdMoUrl(id){try{return new URL(ODOO_LIST()).origin+"/odoo/mrp.productio
 const tdFmtP=n=>(Math.round(n*10)/10).toString().replace(".",",");
 function tdScorePop(t,x,y){
   document.querySelectorAll(".td-pop").forEach(e=>e.remove());
-  const cls=g=>g==="Gấp"?"u":g==="Quan trọng"?"i":g==="Dễ"?"e":"t";
-  const cells=t.bd.map(b=>`<div class="tdp-c g-${cls(b.g)}${b.tot?" tot":""}"><div class="tdp-l"><span class="tdp-g">${esc(b.g)}</span> ${esc(b.l)}${b.note?`<div class="sub">${esc(b.note)}</div>`:""}</div><div class="tdp-v">${b.p!=null?tdFmtP(b.p):b.v}</div></div>`);
-  if(t.mrpH&&t.mrpH.length)cells.push(`<div class="tdp-c g-m"><div class="tdp-l"><span class="tdp-g">Sản xuất</span> Lệnh SX đang thiếu hàng liên quan${t.pay?" (qua PO "+esc([...new Set(t.mrpH.map(h=>h.po))].join(", "))+")":""}<div class="sub">${t.mrpH.map(h=>{const u=h.id?tdMoUrl(h.id):null;return u?`<a href="${esc(u)}" data-tdmo="${esc(u)}">${esc(h.n)}</a>`:`<span>${esc(h.n)}</span>`}).join(" · ")}</div></div><div class="tdp-v">↗</div></div>`);
+  const tint=v=>`background:color-mix(in srgb,var(${v}) 13%,var(--card,#fff));color:var(${v})`;
+  const G=[{g:"Gấp",v:"--pu",max:40,tot:.4*t.u},{g:"Quan trọng",v:"--pi",max:40,tot:.4*t.im},{g:"Dễ",v:"--pe",max:20,tot:.2*t.ease}];
+  const sum=G.reduce((a,b)=>a+b.tot,0)||1,pct=n=>Math.round(n/sum*1000)/10;
+  const eq=G.map((q,i)=>`${i?`<div class="op">+</div>`:""}<div style="${tint(q.v)}"><small>${q.g}</small><strong>${tdFmtP(q.tot)}</strong></div>`).join("")+`<div class="op">=</div><div style="background:var(--bg,#f3f4f6);border:1px solid var(--line,#d0d5dd)"><small>Tổng</small><strong>${t.score}</strong></div>`;
+  const bar=G.map(q=>`<div style="width:${pct(q.tot)}%;background:var(${q.v})"></div>`).join("");
+  const secs=G.map(q=>{
+    let rows=t.bd.filter(b=>b.g===q.g&&(q.g==="Dễ"||!b.tot));
+    if(!rows.length)rows=[{l:"Không có tín hiệu "+q.g.toLowerCase(),p:0,note:""}];
+    return `<div class="tdp-s" style="border-color:var(${q.v})"><div class="tdp-sh" style="${tint(q.v)}"><span>Phần ${esc(q.g)} · tối đa ${q.max} điểm</span><span>${tdFmtP(q.tot)}</span></div>`+rows.map(b=>{const p=b.p||0;return `<div class="tdp-r${p===0?" off":""}"><div class="tdp-l">${esc(b.l)}${b.note?`<span class="sub">${esc(b.note)}</span>`:""}</div><b style="${p?`color:var(${q.v})`:""}">${p>0?"+":""}${tdFmtP(p)}</b></div>`}).join("")+`</div>`}).join("");
+  const mo=t.mrpH&&t.mrpH.length?`<div class="tdp-mo"><b>🏭 Lệnh SX đang thiếu hàng liên quan</b>${t.pay?` <span class="sub">(qua PO ${esc([...new Set(t.mrpH.map(h=>h.po))].join(", "))})</span>`:""}<div class="sub" style="margin-top:2px">${t.mrpH.map(h=>{const u=h.id?tdMoUrl(h.id):null;return u?`<a href="${esc(u)}" data-tdmo="${esc(u)}">${esc(h.n)}</a>`:`<span>${esc(h.n)}</span>`}).join(" · ")}</div></div>`:"";
   const m=document.createElement("div");m.className="td-pop";
-  m.innerHTML=`<div class="tdp-h"><b>${esc(t.code)}</b> · ${esc(t.step)} · <b>${t.score} điểm</b> <span class="sub">— mỗi ô là số điểm góp vào tổng</span><button class="btn sm tdp-x" title="Đóng">×</button></div><div class="tdp-grid">${cells.join("")}</div>`;
+  m.innerHTML=`<div class="tdp-h"><b>${esc(t.code)}</b><span class="sub">${esc(t.step)}</span><button class="btn sm tdp-x" title="Đóng">×</button></div><div class="tdp-eq">${eq}</div><div class="tdp-bar">${bar}</div>${secs}${mo}<div class="tdp-tot"><div>Tổng điểm<small>${G.map(q=>tdFmtP(q.tot)).join(" + ")} = ${tdFmtP(G.reduce((a,b)=>a+b.tot,0))}, làm tròn</small></div><strong>${t.score}</strong></div>`;
   document.body.appendChild(m);
   m.style.left=Math.max(8,Math.min(x,innerWidth-m.offsetWidth-8))+"px";m.style.top=Math.max(8,Math.min(y,innerHeight-m.offsetHeight-8))+"px";
   const close=()=>{m.remove();document.removeEventListener("mousedown",out,true);document.removeEventListener("keydown",esc2,true)};
