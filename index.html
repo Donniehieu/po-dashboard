@@ -1408,9 +1408,9 @@ li.dragging {
   border-radius: var(--radius-md);
 }
 
-.td-pop{position:fixed;z-index:9999;width:min(680px,calc(100vw - 16px));max-height:calc(100vh - 16px);overflow:auto;background:var(--card,#fff);color:inherit;border:1px solid var(--line,#d0d5dd);border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.25);padding:10px}
+.td-pop{position:fixed;z-index:9999;width:min(460px,calc(100vw - 16px));max-height:calc(100vh - 16px);overflow:auto;background:var(--card,#fff);color:inherit;border:1px solid var(--line,#d0d5dd);border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.25);padding:10px}
 .td-pop .tdp-h{display:flex;align-items:center;gap:6px;margin-bottom:8px}.td-pop .tdp-x{margin-left:auto}
-.td-pop .tdp-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.td-pop .tdp-grid{display:grid;grid-template-columns:1fr;gap:6px}
 .td-pop .tdp-c{display:flex;justify-content:space-between;gap:8px;padding:6px 8px;border-radius:8px;background:rgba(127,127,127,.08);border-left:3px solid transparent}
 .td-pop .tdp-c:empty{background:none}
 .td-pop .g-u{border-left-color:var(--bad)}.td-pop .g-i{border-left-color:var(--brand)}.td-pop .g-e{border-left-color:var(--ok)}.td-pop .g-t{border-left-color:var(--warn)}.td-pop .g-m{border-left-color:#7c3aed}
@@ -4232,7 +4232,6 @@ function tdScorePop(t,x,y){
   const cls=g=>g==="Gấp"?"u":g==="Quan trọng"?"i":g==="Dễ"?"e":"t";
   const cells=t.bd.map(b=>`<div class="tdp-c g-${cls(b.g)}${b.tot?" tot":""}"><div class="tdp-l"><span class="tdp-g">${esc(b.g)}</span> ${esc(b.l)}${b.note?`<div class="sub">${esc(b.note)}</div>`:""}</div><div class="tdp-v">${b.p!=null?tdFmtP(b.p):b.v}</div></div>`);
   if(t.mrpH&&t.mrpH.length)cells.push(`<div class="tdp-c g-m"><div class="tdp-l"><span class="tdp-g">Sản xuất</span> Lệnh SX đang thiếu hàng liên quan${t.pay?" (qua PO "+esc([...new Set(t.mrpH.map(h=>h.po))].join(", "))+")":""}<div class="sub">${t.mrpH.map(h=>{const u=h.id?tdMoUrl(h.id):null;return u?`<a href="${esc(u)}" data-tdmo="${esc(u)}">${esc(h.n)}</a>`:`<span>${esc(h.n)}</span>`}).join(" · ")}</div></div><div class="tdp-v">↗</div></div>`);
-  if(cells.length%2)cells.push(`<div class="tdp-c"></div>`); // đủ cặp để chia đều 2 cột: số dòng = số phần tử / 2
   const m=document.createElement("div");m.className="td-pop";
   m.innerHTML=`<div class="tdp-h"><b>${esc(t.code)}</b> · ${esc(t.step)} · <b>${t.score} điểm</b> <span class="sub">— mỗi ô là số điểm góp vào tổng</span><button class="btn sm tdp-x" title="Đóng">×</button></div><div class="tdp-grid">${cells.join("")}</div>`;
   document.body.appendChild(m);
