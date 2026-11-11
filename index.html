@@ -5476,8 +5476,8 @@ function renderTable(sh,fr){
   if(mo){mo.onclick=()=>{u.shown+=200;renderTable(sh,fr)};
     if("IntersectionObserver" in window){if(mo._io)mo._io.disconnect();const io=new IntersectionObserver(es=>{if(es[0].isIntersecting){io.disconnect();u.shown+=200;renderTable(sh,fr)}},{rootMargin:"300px"});mo._io=io;io.observe(mo)}} // cuộn tới cuối tự tải thêm
   const touch=matchMedia("(pointer:coarse)").matches;
-  const cellEdit=td=>{ // tab Phiếu thanh toán: bấm đúp mở phiếu trên Odoo, riêng cột Ghi chú vẫn sửa được
-    if(sh.pay){const ci=+td.dataset.c,col=sh.cols.find(c=>c.idx===ci);if(!col||!/^ghi chú$/i.test(col.name.trim())){const r=sh.rows.find(x=>x.n===+td.dataset.r);if(r)openPay(sh,r);return}}
+  const cellEdit=td=>{ // tab Phiếu thanh toán: bấm đúp mở phiếu trên Odoo, riêng cột Ghi chú và PO liên quan vẫn sửa được (nhiều PO cách nhau dấu phẩy)
+    if(sh.pay){const ci=+td.dataset.c,col=sh.cols.find(c=>c.idx===ci);if(!col||!/^(ghi chú|po liên quan)$/i.test(col.name.trim())){const r=sh.rows.find(x=>x.n===+td.dataset.r);if(r)openPay(sh,r);return}}
     startEdit(sh,td)};
   t.querySelectorAll("td[data-c]").forEach(td=>{td.ondblclick=e=>{if(e.target.closest&&e.target.closest(".ol,[data-ncc]"))return;cellEdit(td)};if(touch)td.onclick=e=>{if(!td.querySelector("input")&&!e.target.closest("button,.ol,.sl,[data-ncc]"))cellEdit(td)}});
   t.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>deleteRow(si,+b.dataset.del));
