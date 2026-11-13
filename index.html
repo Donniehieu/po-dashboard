@@ -2418,7 +2418,12 @@ function wfDerive(sh,r){
 function bdLate(due){let d=sod(due);while(d.getDay()===0||d.getDay()===6)d=new Date(d.getFullYear(),d.getMonth(),d.getDate()+1);let n=0;while(d<TODAY){d=new Date(d.getFullYear(),d.getMonth(),d.getDate()+1);if(d.getDay()!==0&&d.getDay()!==6)n++}return n}
 function payUrl(sh,r){const id=r.v[sh.payId],cid=r.v[sh.payCid];if(id==null||id==="")return null;return new URL(ODOO_LIST()).origin+"/odoo/vendor-payments/"+id+(cid?"?cids="+cid:"")}
 const olLink=(sh,i,r,inner)=>sh.pay?`<a class="ol" href="#" data-pay="${i}|${r.n}" title="Mở phiếu thanh toán trên Odoo">${inner}</a>`:`<a class="ol" href="#" data-code="${esc(r.v[sh.title])}" title="Mở Odoo để tìm đơn này">${inner}</a>`;
-function openPay(sh,r){const u=payUrl(sh,r);if(!u){toast("Phiếu này chưa có ID Odoo (cần một lần đồng bộ Odoo)",true);return}openErp(u);toast("Đang mở phiếu "+r.v[sh.title]+" trên Odoo…")}
+async function openPayList(code){ // chưa biết ID phiếu: mở danh sách phiếu thanh toán trên Odoo, chép mã để dán vào ô tìm kiếm
+  let copied=false;try{await navigator.clipboard.writeText(code);copied=true}catch(e){}
+  try{openErp(new URL(ODOO_LIST()).origin+"/odoo/vendor-payments")}catch(e){openErp(ODOO_LIST())}
+  toast((copied?`Đã sao chép mã “${code}”. `:`Mã phiếu: ${code}. `)+"Phiếu này chưa có liên kết trực tiếp (sẽ có sau một lần đồng bộ Odoo). Trong Odoo hãy dán mã vào ô tìm kiếm.");
+}
+function openPay(sh,r){const u=payUrl(sh,r);if(!u){openPayList(String(r.v[sh.title]??"").trim());return}openErp(u);toast("Đang mở phiếu "+r.v[sh.title]+" trên Odoo…")}
 const dueOf=(sh,r)=>sh.dueIdx!=null?r.v[sh.dueIdx]:null;
 /* Phiếu nhập kho “Đã nhận hết” -> tối thiểu “Cần lập hóa đơn”; “Đã nhận một phần” -> tối thiểu “Chờ nhận hàng” (chỉ nâng các bước đứng trước, không hạ bước đã đi xa hơn) */
 const WF_FLOOR=[
@@ -4655,7 +4660,7 @@ function renderPo360(){
     // phiếu thanh toán
     html+=`<div class="card"><div class="lvl">Phiếu thanh toán<span class="tag">${pays.length}</span></div>`+(pays.length?`<ul class="attn">`+pays.map(({p,ps,psi})=>{
       const no=String(p.v[ps.title]??""),cur=ps.payCurIdx!=null?String(p.v[ps.payCurIdx]??""):"",d=dueOf(ps,p),late=p.st==="overdue"&&d instanceof Date?bdLate(d):0;
-      return `<li><span class="tag">PAY</span><div>${olLink(ps,psi,p,`<b>${esc(no)}</b>`)}${cur&&cur!==no?` · ${esc(cur)}`:""}<div class="sub">${esc(String(p.v[ps.payStIdx]??""))}${ps.payOdooIdx!=null&&p.v[ps.payOdooIdx]?" · Odoo: "+esc(String(p.v[ps.payOdooIdx])):""}${ps.money&&p.v[ps.money.idx]!=null?" · "+fmtN(p.v[ps.money.idx]):""}</div></div><span class="late" style="${late?"":"color:var(--mute)"}">${late?"quá hạn "+late+" ngày":(d instanceof Date?"hạn "+fmtD(d):"")}</span></li>`}).join("")+`</ul>`:`<div class="sub">Chưa có phiếu thanh toán nào gắn với PO này.</div>`)+`</div>`;
+      return `<li><span class="tag">PAY</span><div><a href="#" class="p360pay" data-p360pay="${esc(no)}" data-psi="${psi}" title="Mở phiếu ${esc(no)} trong tab Phiếu thanh toán"><b>${esc(no)}</b></a>${cur&&cur!==no?` · ${esc(cur)}`:""}<div class="sub">${esc(String(p.v[ps.payStIdx]??""))}${ps.payOdooIdx!=null&&p.v[ps.payOdooIdx]?" · Odoo: "+esc(String(p.v[ps.payOdooIdx])):""}${ps.money&&p.v[ps.money.idx]!=null?" · "+fmtN(p.v[ps.money.idx]):""}</div></div><span class="late" style="${late?"":"color:var(--mute)"}">${late?"quá hạn "+late+" ngày":(d instanceof Date?"hạn "+fmtD(d):"")}</span></li>`}).join("")+`</ul>`:`<div class="sub">Chưa có phiếu thanh toán nào gắn với PO này.</div>`)+`</div>`;
     // NCC
     const S=nccSheets();let nccH=`<div class="sub">Không có tab Công nợ NCC.</div>`;
     if(S&&sup){const items=S.ds.rows.filter(x=>x.v[S.nc.idx]!=null&&String(x.v[S.nc.idx]).trim()).map(x=>({name:String(x.v[S.nc.idx]).trim(),row:x})),f=NCC.find(sup,items);
@@ -4686,6 +4691,7 @@ function renderPo360(){
     if($("#po360Apply"))$("#po360Apply").onclick=e=>{const to=e.target.dataset.to;if(setWf(si,r,to)){setStatus(sh);updateChrome();toast(`${r.v[sh.title]}: → ${to}`);renderPo360()}};
     if($("#po360Ncc")){const S=nccSheets();$("#po360Ncc").onclick=e=>{e.preventDefault();goSheet(S.dsSi,{search:String(r.v[sh.cols.find(c=>norm(c.name)==="nhà cung cấp").idx]??"").toLowerCase().slice(0,20)})}}
     $("#po360Sheet").onclick=e=>{e.preventDefault();goSheet(si,{search:String(r.v[sh.title]).toLowerCase()})};
+    $("#main").querySelectorAll("a.p360pay").forEach(a=>a.onclick=e=>{e.preventDefault();e.stopPropagation();goSheet(+a.dataset.psi,{search:a.dataset.p360pay.toLowerCase()})}); // PAY ở PO 360° -> mở đúng phiếu trong tab Phiếu thanh toán
   }
 }
 
@@ -5905,6 +5911,9 @@ async function loadOdooIds(){
 }
 async function openOdoo(code){
   code=String(code||"").trim();
+  if(/^PAY\d+$/i.test(code)){ // mã phiếu thanh toán không có trong tab Phiếu thanh toán: mở thẳng phần phiếu thanh toán của Odoo
+    const pi=state.sheets.findIndex(x=>x.pay),ps=state.sheets[pi],r=ps&&ps.rows.find(x=>String(x.v[ps.title]??"").trim().toUpperCase()===code.toUpperCase()||(ps.payCurIdx!=null&&String(x.v[ps.payCurIdx]??"").trim().toUpperCase()===code.toUpperCase()));
+    if(r){openPay(ps,r);return}openPayList(code.toUpperCase());return}
   const base=ODOO_LIST().replace(/\/+$/,""),m=odooIds&&odooIds[code];
   if(m){openErp(`${base}/${m.id}?cids=${m.cid}`);toast("Đang mở đơn "+code+" trên Odoo…");return}
   let copied=false;
