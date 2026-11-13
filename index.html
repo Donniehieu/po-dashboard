@@ -4512,13 +4512,14 @@ function nccDebtHtml(sh){
     if(!a.length)return `<span class="sub">Không có.</span>`;
     return [["PH","TBDN Phúc Hà"],["DQ","Dung Quất (DQ)"]].map(([k,nm])=>{const g=a.filter(x=>x.co===k).sort((x,y)=>(x.dt===y.dt?0:x.dt<y.dt?-1:1));if(!g.length)return "";
       return `<div style="margin:0 0 8px"><div class="sub" style="margin-bottom:4px"><b>${nm}</b></div>${pchips(g,c)}<div style="margin:2px 0 0;font-weight:700">Tổng ${nm}: ${fmtN(g.reduce((t,x)=>t+x.amt,0))} · ${g.length} mục</div></div>`}).join("")};
-  return `<div class="card" style="margin-bottom:14px"><div class="td-bar" style="margin-bottom:8px"><span class="lvl" style="margin:0">💰 Giá trị công nợ theo NCC · đã / chưa thanh toán</span><span class="grow"></span><input id="dbtQ" placeholder="Lọc NCC…" style="min-width:160px" title="Lọc cả bảng giá trị công nợ và phần Chi tiết bên dưới"><button class="btn" id="dbtOpen">▾ Mở tất cả</button><button class="btn" id="dbtClose">▸ Thu gọn tất cả</button></div>
+  return `<div class="card" style="margin-bottom:14px"><div class="td-bar" style="margin-bottom:8px"><span class="lvl" style="margin:0">💰 Giá trị công nợ theo NCC · đã / chưa thanh toán</span><span class="grow"></span><input id="dbtQ" placeholder="Lọc NCC…" style="min-width:160px" title="Lọc cả bảng giá trị công nợ và phần Chi tiết bên dưới">${ckCol?`<span class="sub">Ngày kiểm tra công nợ từ</span><input type="date" id="dbtD1" title="Chỉ hiện NCC có Ngày kiểm tra công nợ từ ngày này"><span class="sub">đến</span><input type="date" id="dbtD2" title="Chỉ hiện NCC có Ngày kiểm tra công nợ đến ngày này"><button class="btn sm" id="dbtDx" title="Bỏ lọc theo ngày kiểm tra">✕</button>`:""}<button class="btn" id="dbtOpen">▾ Mở tất cả</button><button class="btn" id="dbtClose">▸ Thu gọn tất cả</button></div>
     <div class="dbt-sum" style="margin-bottom:8px"><span class="chip dbt-f" data-dflt="paid" style="--c:var(--ok);cursor:pointer" title="Bấm để chỉ hiện NCC có mục đã thanh toán (bấm lại để bỏ lọc)">Đã thanh toán ${fmtN(tp)} · ${npp} mục</span><span class="chip dbt-f" data-dflt="unpaid" style="--c:var(--bad);cursor:pointer" title="Bấm để chỉ hiện NCC có mục chưa thanh toán (bấm lại để bỏ lọc)">Chưa thanh toán ${fmtN(tu)} · ${npu} mục</span><span class="sub dbt-f" data-dflt="all" id="dbtCnt" style="cursor:pointer" title="Bấm để bỏ mọi bộ lọc" data-total="${out.length}">${out.length} NCC</span>${ckCol?`<span class="chip dbt-f" data-dflt="ck" id="dbtCkSum" style="--c:var(--accent,#2563eb);cursor:pointer" title="Bấm để chỉ hiện NCC đã kiểm tra; bấm lần nữa: chưa kiểm tra; lần ba: bỏ lọc">✔ Đã kiểm tra công nợ ${out.filter(o=>o.row&&String(o.row.v[ckCol.idx]??"").trim()).length} / ${out.length} NCC</span>`:""}</div>
     <div class="sub" style="margin-bottom:8px">Mỗi mục có dạng <b>PAY/BNK-PO - giá trị</b> (theo số tiền phiếu, cột Trạng thái TT; bỏ phiếu hủy). PO chưa có phiếu hiện là <b>PO-chưa có phiếu - giá trị</b> (tính vào cột Chưa thanh toán, trừ PO đã Hoàn thành). Bấm để mở phiếu / PO.</div>
     <div id="dbtList">`+out.map(o=>tdD("dbt:"+o.name,"td-wg",`<b>${esc(o.name)}</b>${o.cls?` <span class="chip" style="--c:${colorFor(o.cls)}">${esc(o.cls)}</span>`:""}${o.inDs?"":` <span class="chip" style="--c:var(--warn)">chưa có trong Công nợ NCC</span>`} <span class="chip" style="--c:var(--ok)">đã TT ${fmtN(o.vp)} · ${o.pays.paid.length}</span> <span class="chip" style="--c:var(--bad)">chưa TT ${fmtN(o.vu)} · ${o.pays.unpaid.length}</span> ${nccCkHtml(o,ckCol,SS)}`,
       `<div class="dbt-cols" style="padding:6px 0 10px 18px"><div><div class="sub" style="margin-bottom:4px"><b>Đã thanh toán</b> · ${fmtN(o.vp)} · ${o.pays.paid.length} mục</div><div>${gchips(o.pays.paid,"var(--ok)")}</div></div><div><div class="sub" style="margin-bottom:4px"><b>Chưa thanh toán</b> · ${fmtN(o.vu)} · ${o.pays.unpaid.length} mục</div><div>${gchips(o.pays.unpaid,"var(--bad)")}</div></div></div>`,false)).join("")+`</div></div>`;
 }
-let dbtQ="",dbtSt=null,dbtCk=0; // ô lọc chữ; lọc theo chip: st = paid | unpaid; ck = 0 tắt, 1 đã kiểm tra, 2 chưa kiểm tra
+let dbtQ="",dbtSt=null,dbtCk=0,dbtD1="",dbtD2=""; // dbtD1/D2: lọc theo Ngày kiểm tra công nợ (yyyy-mm-dd)
+const dbtDate=v=>{if(v instanceof Date&&!isNaN(v))return sod(v);const m=String(v??"").trim().match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})/);return m?new Date(+m[3],+m[2]-1,+m[1]):null}; // ô lọc chữ; lọc theo chip: st = paid | unpaid; ck = 0 tắt, 1 đã kiểm tra, 2 chưa kiểm tra
 function nccDebtApply(){
   const m=$("#nccDebt");if(!m)return;const d=nccDebtRows(),by=new Map(d?d.out.map(o=>["dbt:"+o.name,o]):[]),k=NCC.fold(dbtQ).trim(),ck=d&&d.ckCol?d.ckCol.idx:null;let n=0;
   m.querySelectorAll("details[data-tdd]").forEach(x=>{
@@ -4527,18 +4528,22 @@ function nccDebtApply(){
       if(dbtSt==="paid"&&!o.pays.paid.length)ok=false;
       if(dbtSt==="unpaid"&&!o.pays.unpaid.length)ok=false;
       if(dbtCk&&ck!=null){const on=!!(o.row&&String(o.row.v[ck]??"").trim());if(dbtCk===1&&!on||dbtCk===2&&on)ok=false}
+      if((dbtD1||dbtD2)&&ck!=null){const dt=o.row?dbtDate(o.row.v[ck]):null,a=dbtD1?new Date(dbtD1+"T00:00:00"):null,b=dbtD2?new Date(dbtD2+"T00:00:00"):null;if(!dt||(a&&dt<a)||(b&&dt>b))ok=false}
     }
     x.hidden=!ok;if(ok)n++;
   });
-  const c=$("#dbtCnt");if(c)c.textContent=(dbtSt||dbtCk||k?n+" / ":"")+c.dataset.total+" NCC";
+  const c=$("#dbtCnt");if(c)c.textContent=(dbtSt||dbtCk||dbtD1||dbtD2||k?n+" / ":"")+c.dataset.total+" NCC";
   m.querySelectorAll(".dbt-f").forEach(b=>{const f=b.dataset.dflt,on=f==="paid"||f==="unpaid"?dbtSt===f:f==="ck"?dbtCk>0:false;b.style.fontWeight=on?"700":"";b.style.outline=on?"2px solid currentColor":"";
     if(f==="ck"&&b.dataset.base==null)b.dataset.base=b.textContent;if(f==="ck")b.textContent=b.dataset.base+(dbtCk===1?" · đang lọc: đã kiểm tra":dbtCk===2?" · đang lọc: chưa kiểm tra":"")});
 }
 function nccDebtFilter(v){dbtQ=v||"";nccDebtApply()} // một ô lọc cho cả bảng giá trị công nợ và phần Chi tiết
 function nccDebtBind(){
   const m=$("#nccDebt");if(!m)return;const d=nccDebtRows();
+  if($("#dbtD1")){$("#dbtD1").value=dbtD1;$("#dbtD2").value=dbtD2;
+    $("#dbtD1").onchange=e=>{dbtD1=e.target.value;nccDebtApply()};$("#dbtD2").onchange=e=>{dbtD2=e.target.value;nccDebtApply()};
+    $("#dbtDx").onclick=()=>{dbtD1=dbtD2="";$("#dbtD1").value=$("#dbtD2").value="";nccDebtApply()}}
   m.querySelectorAll(".dbt-f").forEach(b=>b.onclick=ev=>{ev.preventDefault();ev.stopPropagation();const f=b.dataset.dflt;
-    if(f==="all"){dbtSt=null;dbtCk=0;dbtQ="";if($("#dbtQ"))$("#dbtQ").value=""}
+    if(f==="all"){dbtSt=null;dbtCk=0;dbtQ="";dbtD1=dbtD2="";if($("#dbtQ"))$("#dbtQ").value="";if($("#dbtD1"))$("#dbtD1").value=$("#dbtD2").value=""}
     else if(f==="ck")dbtCk=(dbtCk+1)%3;
     else dbtSt=dbtSt===f?null:f;
     nccDebtApply()});
