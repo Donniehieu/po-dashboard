@@ -2457,9 +2457,9 @@ const colLabel=c=>c.label||c.name;
 const VIEWS=[
   {is:sh=>sh.wf,
    rename:[[/^tổng$/i,"Giá trị đơn hàng"],[/^note$/i,"Tiến độ hiện tại"],[/^ngày đổi trạng thái$/i,"Ngày cập nhật tiến độ"]],
-   order:[/^mã đơn hàng$/i,/^nhà cung cấp$/i,/^ngày nhận hàng dự kiến$/i,/^người mua$/i,/^nguồn$/i,/^tổng$/i,/^trạng thái quy trình$/i,/^trạng thái phiếu nhập kho$/i,/^trạng thái hóa đơn$/i,/^note$/i,/^ngày đổi trạng thái$/i,/^thanh toán trước$/i,/^ghi chú$/i]},
+   order:[/^mã đơn hàng$/i,/^nhà cung cấp$/i,/^ngày nhận hàng dự kiến$/i,/^ngày nhập kho$/i,/^người mua$/i,/^nguồn$/i,/^tổng$/i,/^trạng thái quy trình$/i,/^trạng thái phiếu nhập kho$/i,/^trạng thái hóa đơn$/i,/^note$/i,/^ngày đổi trạng thái$/i,/^thanh toán trước$/i,/^ghi chú$/i]},
   {is:sh=>IS_DS(sh.name),
-   order:[/^stt$/i,/^tên ncc$/i,/^(phân loại|note)$/i,/^phát sinh công nợ$/i,/^nhóm ncc$/i,/^trạng thái$/i,/^ngày điều chỉnh$/i,/^(ghi chú|ngày check)$/i]},
+   order:[/^stt$/i,/^tên ncc$/i,/^(phân loại|note)$/i,/^phát sinh công nợ$/i,/^nhóm ncc$/i,/^trạng thái$/i,/^ngày điều chỉnh$/i,/^số ngày công nợ$/i,/^(ghi chú|ngày check)$/i]},
   {is:sh=>sh.pay,
    rename:[[/^số pay$/i,"Số chứng từ"],[/^số ngày làm việc trễ$/i,"Số ngày quá hạn"],[/^nhắc kt thanh toán$/i,"Theo dõi tiến độ"]],
    hide:[/^số chứng từ hiện tại$/i],
@@ -2496,7 +2496,7 @@ function analyze(raw){
   const hIdx=re=>hdr.findIndex(h=>re.test(String(h||"").trim()));
   const isBank=/^thông tin thanh toán$/i.test(String(raw.name||"").trim()); // tab Thông tin thanh toán của NCC
   const payId=isPaySheet?hIdx(/^id odoo$/i):-1,payCid=isPaySheet?hIdx(/^mã công ty$/i):-1,bankId=isBank?hIdx(/^id odoo$/i):-1;
-  const forced=n=>/^hoàn thành$/i.test(n.trim())||(hasKey&&FORCE_RE.test(n.trim()))||(isDs&&/^(ngày điều chỉnh|nhóm ncc|ngày kiểm tra công nợ)$/i.test(n.trim()))||(isPaySheet&&/^ghi chú$/i.test(n.trim()))||(isBank&&/^(note|đã kiểm tra( thông tin)?)$/i.test(n.trim()));
+  const forced=n=>/^hoàn thành$/i.test(n.trim())||(hasKey&&FORCE_RE.test(n.trim()))||(isDs&&/^(ngày điều chỉnh|nhóm ncc|ngày kiểm tra công nợ|số ngày công nợ)$/i.test(n.trim()))||(isPaySheet&&/^ghi chú$/i.test(n.trim()))||(isBank&&/^(note|đã kiểm tra( thông tin)?)$/i.test(n.trim()));
   for(let c=0;c<maxC;c++){
     const name=(hdr[c]!=null?String(hdr[c]):"");
     const vals=rows.map(r=>r.v[c]).filter(x=>x!=null);
@@ -4712,6 +4712,7 @@ function renderTabs(){
   if(state.sheets.some(s=>s.wf))items.push({r:0.7,h:`<button data-i="po360" class="${on("po360")}">🔎 PO 360°</button>`});
   if(state.sheets.some(s=>s.wf))items.push({r:3.5,h:`<button data-i="report" class="${on("report")}">📝 Báo cáo công việc</button>`});
   if(state.sheets.some(s=>s.wf))items.push({r:4,h:`<button data-i="suppliers" class="${on("suppliers")}">🏭 Nhà cung cấp</button>`});
+  if(state.sheets.some(s=>s.wf)){const dn=dueTtRows().rows.length;items.push({r:4.5,h:`<button data-i="duett" class="${on("duett")}" title="PO công nợ của NCC sắp / đã đến hạn thanh toán (hạn = ngày nhập kho + số ngày công nợ của NCC)">⏰ Đến hạn TT<span class="n">${dn}</span></button>`})}
   state.sheets.forEach((s,i)=>items.push({r:rankSheet(s),h:`<button data-i="${i}" class="${on(i)}">${esc(s.name)}<span class="n">${s.rows.length}</span></button>`}));
   if(!state.nsSheet&&state.sheets.length)items.push({r:13,h:`<button data-i="nsload" title="Dữ liệu từ NetSuite (file riêng Netsuite_data.xlsx, tải khi bấm lần đầu)">📊 Netsuite Data</button>`});
   // Tab hay dùng nằm trên thanh; tab ít dùng gom vào “Khác ▾” cho thanh gọn (chọn một tab trong đó thì nút “Khác” hiện tên tab đang mở)
@@ -4720,7 +4721,7 @@ function renderTabs(){
   t.innerHTML=main.map(x=>x.h).join("")+(minor.length?`<button type="button" class="tmore ${minorOn?"on":""}" id="tMore" aria-haspopup="true">${minorOn?esc(lbl(minorOn.h)):"Khác"} ▾</button>`:"");
   let mn=$("#tmenu");if(!mn){mn=document.createElement("div");mn.id="tmenu";mn.className="tmenu";document.body.appendChild(mn)}
   mn.innerHTML=minor.map(x=>x.h).join("");mn.classList.remove("open");
-  const goTab=v=>{if(v==="nsload"){nsLoad(true);return}state.active=(v==="overview"||v==="priority"||v==="today"||v==="po360"||v==="history"||v==="suppliers"||v==="report")?v:+v;renderTabs();render();scrollTo(0,0)};
+  const goTab=v=>{if(v==="nsload"){nsLoad(true);return}state.active=(v==="overview"||v==="priority"||v==="today"||v==="po360"||v==="history"||v==="suppliers"||v==="report"||v==="duett")?v:+v;renderTabs();render();scrollTo(0,0)};
   t.querySelectorAll("button[data-i]").forEach(b=>b.onclick=()=>goTab(b.dataset.i));
   mn.querySelectorAll("button[data-i]").forEach(b=>b.onclick=()=>{mn.classList.remove("open");goTab(b.dataset.i)});
   const mb=$("#tMore");if(mb)mb.onclick=e=>{e.stopPropagation();if(mn.classList.toggle("open")){const r=mb.getBoundingClientRect();mn.style.left=Math.max(8,Math.min(r.left,innerWidth-mn.offsetWidth-8))+"px";mn.style.top=(r.bottom+4)+"px"}};
@@ -4747,8 +4748,8 @@ function navGo(d){
   if(NAV.h[NAV.i]&&NAV.h[NAV.i].k===cur)NAV.h[NAV.i].v=captureView();
   if(NAV.i>=0&&NAV.h[NAV.i].k!==cur){NAV.h.splice(NAV.i+1);NAV.h.push({k:cur,o:JSON.parse(cur),v:captureView()});if(NAV.h.length>NAV.max)NAV.h.shift();NAV.i=NAV.h.length-1}
   const j=NAV.i+d;if(j<0||j>=NAV.h.length)return;NAV.i=j;const o=NAV.h[j].o;
-  const si=typeof o.a==="string"&&!["overview","priority","today","po360","history","suppliers","report"].includes(o.a)?state.sheets.findIndex(x=>x.name===o.a):-1;
-  if(typeof o.a==="string"&&si<0&&!["overview","priority","today","po360","history","suppliers","report"].includes(o.a)){toast("Bảng đó không còn nữa.",true);navUi();return}
+  const si=typeof o.a==="string"&&!["overview","priority","today","po360","history","suppliers","report","duett"].includes(o.a)?state.sheets.findIndex(x=>x.name===o.a):-1;
+  if(typeof o.a==="string"&&si<0&&!["overview","priority","today","po360","history","suppliers","report","duett"].includes(o.a)){toast("Bảng đó không còn nữa.",true);navUi();return}
   NAV.lock=true;
   try{
     if(si>=0){const u=state.sheets[si].ui,v=o.u;u.filters={...v.filters};u.cf=Object.fromEntries(Object.entries(v.cf||{}).map(([k,f])=>[k,{...f,vals:f.vals?new Set(f.vals):null}]));
@@ -4767,7 +4768,7 @@ function render(){
   const same=state._rt===state.active,v=same?captureView():null;
   renderMain();state._rt=state.active;if(v)restoreView(v);
 }
-function renderMain(){state.active==="po360"?renderPo360():state.active==="report"?renderReport(true):state.active==="today"?renderToday():state.active==="overview"?renderOverview():state.active==="priority"?(state.active="today",renderToday()):state.active==="history"?renderHistory():state.active==="suppliers"?renderSuppliers():renderSheet(state.sheets[state.active])}
+function renderMain(){state.active==="po360"?renderPo360():state.active==="report"?renderReport(true):state.active==="today"?renderToday():state.active==="overview"?renderOverview():state.active==="priority"?(state.active="today",renderToday()):state.active==="history"?renderHistory():state.active==="suppliers"?renderSuppliers():state.active==="duett"?renderDueTt():renderSheet(state.sheets[state.active])}
 
 function sheetStats(sh){
   const o={rows:sh.rows.length};
@@ -5871,6 +5872,56 @@ function supplierExport(){
 function supplierImport(){
   const S=nccSheets();if(!S){toast("Không có tab Công nợ NCC để nhập (cần sheet “Công nợ NCC” và tab PO).",true);return}
   state.impTarget=S.dsSi;$("#fileImp").click();
+}
+/* ============ Đến hạn thanh toán: PO công nợ của NCC có hạn TT = Ngày nhập kho + Số ngày công nợ (cột ở tab Công nợ NCC) còn <= DUE_WARN ngày (kể cả đã quá hạn) ============ */
+const DUE_WARN=5;
+function dueParseD(v){
+  if(v instanceof Date)return isNaN(v)?null:sod(v);
+  const t=String(v??"").trim();if(!t)return null;
+  let m=/^(\d{1,2})\/(\d{1,2})\/(\d{4})/.exec(t);if(m)return new Date(+m[3],+m[2]-1,+m[1]);
+  m=/^(\d{4})-(\d{2})-(\d{2})/.exec(t);if(m)return new Date(+m[1],+m[2]-1,+m[3]);
+  return null}
+function dueTtRows(){
+  const out={rows:[],noTerm:new Map(),noDate:0,noCol:false,noDateCol:false,total:0};
+  const S=nccSheets();if(!S)return out;
+  const dc=S.ds.cols.find(c=>norm(c.name)==="số ngày công nợ");out.noCol=!dc;
+  const items=S.ds.rows.filter(r=>r.v[S.nc.idx]!=null&&String(r.v[S.nc.idx]).trim()).map(r=>({name:String(r.v[S.nc.idx]).trim(),row:r})),cache=new Map(items.map(it=>[it,NCC.cands(it.name)])),memo=new Map();
+  const find=sup=>{if(memo.has(sup))return memo.get(sup);const f=NCC.find(sup,items,cache),it=f.hits.length?items.find(i=>i.name===f.hits[0].name):null;memo.set(sup,it||null);return it};
+  state.sheets.forEach((sh,si)=>{if(!sh.wf)return;const ci=poSupplierOf(sh),ri=sh.cols.find(c=>norm(c.name)==="ngày nhập kho");if(ci==null)return;if(!ri)out.noDateCol=true;
+    sh.rows.forEach(r=>{
+      if(r.done||isPre(sh,r))return; // chỉ đơn công nợ chưa hoàn thành (đơn trả trước đã thanh toán trước khi nhận hàng)
+      const sup=String(r.v[ci]??"").trim();if(!sup)return;
+      const rd=ri?dueParseD(r.v[ri.idx]):null;
+      if(!rd){if(sh.rcIdx!=null&&wfn(r.v[sh.rcIdx])==="đã nhận hết")out.noDate++;return}
+      const pi=poPayInfo(sh,r);if(pi.paid)return;
+      const it=find(sup),raw=it&&dc?it.row.v[dc.idx]:null,days=raw==null||String(raw).trim()===""?NaN:parseInt(String(raw).replace(",","."),10);
+      if(!(days>=0)){const k=it?it.name:sup;out.noTerm.set(k,(out.noTerm.get(k)||0)+1);return}
+      out.total++;
+      const due=new Date(rd.getFullYear(),rd.getMonth(),rd.getDate()+days),left=Math.round((due-TODAY)/DAY);
+      if(left>DUE_WARN)return;
+      out.rows.push({si,sh,r,code:String(r.v[sh.title]??"").trim(),sup:it?it.name:sup,amt:sh.money?+r.v[sh.money.idx]||0:0,rd,days,due,left,pay:pi.state,pays:pi.live.map(x=>String(x.p.v[x.ps.title]??"").trim()).filter(Boolean),wf:r.wf})})});
+  out.rows.sort((a,b)=>a.left-b.left||b.amt-a.amt);return out}
+let dueQ="",dueOnlyLate=false;
+function renderDueTt(){
+  const d=dueTtRows(),q=NCC.fold(dueQ).trim();
+  const L=d.rows.filter(x=>(!q||NCC.fold(x.sup+" "+x.code).includes(q))&&(!dueOnlyLate||x.left<0));
+  const late=d.rows.filter(x=>x.left<0),soon=d.rows.length-late.length,sum=a=>a.reduce((t,x)=>t+x.amt,0);
+  const warns=[];
+  if(d.noCol)warns.push(`Tab <b>Công nợ NCC</b> chưa có cột <b>“Số ngày công nợ”</b> (đồng bộ Odoo kế tiếp sẽ tự thêm cột này; hoặc thêm tay vào dòng tiêu đề).`);
+  if(d.noDateCol)warns.push(`Tab PO chưa có cột <b>“Ngày nhập kho”</b> (đồng bộ Odoo kế tiếp sẽ tự thêm, lấy từ ngày hoàn tất phiếu nhập kho).`);
+  if(d.noTerm.size)warns.push(`<b>${d.noTerm.size} NCC</b> có PO đã nhập kho nhưng chưa có “Số ngày công nợ” nên chưa tính hạn: <i>${esc([...d.noTerm].slice(0,8).map(([k,n])=>k+" ("+n+" PO)").join("; "))}${d.noTerm.size>8?"…":""}</i>`);
+  if(d.noDate)warns.push(`${d.noDate} PO đã nhận hết hàng nhưng chưa có “Ngày nhập kho” nên chưa tính hạn.`);
+  const chip=(c,t)=>`<span class="chip" style="--c:${c}">${t}</span>`;
+  setMain(`<div class="toolbar"><input type="search" id="dueq" placeholder="Tìm NCC / mã PO…" value="${esc(dueQ)}"><label class="sub" style="display:inline-flex;gap:4px;align-items:center"><input type="checkbox" id="dueLate" ${dueOnlyLate?"checked":""}>Chỉ quá hạn</label><span class="sub">${L.length} PO · sắp theo hạn gần nhất</span></div>
+   <div class="note" style="margin:0 0 10px">Hạn thanh toán = <b>Ngày nhập kho + Số ngày công nợ</b> của NCC (cột ở tab Công nợ NCC). PO công nợ chưa thanh toán còn <b>≤ ${DUE_WARN} ngày</b> tới hạn (hoặc đã quá hạn) được liệt kê để làm thanh toán. Hôm nay: ${fmtD(TODAY)}.</div>
+   <div class="dbt-sum" style="margin-bottom:10px">${chip("var(--bad)",`Quá hạn ${late.length} PO · ${fmtN(sum(late))}`)} ${chip("var(--warn)",`Còn ≤ ${DUE_WARN} ngày ${soon} PO · ${fmtN(sum(d.rows)-sum(late))}`)}</div>
+   ${warns.map(w=>`<div class="note" style="margin:0 0 8px;border-color:var(--warn)">⚠ ${w}</div>`).join("")}
+   <div class="card scroll-x"><table class="mini"><thead><tr><th>Mã PO</th><th>Nhà cung cấp</th><th style="text-align:right">Giá trị</th><th>Ngày nhập kho</th><th style="text-align:right">Số ngày CN</th><th>Hạn TT</th><th>Còn lại</th><th>Thanh toán</th><th>Tiến độ</th></tr></thead><tbody>`+
+   (L.length?L.map((x,i)=>`<tr class="click" data-due="${i}"><td><a href="#" data-po360="${esc(x.code)}">${esc(x.code)}</a></td><td>${esc(x.sup)}</td><td class="num">${fmtN(x.amt)}</td><td>${fmtD(x.rd)}</td><td class="num">${x.days}</td><td>${fmtD(x.due)}</td><td style="font-weight:700;color:${x.left<0?"var(--bad)":x.left<=2?"var(--warn)":"inherit"}">${x.left<0?"quá "+(-x.left)+" ngày":x.left===0?"hôm nay":"còn "+x.left+" ngày"}</td><td>${esc(x.pay)}${x.pays.length?` <span class="sub">${esc(x.pays.join(", "))}</span>`:""}</td><td>${esc(x.wf||"")}</td></tr>`).join(""):`<tr><td colspan="9" class="sub" style="padding:16px">Không có PO nào đến hạn thanh toán.</td></tr>`)+`</tbody></table></div>`);
+  $("#dueq").oninput=e=>{dueQ=e.target.value;const p=e.target.selectionStart;renderDueTt();const n=$("#dueq");n.focus();n.setSelectionRange(p,p)};
+  $("#dueLate").onchange=e=>{dueOnlyLate=e.target.checked;renderDueTt()};
+  $("#main").querySelectorAll("a[data-po360]").forEach(a=>a.onclick=ev=>{ev.preventDefault();ev.stopPropagation();state.po360=a.dataset.po360;state.active="po360";renderTabs();render();scrollTo(0,0)});
+  $("#main").querySelectorAll("[data-due]").forEach(tr=>tr.onclick=()=>{const x=L[+tr.dataset.due];goSheet(x.si,{search:x.code.toLowerCase()})});
 }
 function renderSuppliers(){
   const q=(state.supQ||"").toLowerCase();
