@@ -5893,7 +5893,7 @@ function dueTtRows(){
       const sup=String(r.v[ci]??"").trim();if(!sup)return;
       const rd=ri?dueParseD(r.v[ri.idx]):null;
       if(!rd){if(sh.rcIdx!=null&&wfn(r.v[sh.rcIdx])==="đã nhận hết")out.noDate++;return}
-      const pi=poPayInfo(sh,r);if(pi.paid)return;
+      const pi=poPayInfo(sh,r);if(pi.paid||pi.live.length)return; // đã có phiếu PAY/BNK (đã hoặc chưa thanh toán) = đã làm TT -> không cần nhắc nữa
       const it=find(sup),raw=it&&dc?it.row.v[dc.idx]:null,days=raw==null||String(raw).trim()===""?NaN:parseInt(String(raw).replace(",","."),10);
       if(!(days>=0)){const k=it?it.name:sup;out.noTerm.set(k,(out.noTerm.get(k)||0)+1);return}
       out.total++;
@@ -5913,7 +5913,7 @@ function renderDueTt(){
   if(d.noDate)warns.push(`${d.noDate} PO đã nhận hết hàng nhưng chưa có “Ngày nhập kho” nên chưa tính hạn.`);
   const chip=(c,t)=>`<span class="chip" style="--c:${c}">${t}</span>`;
   setMain(`<div class="toolbar"><input type="search" id="dueq" placeholder="Tìm NCC / mã PO…" value="${esc(dueQ)}"><label class="sub" style="display:inline-flex;gap:4px;align-items:center"><input type="checkbox" id="dueLate" ${dueOnlyLate?"checked":""}>Chỉ quá hạn</label><span class="sub">${L.length} PO · sắp theo hạn gần nhất</span></div>
-   <div class="note" style="margin:0 0 10px">Hạn thanh toán = <b>Ngày nhập kho + Số ngày công nợ</b> của NCC (cột ở tab Công nợ NCC). PO công nợ chưa thanh toán còn <b>≤ ${DUE_WARN} ngày</b> tới hạn (hoặc đã quá hạn) được liệt kê để làm thanh toán. Hôm nay: ${fmtD(TODAY)}.</div>
+   <div class="note" style="margin:0 0 10px">Hạn thanh toán = <b>Ngày nhập kho + Số ngày công nợ</b> của NCC (cột ở tab Công nợ NCC). PO công nợ <b>chưa có phiếu PAY/BNK</b> còn <b>≤ ${DUE_WARN} ngày</b> tới hạn (hoặc đã quá hạn) được liệt kê để làm thanh toán. Hôm nay: ${fmtD(TODAY)}.</div>
    <div class="dbt-sum" style="margin-bottom:10px">${chip("var(--bad)",`Quá hạn ${late.length} PO · ${fmtN(sum(late))}`)} ${chip("var(--warn)",`Còn ≤ ${DUE_WARN} ngày ${soon} PO · ${fmtN(sum(d.rows)-sum(late))}`)}</div>
    ${warns.map(w=>`<div class="note" style="margin:0 0 8px;border-color:var(--warn)">⚠ ${w}</div>`).join("")}
    <div class="card scroll-x"><table class="mini"><thead><tr><th>Mã PO</th><th>Nhà cung cấp</th><th style="text-align:right">Giá trị</th><th>Ngày nhập kho</th><th style="text-align:right">Số ngày CN</th><th>Hạn TT</th><th>Còn lại</th><th>Thanh toán</th><th>Tiến độ</th></tr></thead><tbody>`+
