@@ -5884,7 +5884,7 @@ function dueParseD(v){
 function dueTtRows(){
   const out={rows:[],noTerm:new Map(),noDate:0,noCol:false,noDateCol:false,total:0};
   const S=nccSheets();if(!S)return out;
-  const dc=S.ds.cols.find(c=>norm(c.name)==="số ngày công nợ");out.noCol=!dc;
+  const dc=S.ds.cols.find(c=>norm(c.name)==="số ngày công nợ"),gcol=S.ds.cols.find(c=>norm(c.name)==="nhóm ncc");out.noCol=!dc;
   const items=S.ds.rows.filter(r=>r.v[S.nc.idx]!=null&&String(r.v[S.nc.idx]).trim()).map(r=>({name:String(r.v[S.nc.idx]).trim(),row:r})),cache=new Map(items.map(it=>[it,NCC.cands(it.name)])),memo=new Map();
   const find=sup=>{if(memo.has(sup))return memo.get(sup);const f=NCC.find(sup,items,cache),it=f.hits.length?items.find(i=>i.name===f.hits[0].name):null;memo.set(sup,it||null);return it};
   state.sheets.forEach((sh,si)=>{if(!sh.wf)return;const ci=poSupplierOf(sh),ri=sh.cols.find(c=>norm(c.name)==="ngày nhập kho");if(ci==null)return;if(!ri)out.noDateCol=true;
@@ -5899,9 +5899,17 @@ function dueTtRows(){
       out.total++;
       const due=new Date(rd.getFullYear(),rd.getMonth(),rd.getDate()+days),left=Math.round((due-TODAY)/DAY);
       if(left>DUE_WARN)return;
-      out.rows.push({si,sh,r,code:String(r.v[sh.title]??"").trim(),sup:it?it.name:sup,amt:sh.money?+r.v[sh.money.idx]||0:0,rd,days,due,left,pay:pi.state,pays:pi.live.map(x=>String(x.p.v[x.ps.title]??"").trim()).filter(Boolean),wf:r.wf})})});
+      out.rows.push({grp:(it&&gcol&&String(it.row.v[gcol.idx]??"").trim())||"(Chưa phân nhóm)",si,sh,r,code:String(r.v[sh.title]??"").trim(),sup:it?it.name:sup,amt:sh.money?+r.v[sh.money.idx]||0:0,rd,days,due,left,pay:pi.state,pays:pi.live.map(x=>String(x.p.v[x.ps.title]??"").trim()).filter(Boolean),wf:r.wf})})});
   out.rows.sort((a,b)=>a.left-b.left||b.amt-a.amt);return out}
 let dueQ="",dueOnlyLate=false;
+/* Gom theo NCC -> PO; NCC có PO gấp nhất (còn ít ngày nhất, hoặc đã quá hạn nhiều nhất) lên trên, trong NCC thì PO gấp lên trước. Gán x.i để bấm dòng mở đúng PO */
+function dueGroups(L){
+  const g=new Map();
+  L.forEach(x=>{if(!g.has(""))g.set("",new Map());const m=g.get("");if(!m.has(x.sup))m.set(x.sup,[]);m.get(x.sup).push(x)});
+  const mn=a=>Math.min(...a.map(x=>x.left)),sm=a=>a.reduce((t,x)=>t+x.amt,0),cmp=(a,b)=>mn(a)-mn(b)||sm(b)-sm(a);
+  const gs=[...g].map(([k,m])=>({k,ncc:[...m].map(([n,r])=>({n,r})).sort((a,b)=>cmp(a.r,b.r)),all:[...m.values()].flat()})).sort((a,b)=>cmp(a.all,b.all));
+  let i=0;const bad=a=>a.filter(x=>x.left<0).length,tag=a=>`<span class="sub">${a.length} PO · ${fmtN(sm(a))}${bad(a)?` · <b style="color:var(--bad)">${bad(a)} quá hạn</b>`:""}</span>`;
+  return gs.map(G=>G.ncc.map(N=>`<tr><td colspan="9" style="background:var(--card-2,rgba(128,128,128,.12));font-weight:700;padding:8px">🏭 ${esc(N.n)} ${tag(N.r)}</td></tr>`+N.r.sort((a,b)=>a.left-b.left||b.amt-a.amt).map(x=>{x.i=i++;return `<tr class="click" data-due="${x.i}"><td><a href="#" data-po360="${esc(x.code)}">${esc(x.code)}</a></td><td>${esc(x.sup)}</td><td class="num">${fmtN(x.amt)}</td><td>${fmtD(x.rd)}</td><td class="num">${x.days}</td><td>${fmtD(x.due)}</td><td style="font-weight:700;color:${x.left<0?"var(--bad)":x.left<=2?"var(--warn)":"inherit"}">${x.left<0?"quá "+(-x.left)+" ngày":x.left===0?"hôm nay":"còn "+x.left+" ngày"}</td><td>${esc(x.pay)}</td><td>${esc(x.wf||"")}</td></tr>`}).join("")).join("")).join("")}
 function renderDueTt(){
   const d=dueTtRows(),q=NCC.fold(dueQ).trim();
   const L=d.rows.filter(x=>(!q||NCC.fold(x.sup+" "+x.code).includes(q))&&(!dueOnlyLate||x.left<0));
@@ -5912,16 +5920,16 @@ function renderDueTt(){
   if(d.noTerm.size)warns.push(`<b>${d.noTerm.size} NCC</b> có PO đã nhập kho nhưng chưa có “Số ngày công nợ” nên chưa tính hạn: <i>${esc([...d.noTerm].slice(0,8).map(([k,n])=>k+" ("+n+" PO)").join("; "))}${d.noTerm.size>8?"…":""}</i>`);
   if(d.noDate)warns.push(`${d.noDate} PO đã nhận hết hàng nhưng chưa có “Ngày nhập kho” nên chưa tính hạn.`);
   const chip=(c,t)=>`<span class="chip" style="--c:${c}">${t}</span>`;
-  setMain(`<div class="toolbar"><input type="search" id="dueq" placeholder="Tìm NCC / mã PO…" value="${esc(dueQ)}"><label class="sub" style="display:inline-flex;gap:4px;align-items:center"><input type="checkbox" id="dueLate" ${dueOnlyLate?"checked":""}>Chỉ quá hạn</label><span class="sub">${L.length} PO · sắp theo hạn gần nhất</span></div>
+  setMain(`<div class="toolbar"><input type="search" id="dueq" placeholder="Tìm NCC / mã PO…" value="${esc(dueQ)}"><label class="sub" style="display:inline-flex;gap:4px;align-items:center"><input type="checkbox" id="dueLate" ${dueOnlyLate?"checked":""}>Chỉ quá hạn</label><span class="sub">${L.length} PO · gom theo NCC, PO gấp nhất lên trên</span></div>
    <div class="note" style="margin:0 0 10px">Hạn thanh toán = <b>Ngày nhập kho + Số ngày công nợ</b> của NCC (cột ở tab Công nợ NCC). PO công nợ <b>chưa có phiếu PAY/BNK</b> còn <b>≤ ${DUE_WARN} ngày</b> tới hạn (hoặc đã quá hạn) được liệt kê để làm thanh toán. Hôm nay: ${fmtD(TODAY)}.</div>
    <div class="dbt-sum" style="margin-bottom:10px">${chip("var(--bad)",`Quá hạn ${late.length} PO · ${fmtN(sum(late))}`)} ${chip("var(--warn)",`Còn ≤ ${DUE_WARN} ngày ${soon} PO · ${fmtN(sum(d.rows)-sum(late))}`)}</div>
    ${warns.map(w=>`<div class="note" style="margin:0 0 8px;border-color:var(--warn)">⚠ ${w}</div>`).join("")}
    <div class="card scroll-x"><table class="mini"><thead><tr><th>Mã PO</th><th>Nhà cung cấp</th><th style="text-align:right">Giá trị</th><th>Ngày nhập kho</th><th style="text-align:right">Số ngày CN</th><th>Hạn TT</th><th>Còn lại</th><th>Thanh toán</th><th>Tiến độ</th></tr></thead><tbody>`+
-   (L.length?L.map((x,i)=>`<tr class="click" data-due="${i}"><td><a href="#" data-po360="${esc(x.code)}">${esc(x.code)}</a></td><td>${esc(x.sup)}</td><td class="num">${fmtN(x.amt)}</td><td>${fmtD(x.rd)}</td><td class="num">${x.days}</td><td>${fmtD(x.due)}</td><td style="font-weight:700;color:${x.left<0?"var(--bad)":x.left<=2?"var(--warn)":"inherit"}">${x.left<0?"quá "+(-x.left)+" ngày":x.left===0?"hôm nay":"còn "+x.left+" ngày"}</td><td>${esc(x.pay)}${x.pays.length?` <span class="sub">${esc(x.pays.join(", "))}</span>`:""}</td><td>${esc(x.wf||"")}</td></tr>`).join(""):`<tr><td colspan="9" class="sub" style="padding:16px">Không có PO nào đến hạn thanh toán.</td></tr>`)+`</tbody></table></div>`);
+   (L.length?dueGroups(L):`<tr><td colspan="9" class="sub" style="padding:16px">Không có PO nào đến hạn thanh toán.</td></tr>`)+`</tbody></table></div>`);
   $("#dueq").oninput=e=>{dueQ=e.target.value;const p=e.target.selectionStart;renderDueTt();const n=$("#dueq");n.focus();n.setSelectionRange(p,p)};
   $("#dueLate").onchange=e=>{dueOnlyLate=e.target.checked;renderDueTt()};
   $("#main").querySelectorAll("a[data-po360]").forEach(a=>a.onclick=ev=>{ev.preventDefault();ev.stopPropagation();state.po360=a.dataset.po360;state.active="po360";renderTabs();render();scrollTo(0,0)});
-  $("#main").querySelectorAll("[data-due]").forEach(tr=>tr.onclick=()=>{const x=L[+tr.dataset.due];goSheet(x.si,{search:x.code.toLowerCase()})});
+  $("#main").querySelectorAll("[data-due]").forEach(tr=>tr.onclick=()=>{const x=L.find(y=>y.i===+tr.dataset.due);goSheet(x.si,{search:x.code.toLowerCase()})});
 }
 function renderSuppliers(){
   const q=(state.supQ||"").toLowerCase();
