@@ -5899,17 +5899,33 @@ function dueTtRows(){
       out.total++;
       const due=new Date(rd.getFullYear(),rd.getMonth(),rd.getDate()+days),left=Math.round((due-TODAY)/DAY);
       if(left>DUE_WARN)return;
-      out.rows.push({grp:(it&&gcol&&String(it.row.v[gcol.idx]??"").trim())||"(Chưa phân nhóm)",si,sh,r,code:String(r.v[sh.title]??"").trim(),sup:it?it.name:sup,amt:sh.money?+r.v[sh.money.idx]||0:0,rd,days,due,left,pay:pi.state,pays:pi.live.map(x=>String(x.p.v[x.ps.title]??"").trim()).filter(Boolean),wf:r.wf})})});
+      out.rows.push({co:dueCoOf(String(r.v[sh.title]??"").trim()),grp:(it&&gcol&&String(it.row.v[gcol.idx]??"").trim())||"(Chưa phân nhóm)",si,sh,r,code:String(r.v[sh.title]??"").trim(),sup:it?it.name:sup,amt:sh.money?+r.v[sh.money.idx]||0:0,rd,days,due,left,pay:pi.state,pays:pi.live.map(x=>String(x.p.v[x.ps.title]??"").trim()).filter(Boolean),wf:r.wf})})});
   out.rows.sort((a,b)=>a.left-b.left||b.amt-a.amt);return out}
-let dueQ="",dueOnlyLate=false;
-/* Gom theo NCC -> PO; NCC có PO gấp nhất (còn ít ngày nhất, hoặc đã quá hạn nhiều nhất) lên trên, trong NCC thì PO gấp lên trước. Gán x.i để bấm dòng mở đúng PO */
+let dueQ="",dueOnlyLate=false;const dueSel=new Set(); // dueSel: mã PO đang tick chọn tạm (không lưu, mất khi tải lại trang)
+const DUE_CO=[["PH","Cty DNPH (Điện Nước Phúc Hà)"],["DQ","Cty Phúc Hà Dung Quất"]]; // thứ tự hiển thị: DNPH trên, Dung Quất dưới
+const dueCoOf=code=>/^POKDQ/i.test(code)?"DQ":"PH"; // cùng quy tắc với nccDebtRows
+/* Gom Công ty mua -> NCC -> PO; công ty/NCC có PO gấp nhất (quá hạn nhiều nhất / còn ít ngày nhất) lên trên, trong NCC thì PO gấp lên trước. STT đánh lại từ 1 trong mỗi công ty */
 function dueGroups(L){
-  const g=new Map();
-  L.forEach(x=>{if(!g.has(""))g.set("",new Map());const m=g.get("");if(!m.has(x.sup))m.set(x.sup,[]);m.get(x.sup).push(x)});
   const mn=a=>Math.min(...a.map(x=>x.left)),sm=a=>a.reduce((t,x)=>t+x.amt,0),cmp=(a,b)=>mn(a)-mn(b)||sm(b)-sm(a);
-  const gs=[...g].map(([k,m])=>({k,ncc:[...m].map(([n,r])=>({n,r})).sort((a,b)=>cmp(a.r,b.r)),all:[...m.values()].flat()})).sort((a,b)=>cmp(a.all,b.all));
-  let i=0;const bad=a=>a.filter(x=>x.left<0).length,tag=a=>`<span class="sub">${a.length} PO · ${fmtN(sm(a))}${bad(a)?` · <b style="color:var(--bad)">${bad(a)} quá hạn</b>`:""}</span>`;
-  return gs.map(G=>G.ncc.map(N=>`<tr><td colspan="9" style="background:var(--card-2,rgba(128,128,128,.12));font-weight:700;padding:8px">🏭 ${esc(N.n)} ${tag(N.r)}</td></tr>`+N.r.sort((a,b)=>a.left-b.left||b.amt-a.amt).map(x=>{x.i=i++;return `<tr class="click" data-due="${x.i}"><td><a href="#" data-po360="${esc(x.code)}">${esc(x.code)}</a></td><td>${esc(x.sup)}</td><td class="num">${fmtN(x.amt)}</td><td>${fmtD(x.rd)}</td><td class="num">${x.days}</td><td>${fmtD(x.due)}</td><td style="font-weight:700;color:${x.left<0?"var(--bad)":x.left<=2?"var(--warn)":"inherit"}">${x.left<0?"quá "+(-x.left)+" ngày":x.left===0?"hôm nay":"còn "+x.left+" ngày"}</td><td>${esc(x.pay)}</td><td>${esc(x.wf||"")}</td></tr>`}).join("")).join("")).join("")}
+  const bad=a=>a.filter(x=>x.left<0).length,tag=a=>`<span class="sub">${a.length} PO · ${fmtN(sm(a))}${bad(a)?` · <b style="color:var(--bad)">${bad(a)} quá hạn</b>`:""}</span>`;
+  const ck=(a,k)=>{const n=a.filter(x=>dueSel.has(x.code)).length;return `<input type="checkbox" data-duek="${esc(k)}" ${n===a.length?"checked":""} title="Chọn / bỏ chọn tất cả PO ở nhóm này" onclick="event.stopPropagation()">`};
+  let html="",i=0;
+  for(const [co,coName] of DUE_CO){
+    const rows=L.filter(x=>x.co===co);if(!rows.length)continue;
+    const m=new Map();rows.forEach(x=>{if(!m.has(x.sup))m.set(x.sup,[]);m.get(x.sup).push(x)});
+    const ncc=[...m].map(([n,r])=>({n,r})).sort((a,b)=>cmp(a.r,b.r));let stt=0;
+    const sel=rows.filter(x=>dueSel.has(x.code));
+    html+=`<tr><td style="background:var(--accent,#2563eb);color:#fff;padding:8px"><span style="color:#fff">${ck(rows,"co:"+co)}</span></td><td colspan="8" style="background:var(--accent,#2563eb);color:#fff;font-weight:700;padding:8px">🏢 ${esc(coName)} · ${rows.length} PO · ${fmtN(sm(rows))}${bad(rows)?` · ${bad(rows)} quá hạn`:""}${sel.length?` · <u>đã chọn ${sel.length} PO: ${fmtN(sm(sel))}</u>`:""}</td></tr>`;
+    ncc.forEach(N=>{
+      html+=`<tr><td style="background:var(--card-2,rgba(128,128,128,.12));padding:8px">${ck(N.r,"ncc:"+co+"|"+N.n)}</td><td colspan="8" style="background:var(--card-2,rgba(128,128,128,.12));font-weight:700;padding:8px">🏭 ${esc(N.n)} ${tag(N.r)}</td></tr>`;
+      N.r.sort((a,b)=>a.left-b.left||b.amt-a.amt).forEach(x=>{x.i=i++;
+        html+=`<tr class="click" data-due="${x.i}"><td onclick="event.stopPropagation()"><input type="checkbox" data-duec="${esc(x.code)}" ${dueSel.has(x.code)?"checked":""} title="Tick tạm để cộng tổng tiền cần thanh toán"></td><td class="num">${++stt}</td><td><a href="#" data-po360="${esc(x.code)}">${esc(x.code)}</a></td><td class="num">${fmtN(x.amt)}</td><td>${fmtD(x.rd)}</td><td class="num">${x.days}</td><td>${fmtD(x.due)}</td><td style="font-weight:700;color:${x.left<0?"var(--bad)":x.left<=2?"var(--warn)":"inherit"}">${x.left<0?"quá "+(-x.left)+" ngày":x.left===0?"hôm nay":"còn "+x.left+" ngày"}</td><td>${esc(x.wf||"")}</td></tr>`})});
+  }
+  return html}
+function dueSelHtml(rows){
+  const sel=rows.filter(x=>dueSel.has(x.code)),sm=a=>a.reduce((t,x)=>t+x.amt,0);
+  if(!sel.length)return `☑ Tick ô bên trái từng PO (hoặc ô của NCC / công ty) để cộng tổng số tiền cần thanh toán.`;
+  return `☑ <b>Đã chọn ${sel.length} PO · Tổng cần thanh toán: ${fmtN(sm(sel))}</b>${DUE_CO.map(([c,n])=>{const a=sel.filter(x=>x.co===c);return a.length?` · ${esc(n.replace(/ \(.*/,""))}: ${a.length} PO · ${fmtN(sm(a))}`:""}).join("")} <button class="btn sm" id="dueClr">✕ Bỏ chọn</button>`}
 function renderDueTt(){
   const d=dueTtRows(),q=NCC.fold(dueQ).trim();
   const L=d.rows.filter(x=>(!q||NCC.fold(x.sup+" "+x.code).includes(q))&&(!dueOnlyLate||x.left<0));
@@ -5922,11 +5938,16 @@ function renderDueTt(){
   const chip=(c,t)=>`<span class="chip" style="--c:${c}">${t}</span>`;
   setMain(`<div class="toolbar"><input type="search" id="dueq" placeholder="Tìm NCC / mã PO…" value="${esc(dueQ)}"><label class="sub" style="display:inline-flex;gap:4px;align-items:center"><input type="checkbox" id="dueLate" ${dueOnlyLate?"checked":""}>Chỉ quá hạn</label><span class="sub">${L.length} PO · gom theo NCC, PO gấp nhất lên trên</span></div>
    <div class="note" style="margin:0 0 10px">Hạn thanh toán = <b>Ngày nhập kho + Số ngày công nợ</b> của NCC (cột ở tab Công nợ NCC). PO công nợ <b>chưa có phiếu PAY/BNK</b> còn <b>≤ ${DUE_WARN} ngày</b> tới hạn (hoặc đã quá hạn) được liệt kê để làm thanh toán. Hôm nay: ${fmtD(TODAY)}.</div>
+   <div class="note" id="dueSelBar" style="margin:0 0 10px;position:sticky;top:0;z-index:5;border-color:var(--ok)">${dueSelHtml(d.rows)}</div>
    <div class="dbt-sum" style="margin-bottom:10px">${chip("var(--bad)",`Quá hạn ${late.length} PO · ${fmtN(sum(late))}`)} ${chip("var(--warn)",`Còn ≤ ${DUE_WARN} ngày ${soon} PO · ${fmtN(sum(d.rows)-sum(late))}`)}</div>
    ${warns.map(w=>`<div class="note" style="margin:0 0 8px;border-color:var(--warn)">⚠ ${w}</div>`).join("")}
-   <div class="card scroll-x"><table class="mini"><thead><tr><th>Mã PO</th><th>Nhà cung cấp</th><th style="text-align:right">Giá trị</th><th>Ngày nhập kho</th><th style="text-align:right">Số ngày CN</th><th>Hạn TT</th><th>Còn lại</th><th>Thanh toán</th><th>Tiến độ</th></tr></thead><tbody>`+
+   <div class="card scroll-x"><table class="mini"><thead><tr><th></th><th style="text-align:right">STT</th><th>Mã PO</th><th style="text-align:right">Giá trị</th><th>Ngày nhập kho</th><th style="text-align:right">Số ngày CN</th><th>Hạn TT</th><th>Còn lại</th><th>Tiến độ</th></tr></thead><tbody>`+
    (L.length?dueGroups(L):`<tr><td colspan="9" class="sub" style="padding:16px">Không có PO nào đến hạn thanh toán.</td></tr>`)+`</tbody></table></div>`);
   $("#dueq").oninput=e=>{dueQ=e.target.value;const p=e.target.selectionStart;renderDueTt();const n=$("#dueq");n.focus();n.setSelectionRange(p,p)};
+  const redraw=()=>{renderDueTt()};
+  $("#main").querySelectorAll("[data-duec]").forEach(c=>c.onchange=()=>{c.checked?dueSel.add(c.dataset.duec):dueSel.delete(c.dataset.duec);redraw()});
+  $("#main").querySelectorAll("[data-duek]").forEach(c=>c.onchange=()=>{const k=c.dataset.duek,rs=k.startsWith("co:")?L.filter(x=>x.co===k.slice(3)):(()=>{const [co,n]=k.slice(4).split("|");return L.filter(x=>x.co===co&&x.sup===n)})();rs.forEach(x=>c.checked?dueSel.add(x.code):dueSel.delete(x.code));redraw()});
+  const cl=$("#dueClr");if(cl)cl.onclick=()=>{dueSel.clear();redraw()};
   $("#dueLate").onchange=e=>{dueOnlyLate=e.target.checked;renderDueTt()};
   $("#main").querySelectorAll("a[data-po360]").forEach(a=>a.onclick=ev=>{ev.preventDefault();ev.stopPropagation();state.po360=a.dataset.po360;state.active="po360";renderTabs();render();scrollTo(0,0)});
   $("#main").querySelectorAll("[data-due]").forEach(tr=>tr.onclick=()=>{const x=L.find(y=>y.i===+tr.dataset.due);goSheet(x.si,{search:x.code.toLowerCase()})});
