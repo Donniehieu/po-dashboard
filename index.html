@@ -2953,7 +2953,7 @@ async function loadBuffer(buf,name,opts={}){
     if(state.src==="github"&&ghReady())loadRemoteHistory();
     odooStart();loadOdooIds();
     setTimeout(()=>{checkRemovals().catch(()=>{})},900); // PO/PAY bị xóa hoặc hủy trên Odoo -> popup
-    setTimeout(()=>{try{applyPrintQueue();autoAdvanceSent()}catch(err){console.error(err)}},1400); // sự kiện "đã in Đề nghị thanh toán" đang chờ
+    setTimeout(()=>{try{applyPrintQueue();autoAdvanceSent();autoPrintTasks()}catch(err){console.error(err)}},1400); // sự kiện "đã in Đề nghị thanh toán" đang chờ
   }catch(e){
     console.error(e);
     if(err){err.hidden=false;err.textContent="Không đọc được file: "+e.message}
@@ -3758,6 +3758,22 @@ function autoAdvanceSent(){
   }}finally{state.via="dashboard"}
   if(moved.length){setStatus(po);softRender();toast("Tự động nâng → “"+PO_AFTER_PRINT+"”: "+moved.join("; "))}
   return moved;
+}
+/* Bù cho sự kiện In đã xử lý trước đây / bị lỡ: PAY chưa thanh toán đã có dòng “Đã gửi duyệt TT cho TP” (ghi khi bấm In) mà tab CV theo ngày chưa có việc in giấy -> tự thêm, tick hoàn thành (tự động). Mỗi PAY chỉ làm một lần (nhớ trong trình duyệt) nên việc đã xóa không tự mọc lại. */
+function autoPrintTasks(){
+  const psi=state.sheets.findIndex(s=>s.pay),ps=state.sheets[psi];
+  if(!ps||ps.payNoteIdx==null||state.stale||!state.sheets.some(x=>x.checklist&&/^cv theo ngày/.test(norm(x.name))))return 0;
+  const key="qlcv:printtasked",did=new Set(store.get(key)||[]);let n=0;
+  for(const r of ps.rows){
+    const no=String(r.v[ps.title]??"").trim();
+    if(!no||r.done||did.has(no)||!noteLines(r.v[ps.payNoteIdx]).some(l=>l.replace(NOTE_STAMP,"").startsWith(PROGRESS_SENT)))continue;
+    const t=addPrintTask([r],ps,psi,null,true);
+    if(t.err)continue;
+    did.add(no);n+=t.added||0;
+  }
+  store.set(key,[...did].slice(-1000));
+  if(n){softRender();toast(`Đã tự thêm ${n} việc “In giấy đề nghị thanh toán” (đã tick hoàn thành) vào tab CV theo ngày`)}
+  return n;
 }
 function applyPrintQueue(){ // -> khóa các sự kiện đã xử lý xong (để báo ngược cho Odoo Helper xóa)
   if(!state.sheets.length||state.stale)return [];
