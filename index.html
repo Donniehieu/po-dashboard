@@ -2639,6 +2639,8 @@ function setStatus(sh){
 }
 /* tick hoàn thành: nếu sheet có cột “Hoàn thành” thì ghi vào cột đó (như một chỉnh sửa), không thì chỉ lưu trong trình duyệt */
 const ckKey=sh=>"qlcv:"+state.fileName+":"+sh.name;
+const AUTO_DONE_RE=/\(tự động\)/i; // việc do hệ thống tự tạo và tự tick hoàn thành (vd. đã bấm In đề nghị thanh toán): không cho sửa tick
+const ckLocked=(sh,r)=>sh.checklist&&sh.doneColIdx!=null&&AUTO_DONE_RE.test(String(r.v[sh.doneColIdx]??""));
 function ckDone(sh,r){
   if(sh.doneColIdx!=null){const v=r.v[sh.doneColIdx];return v!=null&&!/chưa/i.test(String(v))}
   const m=sh._ck||(sh._ck=store.get(ckKey(sh))||{});
@@ -3108,6 +3110,7 @@ function setCell(si,r,ci,val,keyOv){
   bump();
   const sh=state.sheets[si];const old=r.v[ci];
   if(sameVal(old,val))return false;
+  if(sh.checklist&&ci===sh.doneColIdx&&AUTO_DONE_RE.test(String(old??""))){toast("Việc này do hệ thống tự tạo và tự tick hoàn thành, không sửa được.",true);return false}
   if(state.stale){toast('Đang cập nhật dữ liệu mới nhất từ GitHub, chưa sửa được. Nếu mất mạng, bản đang xem chỉ để đọc.',true);return false}
   const k=pkey(si,r.n,ci),ex=state.pending.get(k);
   const orig=ex?ex.old:old;
@@ -3685,7 +3688,7 @@ function pushProgress(old,text){ // nhật ký nhiều dòng "[dd/mm HH:mm] nộ
 }
 const PRINT_Q="qlcv:printq",PRINT_APPLIED="qlcv:printapplied",PROGRESS_SENT="Đã gửi duyệt TT cho TP",PO_AFTER_PRINT="Chờ gửi UNC",PO_BEFORE_PRINT="Chờ làm TT";
 /* Người dùng bấm “Không in” sau khi gửi đề nghị thanh toán trên Odoo -> thêm việc “In giấy ĐNTT” vào tab CV theo ngày, Tham chiếu = PAY-PO */
-function addPrintTask(rows,ps,psi,idOnly){ // idOnly: phiếu vừa tạo trên Odoo, chưa đồng bộ về dashboard -> vẫn thêm việc theo số PAY, chưa có danh sách PO
+function addPrintTask(rows,ps,psi,idOnly,auto){ // auto: người dùng đã bấm In -> việc được tạo sẵn ở trạng thái hoàn thành (tự động), khóa tick // idOnly: phiếu vừa tạo trên Odoo, chưa đồng bộ về dashboard -> vẫn thêm việc theo số PAY, chưa có danh sách PO
   const ci=state.sheets.findIndex(x=>x.checklist&&/^cv theo ngày/.test(norm(x.name))),cv=state.sheets[ci];
   const r0=rows[0],no=r0?String(r0.v[ps.title]??"").trim():String(idOnly||"").trim();
   if(!cv)return {found:true,pay:false,pos:[],skipped:[],no,added:0,err:"chưa có tab CV theo ngày"};
@@ -3693,11 +3696,17 @@ function addPrintTask(rows,ps,psi,idOnly){ // idOnly: phiếu vừa tạo trên 
   if(ti==null||!ri)return {found:true,pay:false,pos:[],skipped:[],no,added:0,err:"tab CV theo ngày thiếu cột Tên việc/Tham chiếu"};
   let added=0;
   const pos=r0&&ps.payPoIdx!=null?String(r0.v[ps.payPoIdx]??"").split(/[,;\s]+/).map(x=>x.trim().toUpperCase()).filter(Boolean):[];
-  const ref=no+(pos.length?"-"+pos.join(","):"");
+  const amt=r0&&ps.money?+r0.v[ps.money.idx]||0:0,ncc=r0&&ps.sub!=null?String(r0.v[ps.sub]??"").trim():"";
+  const ref=no+(r0?"-"+fmtN(amt)+(ncc?"-"+ncc:""):""); // Tham chiếu: PAY-số tiền-tên NCC (bấm PAY mở phiếu trên Odoo)
   const title="In giấy đề nghị thanh toán "+no;
-  if(cv.rows.some(x=>(String(x.v[ri.idx]??"").trim().toUpperCase()===ref.toUpperCase()||norm(x.v[ti])===norm(title))&&!ckDone(cv,x)))return {found:true,pay:false,pos:[],skipped:[],no,added:0}; // đã có việc này, chưa xong
-  state.via="Odoo Helper (không in đề nghị)";
-  try{const nr=addRow(ci,true);setCell(ci,nr,ti,title);setCell(ci,nr,ri.idx,ref);added=1;setStatus(cv)}finally{state.via="dashboard"}
+  const ex=cv.rows.find(x=>(String(x.v[ri.idx]??"").trim().toUpperCase()===ref.toUpperCase()||norm(x.v[ti])===norm(title))&&(auto||!ckDone(cv,x)));
+  if(ex&&!auto)return {found:true,pay:false,pos:[],skipped:[],no,added:0}; // đã có việc này, chưa xong
+  const doneVal=auto&&cv.doneColIdx!=null?"Đã xong "+fmtDS(TODAY)+" (tự động)":null;
+  state.via=auto?"Odoo Helper (đã in đề nghị)":"Odoo Helper (không in đề nghị)";
+  try{
+    if(ex){if(doneVal&&!ckLocked(cv,ex)&&!ckDone(cv,ex)&&setCell(ci,ex,cv.doneColIdx,doneVal)){added=1;setStatus(cv)}} // đã có việc (do bấm “Không in” trước đó) -> chuyển thành hoàn thành tự động
+    else{const nr=addRow(ci,true);setCell(ci,nr,ti,title);setCell(ci,nr,ri.idx,ref);if(doneVal)setCell(ci,nr,cv.doneColIdx,doneVal);added=1;setStatus(cv)}
+  }finally{state.via="dashboard"}
   return {found:true,pay:false,pos:[],skipped:[],no,added};
 }
 function applyPrintEvent(e){ // -> {found, pay, pos:[mã PO đã chuyển]}
@@ -3730,7 +3739,8 @@ function applyPrintEvent(e){ // -> {found, pay, pos:[mã PO đã chuyển]}
     }
   }}finally{state.via="dashboard"}
   if(pay||moved.length){setStatus(ps);if(po)setStatus(po)}
-  return {found:true,pay,pos:moved,skipped,no:rows[0].v[ps.title]};
+  const t=addPrintTask(rows,ps,psi,null,true);
+  return {found:true,pay,pos:moved,skipped,no:rows[0].v[ps.title],added:t.added,err:t.err,auto:true};
 }
 /* Tự nâng PO theo ghi chú của PAY: PAY chưa thanh toán đã có dòng “Đã gửi duyệt TT cho TP” (ghi khi bấm In đề nghị thanh toán)
    mà PO liên quan còn ở “Chờ làm TT” -> “Chờ gửi UNC”. Bù cho trường hợp lúc in phiếu chưa có PO liên quan (PO về sau mới điền). */
@@ -3759,7 +3769,7 @@ function applyPrintQueue(){ // -> khóa các sự kiện đã xử lý xong (đ�
     if(!r.found)continue; // chưa thấy phiếu trên bảng (dữ liệu chưa về): giữ lại thử sau
     applied.add(e.k);done.push(e.k);
     if(r.skipped.length)msgs.push(`${r.no}: PO ${r.skipped.join(", ")} chưa ở “${PO_BEFORE_PRINT}” nên chưa tự chuyển sang “${PO_AFTER_PRINT}”`);
-    if(r.added)msgs.push(`${r.no}: đã thêm việc “In giấy đề nghị thanh toán” vào tab CV theo ngày`);
+    if(r.added)msgs.push(`${r.no}: đã thêm việc “In giấy đề nghị thanh toán” vào tab CV theo ngày${r.auto?" (tự tick hoàn thành)":""}`);
     else if(r.err)msgs.push(`${r.no}: chưa thêm được việc in giấy (${r.err})`);
     if(r.pay||r.pos.length)msgs.push(`${r.no}: “${PROGRESS_SENT}”${r.pos.length?" · PO "+r.pos.join(", ")+" → “"+PO_AFTER_PRINT+"”":""}`);
   }
@@ -4629,7 +4639,8 @@ function paySumsOf(sup){ // tổng tiền phiếu PAY của NCC (tên khớp kh�
 /* PO đang Chờ gửi UNC: ghi thêm số PAY và số BNK (số chứng từ hiện tại) của các phiếu thanh toán gắn với PO */
 function po360PayNos(pi){
   const o=[];for(const {p,ps} of pi.pays){const no=String(p.v[ps.title]??"").trim(),cur=ps.payCurIdx!=null?String(p.v[ps.payCurIdx]??"").trim():"";
-    if(no)o.push(`<span class="chip" style="--c:var(--brand)">${esc(no)}</span>`);if(cur&&cur!==no&&/bnk/i.test(cur))o.push(`<span class="chip" style="--c:var(--ok)">${esc(cur)}</span>`)}
+    const am=ps.money?+p.v[ps.money.idx]||0:0,nc=ps.sub!=null?String(p.v[ps.sub]??"").trim():"",lab=no+(am?"-"+fmtN(am):"")+(nc?"-"+nc:""); // PAY-số tiền-tên NCC
+    if(no)o.push(`<span class="chip" style="--c:var(--brand)" title="Phiếu ${esc(no)}">${esc(lab)}</span>`);if(cur&&cur!==no&&/bnk/i.test(cur))o.push(`<span class="chip" style="--c:var(--ok)">${esc(cur)}</span>`)}
   return o.length?" "+o.join(" "):` <span class="sub">chưa có PAY/BNK</span>`;
 }
 function po360NccHtml(q,list){
@@ -5430,7 +5441,7 @@ function renderTable(sh,fr){
     h+=`<tr data-row="${r.n}" class="${r.st==="overdue"?"od":r.st==="soon"?"sn":""} ${dn?"dn":""} ${sh.wf&&!r.done&&mrpOf(r.v[sh.title])?"mrp":""}">`;
     h+=`<td class="rn">${ri+1}</td>`;
     h+=`<td class="flag sel"><input type="checkbox" data-sel="${r.n}" ${selSet.has(r.n)?"checked":""} aria-label="Chọn dòng"></td>`;
-    if(sh.checklist)h+=`<td class="flag" data-l="Trạng thái"><input type="checkbox" data-ck="${r.n}" ${dn?"checked":""} aria-label="Hoàn thành"></td>`;
+    if(sh.checklist)h+=`<td class="flag" data-l="Trạng thái"><input type="checkbox" data-ck="${r.n}" ${dn?"checked":""} ${ckLocked(sh,r)?`disabled title="Việc tự động (đã bấm In): đã tick hoàn thành, không sửa được"`:""} aria-label="Hoàn thành"></td>`;
     for(const c of cols){const v=r.v[c.idx];let cell="";
       if(c.type==="flag"){h+=`<td class="flag" data-l="TT trước"><input type="checkbox" data-pay="${r.n}" ${isPay(v)?"checked":""} disabled aria-label="Thanh toán trước (tự động)" title="Tự động theo Phân loại của NCC ở tab Công nợ NCC (Đơn hàng = tick, Công nợ = bỏ tick). Không tick tay được."></td>`;continue}
       if(sh.wf&&c.idx===sh.noteIdx){
@@ -5499,7 +5510,7 @@ function renderTable(sh,fr){
   t.querySelectorAll("a.sl").forEach(a=>{a.onclick=e=>{e.preventDefault();e.stopPropagation();u.filters[+a.dataset.sup]=a.dataset.v;u.shown=100;renderDyn(sh);const tb=$("#tbl");if(tb)tb.scrollIntoView({block:"start"});toast("Đang lọc các PO của: "+a.dataset.v)};a.ondblclick=e=>e.stopPropagation()});
   t.querySelectorAll("[data-chk]").forEach(cb=>cb.onchange=()=>{const r=sh.rows.find(x=>x.n===+cb.dataset.chk);if(!r)return;state.via="dashboard";setCell(si,r,sh.chkIdx,cb.checked?"Có":null);renderDyn(sh,true,r.n);updateChrome()});
   t.querySelectorAll("[data-ck]").forEach(cb=>cb.onchange=()=>{
-    const n=+cb.dataset.ck,r=sh.rows.find(x=>x.n===n);
+    const n=+cb.dataset.ck,r=sh.rows.find(x=>x.n===n);if(r&&ckLocked(sh,r)){cb.checked=true;return}
     if(sh.doneColIdx!=null){state.via="dashboard";setCell(si,r,sh.doneColIdx,cb.checked?"Đã xong "+fmtDS(TODAY):null)}
     else{const m=sh._ck||(sh._ck=store.get(ckKey(sh))||{});m[n]=cb.checked;store.set(ckKey(sh),m)}
     renderDyn(sh,true,n);updateChrome();});
