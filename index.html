@@ -4639,7 +4639,7 @@ function paySumsOf(sup){ // tổng tiền phiếu PAY của NCC (tên khớp kh�
 /* PO đang Chờ gửi UNC: ghi thêm số PAY và số BNK (số chứng từ hiện tại) của các phiếu thanh toán gắn với PO */
 function po360PayNos(pi){
   const o=[];for(const {p,ps} of pi.pays){const no=String(p.v[ps.title]??"").trim(),cur=ps.payCurIdx!=null?String(p.v[ps.payCurIdx]??"").trim():"";
-    if(no)o.push(`<span class="chip" style="--c:var(--brand)">${esc(no)}</span>`);
+    if(no)o.push(`<span class="chip" style="--c:var(--brand)">${esc(no)}</span>`);if(cur&&cur!==no&&/bnk/i.test(cur))o.push(`<span class="chip" style="--c:var(--ok)">${esc(cur)}</span>`)}
   return o.length?" "+o.join(" "):` <span class="sub">chưa có PAY/BNK</span>`;
 }
 function po360NccHtml(q,list){
