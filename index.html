@@ -4801,7 +4801,8 @@ function renderMain(){state.active==="po360"?renderPo360():state.active==="repor
 
 function sheetStats(sh){
   const o={rows:sh.rows.length};
-  if(sh.checklist){const d=sh.rows.filter(r=>ckDone(sh,r)).length;o.done=d;o.pct=sh.rows.length?d/sh.rows.length:0}
+  if(sh.checklist){const d=sh.rows.filter(r=>ckDone(sh,r)).length;o.done=d;o.pct=sh.rows.length?d/sh.rows.length:0;
+    if(/^cv theo ngày/.test(norm(sh.name)))o.cats=["buy","print","huong"].map(k=>{const a=sh.rows.filter(r=>ckCat(sh,r)===k),dn=a.filter(r=>ckDone(sh,r)).length;return{label:CK_CATS.find(c=>c[0]===k)[1],done:dn,total:a.length,pct:a.length?dn/a.length:0}})} // tiến độ hoàn thành theo đầu mục: Mua hàng / In đề nghị TT / Nhắc chị Hương
   else if(sh.progIdx!=null){const d=sh.rows.filter(r=>r.done).length;o.done=d;o.pct=sh.rows.length?d/sh.rows.length:0}
   else if(sh.bank&&sh.chkIdx!=null){const d=sh.rows.filter(r=>String(r.v[sh.chkIdx]??"").trim()!=="").length;o.done=d;o.pct=sh.rows.length?d/sh.rows.length:0;o.lbl="Đã kiểm tra"} // Thông tin thanh toán: đã kiểm tra / tổng
   o.overdue=sh.rows.filter(r=>r.st==="overdue").length;
@@ -4823,7 +4824,8 @@ function renderOverview(){
   sheets.forEach((s,i)=>{
     const x=st[i];
     let line="";
-    if(x.pct!=null)line+=`<div class="prog"><i style="width:${(x.pct*100).toFixed(0)}%"></i></div><div class="sub">${x.lbl||"Hoàn thành"}: <b>${x.done}/${x.rows}</b> (${(x.pct*100).toFixed(0)}%)</div>`;
+    if(x.cats)line+=x.cats.map(c=>`<div class="sub" style="margin-top:6px">${c.label}: <b>${c.done}/${c.total}</b> ${c.total?`(${(c.pct*100).toFixed(0)}%)`:""}</div><div class="prog"><i style="width:${(c.pct*100).toFixed(0)}%"></i></div>`).join("");
+    else if(x.pct!=null)line+=`<div class="prog"><i style="width:${(x.pct*100).toFixed(0)}%"></i></div><div class="sub">${x.lbl||"Hoàn thành"}: <b>${x.done}/${x.rows}</b> (${(x.pct*100).toFixed(0)}%)</div>`;
     let extra=[];
     if(x.sum!=null&&s.money)extra.push(`${/^(tổng|giá trị)/i.test(colLabel(s.money))?"":"Tổng "}${esc(colLabel(s.money))}: <b>${fmtBig(x.sum)}</b>`);
     if(x.overdue)extra.push(`<span class="late">${x.overdue} quá hạn</span>`);
