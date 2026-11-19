@@ -2639,6 +2639,9 @@ function setStatus(sh){
 }
 /* tick hoàn thành: nếu sheet có cột “Hoàn thành” thì ghi vào cột đó (như một chỉnh sửa), không thì chỉ lưu trong trình duyệt */
 const ckKey=sh=>"qlcv:"+state.fileName+":"+sh.name;
+/* Phân nhóm việc ở tab CV theo ngày theo Tên việc: nhắc chị Hương / in đề nghị thanh toán / còn lại = mua hàng */
+const CK_CATS=[["huong","📞 Nhắc chị Hương"],["print","🖨 In đề nghị thanh toán"],["buy","🛒 Mua hàng"]];
+const ckCat=(sh,r)=>{const t=norm(r.v[sh.title]);return /chị hương|chi huong/.test(t)?"huong":/^in giấy|đề nghị thanh toán/.test(t)?"print":"buy"};
 const AUTO_DONE_RE=/\(tự động\)/i; // việc do hệ thống tự tạo và tự tick hoàn thành (vd. đã bấm In đề nghị thanh toán): không cho sửa tick
 const ckLocked=(sh,r)=>sh.checklist&&sh.doneColIdx!=null&&AUTO_DONE_RE.test(String(r.v[sh.doneColIdx]??""));
 function ckDone(sh,r){
@@ -5451,13 +5454,18 @@ function renderTable(sh,fr){
     ${hid.size?`<div class="hidbar">Cột đang ẩn: ${sh.cols.filter(c=>hid.has(c.idx)).map(c=>`<button class="btn sm" data-showcol="${c.idx}" title="Hiện lại cột này">＋ ${esc(c.type==="flag"?"TT trước":colLabel(c))}</button>`).join("")}<button class="btn sm" data-showcol="all">Hiện tất cả</button></div>`:""}
     <div class="tablewrap ${sh.wf?"cards":""}"><table class="${sh.wf?"cardtbl":""}"><thead><tr><th title="Số thứ tự các dòng đang hiển thị (tự đánh lại 1, 2, 3… theo bộ lọc/tìm kiếm/sắp xếp hiện tại)">STT</th><th class="flag"><input type="checkbox" data-selall title="Chọn tất cả dòng đang hiện"></th>${sh.checklist?"<th class=\"flag\">Trạng thái</th>":""}`+
     cols.map(c=>{const on=u.cf[c.idx]?" on":"";const lab=c.type==="flag"?"TT trước":colLabel(c);return `<th data-s="${c.idx}" class="${c.type==="flag"?"flag":""}" title="${c.type==="flag"?"Tick = PO thanh toán trước (luồng có Chờ làm TT / Đã gửi UNC)":""}">${esc(lab)}${u.sort&&u.sort.i===c.idx?(u.sort.dir>0?" ▲":" ▼"):""}<button class="fb${on}" data-f="${c.idx}" title="Lọc cột này">▾</button></th>`}).join("")+`<th></th></tr></thead><tbody>`;
-  let ckN={act:0,done:0},lastG=null; // tab CV theo ngày: nhóm “Đang thực hiện” ở trên, nhóm “Hoàn thành” ở dưới, mỗi nhóm đóng/mở được
-  if(sh.checklist){const A=[],D=[];rows.forEach(r=>(ckDone(sh,r)?D:A).push(r));ckN={act:A.length,done:D.length};rows=[...A,...D]}
+  let ckN={act:0,done:0},lastG=null,lastC=null; // tab CV theo ngày: nhóm “Đang thực hiện” ở trên, “Hoàn thành” ở dưới; trong mỗi nhóm chia theo loại việc (Nhắc chị Hương / In đề nghị TT / Mua hàng); đều đóng/mở được
+  if(sh.checklist){const A=[],D=[],ci=r=>CK_CATS.findIndex(c=>c[0]===ckCat(sh,r));rows.forEach(r=>(ckDone(sh,r)?D:A).push(r));
+    const by=a=>a.map((r,i)=>[r,i]).sort((x,y)=>ci(x[0])-ci(y[0])||x[1]-y[1]).map(x=>x[0]); // giữ thứ tự sắp xếp hiện tại trong từng loại
+    ckN={act:A.length,done:D.length};[...A,...D].forEach(r=>{const k=(ckDone(sh,r)?"done":"act")+":"+ckCat(sh,r);ckN[k]=(ckN[k]||0)+1});rows=[...by(A),...by(D)]}
   for(const [ri,r] of rows.slice(0,u.shown).entries()){
     const dn=sh.checklist?ckDone(sh,r):(sh.progIdx!=null&&r.done);
     if(sh.checklist){const g=dn?"done":"act";
-      if(g!==lastG){lastG=g;const cl=!!(u.ckg&&u.ckg[g]);h+=`<tr class="ckgrp click" data-ckg="${g}"><td colspan="${cols.length+4}" style="background:var(--card-2,rgba(128,128,128,.12));font-weight:700;padding:8px;cursor:pointer">${cl?"▸":"▾"} ${g==="act"?"🟢 Đang thực hiện":"✅ Hoàn thành"} <span class="sub">${ckN[g]} việc</span></td></tr>`}
-      if(u.ckg&&u.ckg[g])continue}
+      if(g!==lastG){lastG=g;lastC=null;const cl=!!(u.ckg&&u.ckg[g]);h+=`<tr class="ckgrp click" data-ckg="${g}"><td colspan="${cols.length+4}" style="background:var(--card-2,rgba(128,128,128,.12));font-weight:700;padding:8px;cursor:pointer">${cl?"▸":"▾"} ${g==="act"?"🟢 Đang thực hiện":"✅ Hoàn thành"} <span class="sub">${ckN[g]} việc</span></td></tr>`}
+      if(u.ckg&&u.ckg[g])continue
+      const c=ckCat(sh,r),ck=g+":"+c;
+      if(ck!==lastC){lastC=ck;const cl=!!(u.ckg&&u.ckg[ck]);h+=`<tr class="ckgrp click" data-ckg="${ck}"><td colspan="${cols.length+4}" style="padding:6px 8px 6px 22px;font-weight:600;cursor:pointer">${cl?"▸":"▾"} ${CK_CATS.find(x=>x[0]===c)[1]} <span class="sub">${ckN[ck]} việc</span></td></tr>`}
+      if(u.ckg&&u.ckg[ck])continue}
     h+=`<tr data-row="${r.n}" class="${r.st==="overdue"?"od":r.st==="soon"?"sn":""} ${dn?"dn":""} ${sh.wf&&!r.done&&mrpOf(r.v[sh.title])?"mrp":""}">`;
     h+=`<td class="rn">${ri+1}</td>`;
     h+=`<td class="flag sel"><input type="checkbox" data-sel="${r.n}" ${selSet.has(r.n)?"checked":""} aria-label="Chọn dòng"></td>`;
