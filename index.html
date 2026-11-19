@@ -5451,8 +5451,13 @@ function renderTable(sh,fr){
     ${hid.size?`<div class="hidbar">Cột đang ẩn: ${sh.cols.filter(c=>hid.has(c.idx)).map(c=>`<button class="btn sm" data-showcol="${c.idx}" title="Hiện lại cột này">＋ ${esc(c.type==="flag"?"TT trước":colLabel(c))}</button>`).join("")}<button class="btn sm" data-showcol="all">Hiện tất cả</button></div>`:""}
     <div class="tablewrap ${sh.wf?"cards":""}"><table class="${sh.wf?"cardtbl":""}"><thead><tr><th title="Số thứ tự các dòng đang hiển thị (tự đánh lại 1, 2, 3… theo bộ lọc/tìm kiếm/sắp xếp hiện tại)">STT</th><th class="flag"><input type="checkbox" data-selall title="Chọn tất cả dòng đang hiện"></th>${sh.checklist?"<th class=\"flag\">Trạng thái</th>":""}`+
     cols.map(c=>{const on=u.cf[c.idx]?" on":"";const lab=c.type==="flag"?"TT trước":colLabel(c);return `<th data-s="${c.idx}" class="${c.type==="flag"?"flag":""}" title="${c.type==="flag"?"Tick = PO thanh toán trước (luồng có Chờ làm TT / Đã gửi UNC)":""}">${esc(lab)}${u.sort&&u.sort.i===c.idx?(u.sort.dir>0?" ▲":" ▼"):""}<button class="fb${on}" data-f="${c.idx}" title="Lọc cột này">▾</button></th>`}).join("")+`<th></th></tr></thead><tbody>`;
+  let ckN={act:0,done:0},lastG=null; // tab CV theo ngày: nhóm “Đang thực hiện” ở trên, nhóm “Hoàn thành” ở dưới, mỗi nhóm đóng/mở được
+  if(sh.checklist){const A=[],D=[];rows.forEach(r=>(ckDone(sh,r)?D:A).push(r));ckN={act:A.length,done:D.length};rows=[...A,...D]}
   for(const [ri,r] of rows.slice(0,u.shown).entries()){
     const dn=sh.checklist?ckDone(sh,r):(sh.progIdx!=null&&r.done);
+    if(sh.checklist){const g=dn?"done":"act";
+      if(g!==lastG){lastG=g;const cl=!!(u.ckg&&u.ckg[g]);h+=`<tr class="ckgrp click" data-ckg="${g}"><td colspan="${cols.length+4}" style="background:var(--card-2,rgba(128,128,128,.12));font-weight:700;padding:8px;cursor:pointer">${cl?"▸":"▾"} ${g==="act"?"🟢 Đang thực hiện":"✅ Hoàn thành"} <span class="sub">${ckN[g]} việc</span></td></tr>`}
+      if(u.ckg&&u.ckg[g])continue}
     h+=`<tr data-row="${r.n}" class="${r.st==="overdue"?"od":r.st==="soon"?"sn":""} ${dn?"dn":""} ${sh.wf&&!r.done&&mrpOf(r.v[sh.title])?"mrp":""}">`;
     h+=`<td class="rn">${ri+1}</td>`;
     h+=`<td class="flag sel"><input type="checkbox" data-sel="${r.n}" ${selSet.has(r.n)?"checked":""} aria-label="Chọn dòng"></td>`;
@@ -5524,6 +5529,7 @@ function renderTable(sh,fr){
   t.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>deleteRow(si,+b.dataset.del));
   t.querySelectorAll("a.sl").forEach(a=>{a.onclick=e=>{e.preventDefault();e.stopPropagation();u.filters[+a.dataset.sup]=a.dataset.v;u.shown=100;renderDyn(sh);const tb=$("#tbl");if(tb)tb.scrollIntoView({block:"start"});toast("Đang lọc các PO của: "+a.dataset.v)};a.ondblclick=e=>e.stopPropagation()});
   t.querySelectorAll("[data-chk]").forEach(cb=>cb.onchange=()=>{const r=sh.rows.find(x=>x.n===+cb.dataset.chk);if(!r)return;state.via="dashboard";setCell(si,r,sh.chkIdx,cb.checked?"Có":null);renderDyn(sh,true,r.n);updateChrome()});
+  t.querySelectorAll("tr[data-ckg]").forEach(tr=>tr.onclick=()=>{const g=tr.dataset.ckg;u.ckg=u.ckg||{};u.ckg[g]=!u.ckg[g];renderTable(sh,fr)}); // đóng / mở nhóm Đang thực hiện, Hoàn thành
   t.querySelectorAll("[data-ck]").forEach(cb=>cb.onchange=()=>{
     const n=+cb.dataset.ck,r=sh.rows.find(x=>x.n===n);if(r&&ckLocked(sh,r)){cb.checked=true;return}
     if(sh.doneColIdx!=null){state.via="dashboard";setCell(si,r,sh.doneColIdx,cb.checked?"Đã xong "+fmtDS(TODAY):null)}
