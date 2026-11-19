@@ -5243,6 +5243,9 @@ function barsHtml(sh,colIdx,fr,metric){
   const sel=sh.ui.filters[colIdx];
   return `<div class="bars">`+arr.slice(0,14).map(([k,v])=>`<div class="bar ${sel===k?"sel":""}" data-c="${colIdx}" data-v="${esc(k)}" title="Bấm để lọc"><span class="t">${esc(k||"(Trống)")}</span><span class="tr"><span class="f" style="display:block;width:${(v/mx*100).toFixed(1)}%;background:${colorFor(k)}"></span></span><span class="n">${metric==="sum"?fmtBig(v):fmtN(v)} · ${(v/tot*100).toFixed(0)}%</span></div>`).join("")+`</div>`;
 }
+function ckCatBars(sh,fr){ // CV theo ngày: tiến độ hoàn thành theo đầu mục (Mua hàng / In đề nghị TT / Nhắc chị Hương) thay cho thống kê theo giá trị cột Hoàn thành
+  return `<div class="bars">`+["buy","print","huong"].map(k=>{const a=fr.filter(r=>ckCat(sh,r)===k),dn=a.filter(r=>ckDone(sh,r)).length,p=a.length?dn/a.length:0;
+    return `<div class="bar"><span class="t">${CK_CATS.find(c=>c[0]===k)[1]}</span><span class="tr"><span class="f" style="display:block;width:${(p*100).toFixed(1)}%;background:var(--ok)"></span></span><span class="n">${dn}/${a.length} · ${(p*100).toFixed(0)}%</span></div>`}).join("")+`</div>`}
 function donut(done,total,color){
   const R=52,C=2*Math.PI*R,p=total?done/total:0;
   return `<svg width="140" height="140" viewBox="0 0 140 140" role="img" aria-label="Tỷ lệ hoàn thành ${(p*100).toFixed(0)}%"><circle cx="70" cy="70" r="${R}" fill="none" stroke="var(--soft)" stroke-width="16"/><circle cx="70" cy="70" r="${R}" fill="none" stroke="${color}" stroke-width="16" stroke-dasharray="${(C*p).toFixed(1)} ${C.toFixed(1)}" transform="rotate(-90 70 70)" stroke-linecap="butt"/><text x="70" y="68" text-anchor="middle" font-size="26" font-weight="700" fill="currentColor">${(p*100).toFixed(0)}%</text><text x="70" y="88" text-anchor="middle" font-size="11" fill="var(--mute)">${done}/${total}</text></svg>`;
@@ -5384,9 +5387,9 @@ function renderDyn(sh,keep,anchor){
   // biểu đồ
   html+=`<div class="grid panels">`;
   if(sh.progIdx!=null){
-    const f2=rowsFor(sh,sh.progIdx);const d=f2.filter(r=>sh.wf?r.done:isDoneVal(r.v[sh.progIdx])).length;
+    const f2=rowsFor(sh,sh.progIdx),cvd=sh.checklist&&/^cv theo ngày/.test(norm(sh.name));const d=f2.filter(r=>cvd?ckDone(sh,r):sh.wf?r.done:isDoneVal(r.v[sh.progIdx])).length;
     const pc=sh.cols.find(c=>c.idx===sh.progIdx);
-    html+=`<div class="card"><h3>${esc(pc.name)} <small>tiến độ chính</small></h3><div class="donutwrap">${donut(d,f2.length,"var(--ok)")}${barsHtml(sh,sh.progIdx,f2,u.metric)}</div></div>`;
+    html+=`<div class="card"><h3>${esc(pc.name)} <small>tiến độ chính${cvd?" · theo đầu mục":""}</small></h3><div class="donutwrap">${donut(d,f2.length,"var(--ok)")}${cvd?ckCatBars(sh,f2):barsHtml(sh,sh.progIdx,f2,u.metric)}</div></div>`;
   }
   for(const c of sh.cat){if(c.idx===sh.progIdx)continue;if(sh.ext&&/thuế/i.test(c.name))continue; // Netsuite: không vẽ biểu đồ thuế suất
    
