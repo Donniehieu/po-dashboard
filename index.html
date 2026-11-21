@@ -2074,6 +2074,9 @@ body.rzing, body.rzing * { cursor: col-resize !important; user-select: none !imp
 @media (prefers-reduced-motion: reduce) {
   .tgrp .gb, .tgrp .gt i, * { transition: none !important; animation: none !important; }
 }
+.clkwin{top:auto;bottom:18px;right:18px;width:230px;z-index:61}
+.clkwin h3{cursor:move;touch-action:none;user-select:none}
+.aclk-svg{width:100%;height:auto;color:var(--ink);display:block}
 </style>
 </head>
 <body>
@@ -4742,6 +4745,7 @@ function renderTabs(){
   if(state.sheets.some(s=>s.wf))items.push({r:3.5,h:`<button data-i="report" class="${on("report")}">📝 Báo cáo công việc</button>`});
   if(state.sheets.some(s=>s.wf))items.push({r:4,h:`<button data-i="suppliers" class="${on("suppliers")}">🏭 Nhà cung cấp</button>`});
   if(state.sheets.some(s=>s.wf)){const dn=dueTtRows().rows.length;items.push({r:4.5,h:`<button data-i="duett" class="${on("duett")}" title="PO công nợ của NCC sắp / đã đến hạn thanh toán (hạn = ngày nhập kho + số ngày công nợ của NCC)">⏰ Đến hạn TT<span class="n">${dn}</span></button>`})}
+  items.push({r:0.8,h:`<button data-i="clock" class="${on("clock")}">🕐 Đồng hồ</button>`});
   state.sheets.forEach((s,i)=>items.push({r:rankSheet(s),h:`<button data-i="${i}" class="${on(i)}">${esc(s.name)}<span class="n">${s.rows.length}</span></button>`}));
   if(!state.nsSheet&&state.sheets.length)items.push({r:13,h:`<button data-i="nsload" title="Dữ liệu từ NetSuite (file riêng Netsuite_data.xlsx, tải khi bấm lần đầu)">📊 Netsuite Data</button>`});
   // Tab hay dùng nằm trên thanh; tab ít dùng gom vào “Khác ▾” cho thanh gọn (chọn một tab trong đó thì nút “Khác” hiện tên tab đang mở)
@@ -4750,7 +4754,7 @@ function renderTabs(){
   t.innerHTML=main.map(x=>x.h).join("")+(minor.length?`<button type="button" class="tmore ${minorOn?"on":""}" id="tMore" aria-haspopup="true">${minorOn?esc(lbl(minorOn.h)):"Khác"} ▾</button>`:"");
   let mn=$("#tmenu");if(!mn){mn=document.createElement("div");mn.id="tmenu";mn.className="tmenu";document.body.appendChild(mn)}
   mn.innerHTML=minor.map(x=>x.h).join("");mn.classList.remove("open");
-  const goTab=v=>{if(v==="nsload"){nsLoad(true);return}state.active=(v==="overview"||v==="priority"||v==="today"||v==="po360"||v==="history"||v==="suppliers"||v==="report"||v==="duett")?v:+v;renderTabs();render();scrollTo(0,0)};
+  const goTab=v=>{if(v==="nsload"){nsLoad(true);return}state.active=(v==="overview"||v==="priority"||v==="today"||v==="po360"||v==="history"||v==="suppliers"||v==="report"||v==="duett"||v==="clock")?v:+v;renderTabs();render();scrollTo(0,0)};
   t.querySelectorAll("button[data-i]").forEach(b=>b.onclick=()=>goTab(b.dataset.i));
   mn.querySelectorAll("button[data-i]").forEach(b=>b.onclick=()=>{mn.classList.remove("open");goTab(b.dataset.i)});
   const mb=$("#tMore");if(mb)mb.onclick=e=>{e.stopPropagation();if(mn.classList.toggle("open")){const r=mb.getBoundingClientRect();mn.style.left=Math.max(8,Math.min(r.left,innerWidth-mn.offsetWidth-8))+"px";mn.style.top=(r.bottom+4)+"px"}};
@@ -4777,8 +4781,8 @@ function navGo(d){
   if(NAV.h[NAV.i]&&NAV.h[NAV.i].k===cur)NAV.h[NAV.i].v=captureView();
   if(NAV.i>=0&&NAV.h[NAV.i].k!==cur){NAV.h.splice(NAV.i+1);NAV.h.push({k:cur,o:JSON.parse(cur),v:captureView()});if(NAV.h.length>NAV.max)NAV.h.shift();NAV.i=NAV.h.length-1}
   const j=NAV.i+d;if(j<0||j>=NAV.h.length)return;NAV.i=j;const o=NAV.h[j].o;
-  const si=typeof o.a==="string"&&!["overview","priority","today","po360","history","suppliers","report","duett"].includes(o.a)?state.sheets.findIndex(x=>x.name===o.a):-1;
-  if(typeof o.a==="string"&&si<0&&!["overview","priority","today","po360","history","suppliers","report","duett"].includes(o.a)){toast("Bảng đó không còn nữa.",true);navUi();return}
+  const si=typeof o.a==="string"&&!["overview","priority","today","po360","history","suppliers","report","duett","clock"].includes(o.a)?state.sheets.findIndex(x=>x.name===o.a):-1;
+  if(typeof o.a==="string"&&si<0&&!["overview","priority","today","po360","history","suppliers","report","duett","clock"].includes(o.a)){toast("Bảng đó không còn nữa.",true);navUi();return}
   NAV.lock=true;
   try{
     if(si>=0){const u=state.sheets[si].ui,v=o.u;u.filters={...v.filters};u.cf=Object.fromEntries(Object.entries(v.cf||{}).map(([k,f])=>[k,{...f,vals:f.vals?new Set(f.vals):null}]));
@@ -4797,7 +4801,7 @@ function render(){
   const same=state._rt===state.active,v=same?captureView():null;
   renderMain();state._rt=state.active;if(v)restoreView(v);
 }
-function renderMain(){state.active==="po360"?renderPo360():state.active==="report"?renderReport(true):state.active==="today"?renderToday():state.active==="overview"?renderOverview():state.active==="priority"?(state.active="today",renderToday()):state.active==="history"?renderHistory():state.active==="suppliers"?renderSuppliers():state.active==="duett"?renderDueTt():renderSheet(state.sheets[state.active])}
+function renderMain(){state.active==="po360"?renderPo360():state.active==="report"?renderReport(true):state.active==="today"?renderToday():state.active==="overview"?renderOverview():state.active==="priority"?(state.active="today",renderToday()):state.active==="history"?renderHistory():state.active==="suppliers"?renderSuppliers():state.active==="duett"?renderDueTt():state.active==="clock"?renderClockTab():renderSheet(state.sheets[state.active])}
 
 function sheetStats(sh){
   const o={rows:sh.rows.length};
@@ -5998,6 +6002,68 @@ function renderDueTt(){
   $("#main").querySelectorAll("[data-duet]").forEach(tr=>tr.onclick=()=>{const k=tr.dataset.duet;dueCol.has(k)?dueCol.delete(k):dueCol.add(k);redraw()}); // đóng / mở nhóm công ty, NCC
   $("#main").querySelectorAll("a[data-duepo]").forEach(a=>a.onclick=ev=>{ev.preventDefault();ev.stopPropagation();const x=L.find(y=>y.i===+a.dataset.duepo),S=nccSheets();if(x&&S)goSheet(S.dsSi,{search:x.sup.toLowerCase()})}); // bấm mã PO -> tab Công nợ NCC, lọc theo NCC
   $("#main").querySelectorAll("tr[data-due]").forEach(tr=>tr.onclick=()=>{const x=L.find(y=>y.i===+tr.dataset.due);if(!x)return;dueSel.has(x.code)?dueSel.delete(x.code):dueSel.add(x.code);redraw()}); // bấm dòng: tick -> bỏ tick -> tick…
+}
+
+/* ---- Đồng hồ kim (mặt tròn) + tab “Đồng hồ”: chọn hiển thị nổi cho Pomodoro / Đồng hồ, mỗi loại có nút đóng ---- */
+const CLK_KEY="qlcv:clock",CLK_TZ=[["Asia/Ho_Chi_Minh","Hà Nội (UTC+7)"],["local","Giờ máy tính"],["UTC","UTC"],["Asia/Tokyo","Tokyo (UTC+9)"],["Europe/London","London"],["America/New_York","New York"]];
+const clkSt=(()=>{const d={show:false,tz:"Asia/Ho_Chi_Minh",x:null,y:null};try{Object.assign(d,JSON.parse(localStorage.getItem(CLK_KEY)||"{}"))}catch(e){}return d})();
+const clkSave=()=>{try{localStorage.setItem(CLK_KEY,JSON.stringify(clkSt))}catch(e){}};
+const clkFmt={};
+function clkNow(tz){ // giờ theo múi giờ chọn (mặc định Hà Nội +7), lấy từ đồng hồ hệ thống của máy
+  const now=new Date();
+  if(tz==="local")return{h:now.getHours(),m:now.getMinutes(),s:now.getSeconds(),ms:now.getMilliseconds(),date:now};
+  try{const f=clkFmt[tz]||(clkFmt[tz]=new Intl.DateTimeFormat("en-GB",{timeZone:tz,hour:"numeric",minute:"numeric",second:"numeric",hour12:false}));
+    const p=Object.fromEntries(f.formatToParts(now).map(x=>[x.type,x.value]));return{h:+p.hour%24,m:+p.minute,s:+p.second,ms:now.getMilliseconds(),date:now}}
+  catch(e){const u=now.getTime()+now.getTimezoneOffset()*6e4+7*36e5,d=new Date(u);return{h:d.getHours(),m:d.getMinutes(),s:d.getSeconds(),ms:now.getMilliseconds(),date:now}}
+}
+function clkSvg(){
+  let t="";for(let i=0;i<60;i++){const a=i*6*Math.PI/180,r1=i%5?93:88,r2=97,c=Math.sin(a),s=-Math.cos(a);t+=`<line x1="${100+r1*c}" y1="${100+r1*s}" x2="${100+r2*c}" y2="${100+r2*s}" stroke="currentColor" stroke-width="${i%5?1:2.5}" opacity="${i%5?.45:.9}"/>`}
+  let n="";for(let i=1;i<=12;i++){const a=i*30*Math.PI/180;n+=`<text x="${100+74*Math.sin(a)}" y="${100-74*Math.cos(a)+6}" text-anchor="middle" font-size="17" font-weight="700" fill="currentColor">${i}</text>`}
+  return `<svg class="aclk-svg" viewBox="0 0 200 200" role="img" aria-label="Đồng hồ kim"><circle cx="100" cy="100" r="98" fill="var(--card)" stroke="currentColor" stroke-width="3"/>${t}${n}
+  <line class="hh" x1="100" y1="100" x2="100" y2="56" stroke="currentColor" stroke-width="6" stroke-linecap="round"/>
+  <line class="mh" x1="100" y1="100" x2="100" y2="34" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
+  <line class="sh" x1="100" y1="114" x2="100" y2="26" stroke="var(--bad)" stroke-width="2" stroke-linecap="round"/><circle cx="100" cy="100" r="5" fill="var(--bad)"/></svg>`}
+function clkTick(){
+  const els=document.querySelectorAll(".aclk-svg");
+  if(els.length){const t=clkNow(clkSt.tz),sec=t.s+t.ms/1000,min=t.m+sec/60,hr=(t.h%12)+min/60;
+    els.forEach(sv=>{sv.querySelector(".hh").setAttribute("transform",`rotate(${hr*30} 100 100)`);sv.querySelector(".mh").setAttribute("transform",`rotate(${min*6} 100 100)`);sv.querySelector(".sh").setAttribute("transform",`rotate(${sec*6} 100 100)`)});
+    const dg=`${String(t.h).padStart(2,"0")}:${String(t.m).padStart(2,"0")}:${String(t.s).padStart(2,"0")}`,tzn=(CLK_TZ.find(z=>z[0]===clkSt.tz)||CLK_TZ[0])[1];
+    let ds="";try{ds=t.date.toLocaleDateString("vi-VN",{timeZone:clkSt.tz==="local"?undefined:clkSt.tz,weekday:"long",day:"2-digit",month:"2-digit",year:"numeric"})}catch(e){}
+    document.querySelectorAll(".aclk-dg").forEach(x=>x.textContent=dg);document.querySelectorAll(".aclk-dt").forEach(x=>x.textContent=ds+" · "+tzn)}
+  const cb=document.getElementById("clkWin");if(cb)cb.hidden=!clkSt.show;
+  const t1=document.getElementById("clkSelClock"),t2=document.getElementById("clkSelPomo"),pm=document.getElementById("pomo");
+  if(t1)t1.checked=!!clkSt.show;if(t2&&pm)t2.checked=!pm.hidden;
+  const ps=document.getElementById("clkPomoSt"),pt=document.getElementById("pTm"),pp=document.getElementById("pPh");if(ps&&pt&&pp)ps.textContent=pt.textContent+" · "+pp.textContent;
+}
+function clkSetShow(v){clkSt.show=!!v;clkSave();clkTick()}
+function clkSetPomo(v){const pm=document.getElementById("pomo");if(pm)pm.hidden=!v;clkTick()}
+(function clkInit(){
+  const w=document.createElement("div");w.id="clkWin";w.className="pomo clkwin";w.hidden=!clkSt.show;
+  w.innerHTML=`<h3><span title="Kéo để di chuyển">🕐 Đồng hồ</span><button class="x" id="clkX" aria-label="Đóng đồng hồ">×</button></h3>${clkSvg()}<div class="tm" style="font-size:26px;margin:4px 0 0"><span class="aclk-dg"></span></div><div class="ph aclk-dt" style="text-align:center"></div>`;
+  document.body.appendChild(w);
+  const place=(x,y)=>{w.style.left=Math.max(0,Math.min(x,innerWidth-60))+"px";w.style.top=Math.max(0,Math.min(y,innerHeight-60))+"px";w.style.right="auto";w.style.bottom="auto"};
+  if(clkSt.x!=null&&clkSt.y!=null)place(clkSt.x,clkSt.y);
+  w.querySelector("#clkX").onclick=()=>clkSetShow(false);
+  let d=null;w.querySelector("h3").addEventListener("pointerdown",e=>{if(e.target.closest("button"))return;const r=w.getBoundingClientRect();d={dx:e.clientX-r.left,dy:e.clientY-r.top};w.setPointerCapture(e.pointerId)});
+  w.addEventListener("pointermove",e=>{if(d)place(e.clientX-d.dx,e.clientY-d.dy)});
+  w.addEventListener("pointerup",()=>{if(!d)return;d=null;const r=w.getBoundingClientRect();clkSt.x=Math.round(r.left);clkSt.y=Math.round(r.top);clkSave()});
+  setInterval(clkTick,250);clkTick();
+})();
+function renderClockTab(){
+  const tzo=CLK_TZ.map(z=>`<option value="${z[0]}" ${clkSt.tz===z[0]?"selected":""}>${esc(z[1])}</option>`).join("");
+  setMain(`<div class="note" style="margin:0 0 12px">Chọn loại đồng hồ hiển thị nổi trên màn hình (luôn nằm trên mọi tab). Mỗi loại có nút <b>×</b> để đóng riêng, hoặc bỏ tick ở đây.</div>
+  <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px">
+   <div class="card"><h3>🕐 Đồng hồ kim <small>mặc định Hà Nội (UTC+7), theo giờ máy tính</small></h3>
+     <div style="max-width:220px;margin:8px auto">${clkSvg()}</div><div class="tm" style="font-size:30px;text-align:center;font-weight:800"><span class="aclk-dg"></span></div><div class="ph aclk-dt" style="text-align:center;margin-bottom:10px"></div>
+     <div class="row" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:center"><label><input type="checkbox" id="clkSelClock" ${clkSt.show?"checked":""}> Hiện nổi trên màn hình</label>
+     <select id="clkTz" title="Múi giờ">${tzo}</select><button class="btn sm" id="clkOff">✕ Tắt</button></div></div>
+   <div class="card"><h3>🍅 Pomodoro <small>tập trung / nghỉ</small></h3>
+     <div class="tm" style="font-size:34px;text-align:center;font-weight:800;margin:14px 0 4px"><span id="clkPomoSt">—</span></div><div class="sub" style="text-align:center;margin-bottom:14px">Tick “Hiện nổi” để mở bảng Pomodoro (bắt đầu, tạm dừng, cài thời gian ở đó).</div>
+     <div class="row" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:center"><label><input type="checkbox" id="clkSelPomo"> Hiện nổi trên màn hình</label><button class="btn sm" id="clkPOff">✕ Tắt</button></div></div></div>`);
+  $("#clkSelClock").onchange=e=>clkSetShow(e.target.checked);$("#clkOff").onclick=()=>clkSetShow(false);
+  $("#clkSelPomo").onchange=e=>clkSetPomo(e.target.checked);$("#clkPOff").onclick=()=>clkSetPomo(false);
+  $("#clkTz").onchange=e=>{clkSt.tz=e.target.value;clkSave();clkTick()};
+  clkTick();
 }
 function renderSuppliers(){
   const q=(state.supQ||"").toLowerCase();
