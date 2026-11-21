@@ -2075,6 +2075,9 @@ body.rzing, body.rzing * { cursor: col-resize !important; user-select: none !imp
   .tgrp .gb, .tgrp .gt i, * { transition: none !important; animation: none !important; }
 }
 .clkwin{top:auto;bottom:18px;right:18px;width:230px;z-index:61}
+.clkwin{position:fixed}
+.clkwin .clk-tm{font-weight:800;text-align:center;font-variant-numeric:tabular-nums;font-size:26px}
+.clk-rz{position:absolute;right:2px;bottom:2px;width:18px;height:18px;cursor:nwse-resize;touch-action:none;background:linear-gradient(135deg,transparent 50%,var(--mute) 50%,var(--mute) 58%,transparent 58%,transparent 72%,var(--mute) 72%,var(--mute) 80%,transparent 80%);opacity:.7}
 .clkwin h3{cursor:move;touch-action:none;user-select:none}
 .aclk-svg{width:100%;height:auto;color:var(--ink);display:block}
 </style>
@@ -6006,7 +6009,7 @@ function renderDueTt(){
 
 /* ---- Đồng hồ kim (mặt tròn) + tab “Đồng hồ”: chọn hiển thị nổi cho Pomodoro / Đồng hồ, mỗi loại có nút đóng ---- */
 const CLK_KEY="qlcv:clock",CLK_TZ=[["Asia/Ho_Chi_Minh","Hà Nội (UTC+7)"],["local","Giờ máy tính"],["UTC","UTC"],["Asia/Tokyo","Tokyo (UTC+9)"],["Europe/London","London"],["America/New_York","New York"]];
-const clkSt=(()=>{const d={show:false,tz:"Asia/Ho_Chi_Minh",x:null,y:null};try{Object.assign(d,JSON.parse(localStorage.getItem(CLK_KEY)||"{}"))}catch(e){}return d})();
+const clkSt=(()=>{const d={show:false,tz:"Asia/Ho_Chi_Minh",x:null,y:null,w:230};try{Object.assign(d,JSON.parse(localStorage.getItem(CLK_KEY)||"{}"))}catch(e){}return d})();
 const clkSave=()=>{try{localStorage.setItem(CLK_KEY,JSON.stringify(clkSt))}catch(e){}};
 const clkFmt={};
 function clkNow(tz){ // giờ theo múi giờ chọn (mặc định Hà Nội +7), lấy từ đồng hồ hệ thống của máy
@@ -6039,13 +6042,18 @@ function clkSetShow(v){clkSt.show=!!v;clkSave();clkTick()}
 function clkSetPomo(v){const pm=document.getElementById("pomo");if(pm)pm.hidden=!v;clkTick()}
 (function clkInit(){
   const w=document.createElement("div");w.id="clkWin";w.className="pomo clkwin";w.hidden=!clkSt.show;
-  w.innerHTML=`<h3><span title="Kéo để di chuyển">🕐 Đồng hồ</span><button class="x" id="clkX" aria-label="Đóng đồng hồ">×</button></h3>${clkSvg()}<div class="tm" style="font-size:26px;margin:4px 0 0"><span class="aclk-dg"></span></div><div class="ph aclk-dt" style="text-align:center"></div>`;
+  w.innerHTML=`<h3><span title="Kéo để di chuyển">🕐 Đồng hồ</span><button class="x" id="clkX" aria-label="Đóng đồng hồ">×</button></h3>${clkSvg()}<div class="tm clk-tm" style="margin:4px 0 0"><span class="aclk-dg"></span></div><div class="ph aclk-dt" style="text-align:center"></div><div class="clk-rz" title="Kéo để đổi kích thước"></div>`;
   document.body.appendChild(w);
+  const setW=px=>{px=Math.max(150,Math.min(Math.round(px),Math.min(640,innerWidth-20)));clkSt.w=px;w.style.width=px+"px";w.querySelector(".clk-tm").style.fontSize=Math.round(px*0.113)+"px"};setW(clkSt.w||230); // đổi kích thước: mặt đồng hồ (SVG) và chữ số co giãn theo
   const place=(x,y)=>{w.style.left=Math.max(0,Math.min(x,innerWidth-60))+"px";w.style.top=Math.max(0,Math.min(y,innerHeight-60))+"px";w.style.right="auto";w.style.bottom="auto"};
   if(clkSt.x!=null&&clkSt.y!=null)place(clkSt.x,clkSt.y);
   w.querySelector("#clkX").onclick=()=>clkSetShow(false);
   let d=null;w.querySelector("h3").addEventListener("pointerdown",e=>{if(e.target.closest("button"))return;const r=w.getBoundingClientRect();d={dx:e.clientX-r.left,dy:e.clientY-r.top};w.setPointerCapture(e.pointerId)});
   w.addEventListener("pointermove",e=>{if(d)place(e.clientX-d.dx,e.clientY-d.dy)});
+  let rz=null;const hd=w.querySelector(".clk-rz");
+  hd.addEventListener("pointerdown",e=>{e.stopPropagation();rz={x:e.clientX,w:w.getBoundingClientRect().width};hd.setPointerCapture(e.pointerId)});
+  hd.addEventListener("pointermove",e=>{if(rz)setW(rz.w+(e.clientX-rz.x))});
+  hd.addEventListener("pointerup",()=>{if(!rz)return;rz=null;clkSave()});
   w.addEventListener("pointerup",()=>{if(!d)return;d=null;const r=w.getBoundingClientRect();clkSt.x=Math.round(r.left);clkSt.y=Math.round(r.top);clkSave()});
   setInterval(clkTick,250);clkTick();
 })();
