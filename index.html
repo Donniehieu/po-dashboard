@@ -3803,6 +3803,25 @@ function applyPrintQueue(){ // -> khóa các sự kiện đã xử lý xong (đ�
   if(msgs.length){softRender();toast("Odoo Helper (đề nghị thanh toán): "+msgs.join(" | "))}
   return done;
 }
+/* Odoo Helper báo bạn vừa tạo/sửa/xóa PO hoặc phiếu thanh toán trên Odoo: ghi nhớ tạm rồi tự đồng bộ một lần (gộp nhiều thay đổi liên tiếp) */
+const chg={set:new Map(),timer:null,tries:0};
+function receiveOdooChanges(list,source,origin){
+  const keys=[];
+  for(const x of Array.isArray(list)?list:[]){
+    if(!x||typeof x.k!=="string"||!CHG_LABEL[x.kind])continue;
+    keys.push(x.k);const lab=CHG_LABEL[x.kind]+(x.ids&&x.ids.length?" #"+x.ids.slice(0,3).join(","):" mới");chg.set.set(x.k,lab);
+  }
+  if(!keys.length)return;
+  if(source){try{source.postMessage({qlcv:"odoochg-ack",keys},origin)}catch(e){}}
+  chg.tries=0;clearTimeout(chg.timer);chg.timer=setTimeout(flushOdooChanges,CHG_WAIT);
+  toast("Odoo vừa thay đổi ("+[...new Set(chg.set.values())].slice(0,4).join(", ")+"): sẽ tự đồng bộ sau ít giây…");
+}
+async function flushOdooChanges(){
+  if(!state.autosync||!ghReady()||state.src!=="github"){chg.set.clear();return}
+  if(ods.wait&&chg.tries++<6){chg.timer=setTimeout(flushOdooChanges,30000);return} // đang có lần đồng bộ chạy: đợi xong rồi chạy lần nữa để lấy thay đổi mới nhất
+  chg.set.clear();await requestSync(false);
+}
+const CHG_LABEL={PO:"PO",PAY:"phiếu TT"},CHG_WAIT=20000;
 function receivePrintEvents(list,source,origin){
   const q=store.get(PRINT_Q)||[],have=new Set(q.map(x=>x.k)),applied=new Set(store.get(PRINT_APPLIED)||[]);
   for(const x of Array.isArray(list)?list:[]){
@@ -3824,12 +3843,13 @@ function bankItems(){
 /* Mở/điều hướng tab Odoo rồi đẩy dữ liệu tab Thông tin thanh toán sang ngay (nhiều lần vì trang Odoo cần vài giây để nạp Odoo Helper). Cách này chạy cả khi tab Odoo đã mở từ trước (không có window.opener). */
 function openErp(url){
   const w=window.open(url,"odoo-erp");
-  if(w){const send=()=>{try{if(!w.closed){const items=bankItems();if(items.length)w.postMessage({qlcv:"bank-data",items,t:Date.now()},"https://erp.dekko.com.vn");w.postMessage({qlcv:"printev-req"},"https://erp.dekko.com.vn")}}catch(e){}};[1500,4000,8000,15000].forEach(ms=>setTimeout(send,ms))}
+  if(w){const send=()=>{try{if(!w.closed){const items=bankItems();if(items.length)w.postMessage({qlcv:"bank-data",items,t:Date.now()},"https://erp.dekko.com.vn");w.postMessage({qlcv:"printev-req"},"https://erp.dekko.com.vn");w.postMessage({qlcv:"odoochg-req"},"https://erp.dekko.com.vn")}}catch(e){}};[1500,4000,8000,15000].forEach(ms=>setTimeout(send,ms))}
   return w;
 }
 /* Odoo Helper chạy trong tab Odoo (mở từ dashboard) gửi nhật ký tin đã gửi về đây bằng postMessage */
 addEventListener("message",e=>{
   if(e.origin!=="https://erp.dekko.com.vn")return;
+  if(e.data&&e.data.qlcv==="odoochg"&&Array.isArray(e.data.events)){try{receiveOdooChanges(e.data.events,e.source,e.origin)}catch(err){console.error(err)}return}
   if(e.data&&e.data.qlcv==="printev"&&Array.isArray(e.data.events)){try{receivePrintEvents(e.data.events,e.source,e.origin)}catch(err){console.error(err)}return}
   if(e.data&&e.data.qlcv==="bank-req"&&e.source){ // Odoo Helper xin dữ liệu tab Thông tin thanh toán để tự điền thụ hưởng
     try{e.source.postMessage({qlcv:"bank-data",items:bankItems(),t:Date.now()},e.origin)}catch(err){console.error(err)}

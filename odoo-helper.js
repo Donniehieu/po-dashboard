@@ -1,4 +1,4 @@
-/* Odoo Helper v1.5.1 - tự điền thụ hưởng NCC + nhắc kế toán trong Chatter (tin mẫu, nhật ký tin đã gửi).
+/* Odoo Helper v1.6.0 - tự điền thụ hưởng NCC + nhắc kế toán trong Chatter (tin mẫu, nhật ký tin đã gửi).
    Chạy bằng nút bookmark trên trang Odoo (không cần Tampermonkey). File này nằm trong dashboard nên luôn là bản mới nhất.
    Dữ liệu NCC và nhật ký lưu trong trình duyệt (localStorage của trang Odoo), không gửi đi đâu ngoài tab dashboard đã mở trang này. */
 (function () {
@@ -542,6 +542,50 @@
     if (d.qlcv === "printev-req") sendPrintEvents(e.source, e.origin);
     else if (d.qlcv === "printev-ack" && Array.isArray(d.keys)) st.set(PRINTEV_KEY, st.get(PRINTEV_KEY, []).filter((x) => !d.keys.includes(x.k)));
   });
+  /* Theo dõi thay đổi dữ liệu trên Odoo do chính bạn làm (lưu/tạo/xóa/bấm nút trên đơn mua, phiếu thanh toán): ghi vào hàng đợi tạm rồi báo dashboard,
+     dashboard tự đồng bộ lại sau ít giây. Bắt cuộc gọi call_kw của Odoo qua XMLHttpRequest và fetch. Không đọc/gửi nội dung phiếu, chỉ ghi mã ID + loại + giờ. */
+  const CHG_KEY = "qlcv_odoochg_v1", CHG_MODELS = { "purchase.order": "PO", "account.payment": "PAY" };
+  const CHG_READ = /^(read|web_read|search_read|web_search_read|search|search_count|read_group|web_read_group|formatted_read_group|name_search|web_name_search|name_get|onchange|fields_get|get_views|load_views|default_get|check_access_rights|has_group|get_formview_action|get_formview_id|message_|activity_|_)/;
+  function noteChange(url, bodyText) {
+    try {
+      const m = /\/web\/dataset\/call_kw\/([\w.]+)\/(\w+)/.exec(url || ""); if (!m || !CHG_MODELS[m[1]] || CHG_READ.test(m[2])) return;
+      let ids = []; try { const a = (JSON.parse(bodyText).params || {}).args || []; ids = (Array.isArray(a[0]) ? a[0] : []).filter((x) => Number.isInteger(x)); } catch (e) {}
+      const q = st.get(CHG_KEY, []);
+      q.push({ k: "chg:" + m[1] + ":" + m[2] + ":" + (ids.join(",") || "new") + ":" + Date.now(), model: m[1], kind: CHG_MODELS[m[1]], method: m[2], ids, at: nowIso() });
+      st.set(CHG_KEY, q.slice(-100));
+      sendChanges();
+    } catch (e) {}
+  }
+  function sendChanges(target, origin) {
+    const q = st.get(CHG_KEY, []); if (!q.length) return;
+    try {
+      if (target) target.postMessage({ qlcv: "odoochg", events: q }, origin);
+      else if (window.opener && !window.opener.closed) window.opener.postMessage({ qlcv: "odoochg", events: q }, "*");
+    } catch (e) {} // không có dashboard đang mở: giữ trong hàng đợi, dashboard xin lại khi mở (odoochg-req)
+  }
+  if (location.hostname === "erp.dekko.com.vn" && !window.__qlcvChgHook) {
+    window.__qlcvChgHook = 1;
+    try {
+      const xo = XMLHttpRequest.prototype.open, xs = XMLHttpRequest.prototype.send;
+      XMLHttpRequest.prototype.open = function (m, u) { this.__qu = u; return xo.apply(this, arguments); };
+      XMLHttpRequest.prototype.send = function (b) {
+        const u = this.__qu, body = typeof b === "string" ? b : "";
+        if (u && /call_kw/.test(String(u))) this.addEventListener("load", () => { if (this.status === 200) noteChange(String(u), body); });
+        return xs.apply(this, arguments);
+      };
+      const of = window.fetch;
+      window.fetch = function (r, o) {
+        const u = typeof r === "string" ? r : (r && r.url) || "", body = o && typeof o.body === "string" ? o.body : "", p = of.apply(this, arguments);
+        if (/call_kw/.test(u)) p.then((res) => { if (res && res.ok) noteChange(u, body); }, () => {});
+        return p;
+      };
+    } catch (e) {}
+    addEventListener("message", (e) => {
+      const d = e.data; if (!d || !/^https:\/\/[a-z0-9-]+\.github\.io$/i.test(e.origin)) return;
+      if (d.qlcv === "odoochg-req") sendChanges(e.source, e.origin);
+      else if (d.qlcv === "odoochg-ack" && Array.isArray(d.keys)) st.set(CHG_KEY, st.get(CHG_KEY, []).filter((x) => !d.keys.includes(x.k)));
+    });
+  }
   if (location.hostname === "erp.dekko.com.vn") { hookSend(); hookSendRequest(); }
   async function copyUnc() { // sao chép tin nhắc gửi UNC (không có @tag) để dán sang Zalo
     const tpl = fillTpl(tplByKey("unc"));
@@ -752,7 +796,7 @@
   let lastKey = "";
   function tick() {
     if (location.hostname !== "erp.dekko.com.vn") { bridge(); return; }
-    sendToOpener(); requestBank(); sendPrintEvents();
+    sendToOpener(); requestBank(); sendPrintEvents(); sendChanges();
     if (!PATH_RE.test(location.pathname + location.hash)) { if (ui) { ui.box.remove(); ui = null; } lastKey = ""; return; }
     build(); syncMode();
     if (!ui || !canFill() || !cfg().auto) return;
