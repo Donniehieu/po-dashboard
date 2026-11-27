@@ -2624,6 +2624,8 @@ function setStatus(sh){
   for(const r of sh.rows){
     r.st=null;r.done=null;
     if(sh.pay){
+      r.autoPaid=false; // Ghi chú có cụm “Đã thanh toán” mà phiếu còn “Chưa thanh toán” -> coi như đã thanh toán (chỉ trong dashboard, không ghi ngược vào ô trạng thái)
+      if(sh.ghiIdx!=null&&wfn(r.v[sh.payStIdx])==="chưa thanh toán"&&/đã thanh toán/.test(wfn(r.v[sh.ghiIdx]))){r.v[sh.payStIdx]="Đã thanh toán";r.autoPaid=true}
       const s=wfn(r.v[sh.payStIdx]);r.done=s==="đã thanh toán"||s==="đã hủy"||s.startsWith("⚠ không còn");
       const d0=dueOf(sh,r);
       if(!r.done&&d0 instanceof Date&&bdLate(d0)>=1)r.st="overdue";
@@ -4547,7 +4549,8 @@ function nccDebtRows(){
     const sup=String(r.v[ps.sub]??"").trim()||"(Chưa ghi NCC)",st=wfn(r.v[ps.payStIdx]);if(st!=="đã thanh toán"&&st!=="chưa thanh toán")return;
     const o=get(sup),amt=ps.money?+r.v[ps.money.idx]||0:0,dl=ps.cols.find(c=>norm(c.name)==='ngày lập'),no=String(r.v[ps.title]??"").trim();
     const pos=ps.payPoIdx!=null?[...new Set(String(r.v[ps.payPoIdx]??"").split(/[,;\s]+/).map(x=>x.trim()).filter(Boolean))]:[];
-    (o.pays=o.pays||{paid:[],unpaid:[]})[st==="đã thanh toán"?"paid":"unpaid"].push({no,po:pos[0]||"",amt,label:pos.length?no+"-"+pos.join(","):no,co:dbtCoName(ps.payCoIdx!=null?String(r.v[ps.payCoIdx]??""):""),dt:dl?dbtTm(r.v[dl.idx]):Infinity});
+    const cur=ps.payCurIdx!=null?String(r.v[ps.payCurIdx]??"").trim():"";
+    (o.pays=o.pays||{paid:[],unpaid:[]})[st==="đã thanh toán"?"paid":"unpaid"].push({no,po:pos[0]||"",amt,auto:!!r.autoPaid,label:r.autoPaid&&/bnk/i.test(cur)?cur:pos.length?no+"-"+pos.join(","):no,co:dbtCoName(ps.payCoIdx!=null?String(r.v[ps.payCoIdx]??""):""),dt:dl?dbtTm(r.v[dl.idx]):Infinity});
   });
   const sm=a=>(a||[]).reduce((t,x)=>t+x.amt,0);
   const out=[...by.values()].map(o=>{o.pays=o.pays||{paid:[],unpaid:[]};return{...o,psi,vp:sm(o.pays.paid),vu:sm(o.pays.unpaid)}});
@@ -4562,7 +4565,7 @@ function nccCkHtml(o,ckCol,S){
 function nccDebtHtml(sh){
   const d=nccDebtRows();if(!d||!d.out.length)return "";
   const {out,ckCol,S:SS}=d,tp=out.reduce((t,o)=>t+o.vp,0),tu=out.reduce((t,o)=>t+o.vu,0),npp=out.reduce((t,o)=>t+o.pays.paid.length,0),npu=out.reduce((t,o)=>t+o.pays.unpaid.length,0);
-  const pchips=(a,c)=>a.length?a.map((x,i)=>`<span class="sub" style="display:inline-block;min-width:24px">${i+1}.</span><a href="#" class="chip dbt-po" ${x.no?`data-dpay="${esc(x.no)}"`:`data-dpo="${esc(x.po)}"`} style="--c:${c}" title="${x.no?"Mở phiếu trong tab Phiếu thanh toán":"PO chưa có phiếu PAY/BNK - mở trong tab PO"}">${esc(x.label)} - ${fmtN(x.amt)}</a>`).map(h=>`<div style="margin:0 0 4px">${h}</div>`).join(""):`<span class="sub">Không có.</span>`;
+  const pchips=(a,c)=>a.length?a.map((x,i)=>`<span class="sub" style="display:inline-block;min-width:24px">${i+1}.</span><a href="#" class="chip dbt-po" ${x.no?`data-dpay="${esc(x.no)}"`:`data-dpo="${esc(x.po)}"`} style="--c:${c}" title="${x.no?"Mở phiếu trong tab Phiếu thanh toán":"PO chưa có phiếu PAY/BNK - mở trong tab PO"}">${esc(x.label)} - ${fmtN(x.amt)}${x.auto?" (tự điền)":""}</a>`).map(h=>`<div style="margin:0 0 4px">${h}</div>`).join(""):`<span class="sub">Không có.</span>`;
   const gchips=(a,c)=>{ // hai cột Đã / Chưa thanh toán: chia theo công ty, đánh số từ 1 ở mỗi khối (Phúc Hà rồi DQ), trong mỗi công ty đơn làm trước đứng trên, cuối mỗi khối là tổng tiền
     if(!a.length)return `<span class="sub">Không có.</span>`;
     return [["PH","TBDN Phúc Hà"],["DQ","Dung Quất (DQ)"]].map(([k,nm])=>{const g=a.filter(x=>x.co===k).sort((x,y)=>(x.dt===y.dt?0:x.dt<y.dt?-1:1));if(!g.length)return "";
