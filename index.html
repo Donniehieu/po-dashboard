@@ -2436,7 +2436,7 @@ const WF_FLOOR=[
   {rc:"đã nhận hết",min:"Cần lập hóa đơn"},
   {rc:"đã nhận một phần",min:"Chờ nhận hàng"},
   {rc:"chưa nhận",st:["đơn mua hàng","đã phê duyệt"],min:"Chờ gửi NCC"}, // đơn đã xác nhận nhưng hàng chưa về -> tối thiểu “Chờ gửi NCC”
-  {rc:"đã nhận hết",iv:["đã xuất hóa đơn"],flow:"debt",min:"Chờ làm TT"} // đơn CÔNG NỢ đã nhận hết và đã xuất hóa đơn -> tới bước làm thanh toán (đơn trả trước thì không)
+  {rc:"đã nhận hết",iv:["đã xuất hóa đơn","đã thanh toán","chờ làm tt"],flow:"debt",min:"Chờ làm TT"} // đơn CÔNG NỢ đã nhận hết và đã xuất hóa đơn -> tới bước làm thanh toán (đơn trả trước thì không)
 ];
 function wfFloorOf(sh,r){
   const rc=sh.rcIdx!=null?wfn(r.v[sh.rcIdx]):"",st=sh.stIdx!=null?wfn(r.v[sh.stIdx]):"",iv=sh.ivIdx!=null?wfn(r.v[sh.ivIdx]):"";
@@ -5787,7 +5787,7 @@ function sugDone(sh,r){ // Odoo báo đã nhận hết VÀ đã xuất hóa đơ
   if(sh.payIdx==null||!isPay(r.v[sh.payIdx]))return false; // đơn công nợ: đã nhận hết + xuất hóa đơn thì sang “Chờ làm TT”, chỉ Hoàn thành khi có BNK
   const rc=wfn(r.v[sh.rcIdx]),iv=wfn(r.v[sh.ivIdx]);
   const got=/^(đã nhận|nhận hết|nhận đủ|nhận toàn bộ)/.test(rc)&&!/(một phần|chưa)/.test(rc);
-  const inv=/(đã (xuất|lập|ghi).*hóa đơn|hóa đơn đầy đủ|fully billed)/.test(iv)&&!/(chưa|một phần|nháp)/.test(iv);
+  const inv=(/(đã (xuất|lập|ghi).*hóa đơn|hóa đơn đầy đủ|fully billed)/.test(iv)&&!/(chưa|một phần|nháp)/.test(iv))||/^(đã thanh toán|chờ làm tt)$/.test(iv);
   return got&&inv;
 }
 function setWf(si,r,status,via){
@@ -5965,6 +5965,7 @@ function dueTtRows(){
       const sup=String(r.v[ci]??"").trim();if(!sup)return;
       const rd=ri?dueParseD(r.v[ri.idx]):null;
       if(!rd){if(sh.rcIdx!=null&&wfn(r.v[sh.rcIdx])==="đã nhận hết")out.noDate++;return}
+      if(sh.ivIdx!=null&&wfn(r.v[sh.ivIdx])==="đã thanh toán")return; // bill NCC trên Odoo đã thanh toán -> không cần nhắc TT
       const pi=poPayInfo(sh,r);if(pi.paid||pi.live.length)return; // đã có phiếu PAY/BNK (đã hoặc chưa thanh toán) = đã làm TT -> không cần nhắc nữa
       const it=find(sup),raw=it&&dc?it.row.v[dc.idx]:null,days=raw==null||String(raw).trim()===""?NaN:parseInt(String(raw).replace(",","."),10);
       if(!(days>=0)){const k=it?it.name:sup;out.noTerm.set(k,(out.noTerm.get(k)||0)+1);return}
